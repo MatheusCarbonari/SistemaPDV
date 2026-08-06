@@ -1,0 +1,40 @@
+# Ambiente virtual
+.venv/
+venv/
+env/
+
+# Cache e arquivos compilados do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cache e relatórios de testes/cobertura
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Bancos de dados locais e arquivos auxiliares do SQLite
+data/*.db
+tests/*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Variáveis de ambiente e segredos locais
+.env
+.env.*
+!.env.example
+
+# Ferramentas de análise Python
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# Editores e sistema operacional
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
