@@ -1,0 +1,1 @@
+# contém validações genéricas e reutilizáveis
