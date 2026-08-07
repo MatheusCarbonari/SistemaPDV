@@ -1,5 +1,7 @@
 from models.produto import Produto
 
+
+# Normaliza e valida os dados antes de criar um produto.
 def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, origem):
 
     codigo_limpo = limpar_codigo(codigo) 
@@ -34,6 +36,7 @@ def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, or
     return produto, []
 
 
+# Valida se o código foi informado e contém somente números.
 def validar_codigo(codigo):
     lista_de_erros = []
 
@@ -44,6 +47,8 @@ def validar_codigo(codigo):
 
     return lista_de_erros
 
+
+# Remove espaços extras e converte valores ausentes em texto vazio.
 def limpar_codigo(codigo):
     if codigo is None:
         return ""
@@ -52,6 +57,8 @@ def limpar_codigo(codigo):
 
     return codigo_limpo
 
+
+# Valida se o nome foi informado e não é exclusivamente numérico.
 def validar_nome(nome):
     lista_de_erros = []
 
@@ -62,6 +69,8 @@ def validar_nome(nome):
 
     return lista_de_erros
 
+
+# Remove espaços extras e padroniza a capitalização do nome.
 def limpar_nome(nome):
     if nome is None:
         return ""
@@ -70,6 +79,8 @@ def limpar_nome(nome):
 
     return nome_limpo
 
+
+# Remove espaços extras e padroniza a categoria em letras maiúsculas.
 def limpar_categoria(categoria):
     if categoria is None:
         return ""
@@ -78,6 +89,8 @@ def limpar_categoria(categoria):
 
     return categoria_limpa
 
+
+# Valida se a categoria foi informada e não é exclusivamente numérica.
 def validar_categoria(categoria):
     lista_de_erros = []
 
@@ -88,6 +101,8 @@ def validar_categoria(categoria):
 
     return lista_de_erros
 
+
+# Remove espaços extras e padroniza a forma de venda em letras maiúsculas.
 def limpar_forma_venda(forma_venda):
     if forma_venda is None:
         return ""
@@ -96,6 +111,8 @@ def limpar_forma_venda(forma_venda):
 
     return forma_venda_limpa
 
+
+# Restringe a forma de venda aos valores PESO e UNIDADE.
 def validar_forma_venda(forma_venda):
     lista_de_erros =[]
 
@@ -112,6 +129,8 @@ def validar_forma_venda(forma_venda):
 
     return lista_de_erros
 
+
+# Exige um preço inteiro em centavos e maior que zero.
 def validar_preco_venda_centavos(preco_venda_centavos):
     lista_de_erros = []
 
@@ -128,6 +147,8 @@ def validar_preco_venda_centavos(preco_venda_centavos):
 
     return lista_de_erros
 
+
+# Remove espaços extras e padroniza a origem em letras maiúsculas.
 def limpar_origem(origem):
     if origem is None:
         return ""
@@ -136,6 +157,8 @@ def limpar_origem(origem):
 
     return origem_limpa
 
+
+# Restringe a origem aos valores COMPRADO e PRODUZIDO.
 def validar_origem(origem):
     lista_de_erros = []
 

@@ -1,5 +1,7 @@
 from services.produto_service import criar_produto
 
+
+# Cenário válido e normalização dos dados.
 def test_criar_produto() -> None:
 
     produto, erros = criar_produto(
@@ -20,6 +22,7 @@ def test_criar_produto() -> None:
     assert produto.origem == "COMPRADO"
 
 
+# Validações do código.
 def test_criar_produto_com_codigo_vazio() -> None:
     produto, erros = criar_produto(
         codigo="",
@@ -48,6 +51,7 @@ def test_criar_produto_com_codigo_nao_numerico() -> None:
     assert "O código deve conter apenas números." in erros
 
 
+# Validações do nome.
 def test_criar_produto_com_nome_vazio() -> None:
     produto, erros = criar_produto(
         codigo="101",
@@ -62,6 +66,7 @@ def test_criar_produto_com_nome_vazio() -> None:
     assert "O nome é obrigatório." in erros
 
 
+# Confirma que a limpeza transforma espaços em código vazio.
 def test_criar_produto_com_codigo_apenas_espacos() -> None:
     produto, erros = criar_produto(
         codigo="   ",
@@ -76,6 +81,7 @@ def test_criar_produto_com_codigo_apenas_espacos() -> None:
     assert "O código é obrigatório." in erros
 
 
+# Validações adicionais do nome após a limpeza.
 def test_criar_produto_com_nome_apenas_espacos() -> None:
     produto, erros = criar_produto(
         codigo="101",
@@ -104,6 +110,7 @@ def test_criar_produto_com_nome_apenas_numeros() -> None:
     assert "O nome não pode conter apenas números." in erros
 
 
+# Validações da categoria.
 def test_criar_produto_com_categoria_vazia() -> None:
     produto, erros = criar_produto(
         codigo="101",
@@ -146,6 +153,7 @@ def test_criar_produto_com_categoria_apenas_numeros() -> None:
     assert "A categoria não pode conter apenas números." in erros
 
 
+# Validações da forma de venda.
 def test_criar_produto_com_forma_venda_vazia() -> None:
     produto, erros = criar_produto(
         codigo="101",
@@ -202,6 +210,7 @@ def test_criar_produto_com_forma_venda_invalida() -> None:
     assert "Forma de venda permite apenas 'PESO' e 'UNIDADE'." in erros
 
 
+# Validações do preço em centavos.
 def test_criar_produto_com_preco_none() -> None:
     produto, erros = criar_produto(
         codigo="101",
@@ -272,6 +281,7 @@ def test_criar_produto_com_preco_negativo() -> None:
     assert "O preço de venda deve ser maior que zero." in erros
 
 
+# Validações da origem do produto.
 def test_criar_produto_com_origem_vazia() -> None:
     produto, erros = criar_produto(
         codigo="101",

@@ -6,6 +6,7 @@ from database.conexao import conectar
 from database.schema import criar_tabelas
 
 
+# Cria um banco isolado para cada teste, sem tocar nos dados principais.
 @pytest.fixture
 def banco_teste(tmp_path):
     caminho = Path("tests/banco_teste.db")

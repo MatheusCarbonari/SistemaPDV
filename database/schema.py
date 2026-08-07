@@ -6,6 +6,7 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
     Cria as tabelas necessárias caso ainda não existam.
     """
 
+    # Centraliza a definição da tabela para o banco principal ou de testes.
     comando_produtos = """
     CREATE TABLE IF NOT EXISTS produtos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,6 +28,7 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
 
     conexao = conectar(caminho_banco)
 
+    # Garante que a conexão seja fechada mesmo se a criação falhar.
     try:
         conexao.execute(comando_produtos)
         conexao.commit()

@@ -1,1 +1,1 @@
-# futuramente salvará o produto no banco
+# Reservado para operações de persistência dos produtos.
