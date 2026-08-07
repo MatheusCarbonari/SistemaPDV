@@ -340,6 +340,8 @@ def test_criar_produto_com_origem_invalida() -> None:
     assert produto is None
     assert "A origem do produto permite apenas 'COMPRADO' e 'PRODUZIDO'." in erros
 
+
+# Garante que o serviço rejeite um código já persistido no banco.
 def test_criar_produto_retorna_erro_quando_codigo_ja_existe(tmp_path) -> None:
     caminho_banco = tmp_path / "teste_produto_service.db"
 

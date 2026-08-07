@@ -26,6 +26,7 @@ def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, or
     if lista_de_erros:
         return None, lista_de_erros
 
+    # Consulta duplicidade somente depois que os dados básicos são válidos.
     if codigo_existe(codigo_limpo, caminho_banco):
         lista_de_erros.append("Já existe um produto com esse código.")
 

@@ -4,6 +4,7 @@ from database.schema import criar_tabelas
 from repositories.produto_repository import codigo_existe
 
 
+# Valida os dois resultados possíveis da consulta de existência do código.
 def test_codigo_existe_retorna_true_quando_codigo_esta_cadastrado(tmp_path) -> None:
     caminho_banco = tmp_path / "teste_repository.db"
 
