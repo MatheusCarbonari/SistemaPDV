@@ -1,6 +1,6 @@
+from models.produto import Produto
 
-# categoria, forma_venda, preco_venda_centavos, origem
-def criar_produto(codigo, nome):
+def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, origem):
 
     codigo_limpo = limpar_codigo(codigo) 
     lista_de_erros = validar_codigo(codigo_limpo)
@@ -8,11 +8,30 @@ def criar_produto(codigo, nome):
     nome_limpo = limpar_nome(nome)
     lista_de_erros.extend(validar_nome(nome_limpo))
 
+    categoria_limpa = limpar_categoria(categoria)
+    lista_de_erros.extend(validar_categoria(categoria_limpa))
+
+    forma_venda_limpa = limpar_forma_venda(forma_venda)
+    lista_de_erros.extend(validar_forma_venda(forma_venda_limpa))
+
+    lista_de_erros.extend(validar_preco_venda_centavos(preco_venda_centavos))
+
+    origem_limpa = limpar_origem(origem)
+    lista_de_erros.extend(validar_origem(origem_limpa))
+
     if lista_de_erros:
         return None, lista_de_erros
     
+    produto = Produto(
+        codigo=codigo_limpo,
+        nome=nome_limpo,
+        categoria=categoria_limpa,
+        forma_venda=forma_venda_limpa,
+        preco_venda_centavos=preco_venda_centavos,
+        origem=origem_limpa,
+    )
 
-    return (codigo_limpo, nome_limpo), []
+    return produto, []
 
 
 def validar_codigo(codigo):
@@ -51,3 +70,84 @@ def limpar_nome(nome):
 
     return nome_limpo
 
+def limpar_categoria(categoria):
+    if categoria is None:
+        return ""
+
+    categoria_limpa = categoria.strip().upper()
+
+    return categoria_limpa
+
+def validar_categoria(categoria):
+    lista_de_erros = []
+
+    if categoria == "":
+        lista_de_erros.append("A categoria é obrigatória.")
+    elif categoria.isdigit():
+        lista_de_erros.append("A categoria não pode conter apenas números.")
+
+    return lista_de_erros
+
+def limpar_forma_venda(forma_venda):
+    if forma_venda is None:
+        return ""
+
+    forma_venda_limpa = forma_venda.strip().upper()
+
+    return forma_venda_limpa
+
+def validar_forma_venda(forma_venda):
+    lista_de_erros =[]
+
+    if forma_venda == "":
+        lista_de_erros.append("A forma de venda é obrigatória.")
+        return lista_de_erros
+
+    if any(caractere.isdigit() for caractere in forma_venda):
+        lista_de_erros.append("A forma de venda não permite números.")
+        return lista_de_erros
+
+    if forma_venda not in ["PESO", "UNIDADE"]:
+        lista_de_erros.append("Forma de venda permite apenas 'PESO' e 'UNIDADE'.")
+
+    return lista_de_erros
+
+def validar_preco_venda_centavos(preco_venda_centavos):
+    lista_de_erros = []
+
+    if preco_venda_centavos is None:
+        lista_de_erros.append("O preço de venda é obrigatório.")
+        return lista_de_erros
+
+    if not isinstance(preco_venda_centavos, int):
+        lista_de_erros.append("O preço de venda deve ser um número inteiro em centavos.")
+        return lista_de_erros
+
+    if preco_venda_centavos <= 0:
+        lista_de_erros.append("O preço de venda deve ser maior que zero.")
+
+    return lista_de_erros
+
+def limpar_origem(origem):
+    if origem is None:
+        return ""
+
+    origem_limpa = origem.strip().upper()
+
+    return origem_limpa
+
+def validar_origem(origem):
+    lista_de_erros = []
+
+    if origem == "":
+        lista_de_erros.append("A origem do produto é obrigatória.")
+        return lista_de_erros
+
+    if any(caractere.isdigit() for caractere in origem):
+        lista_de_erros.append("A origem do produto não permite números.")
+        return lista_de_erros
+
+    if origem not in ["COMPRADO", "PRODUZIDO"]:
+        lista_de_erros.append("A origem do produto permite apenas 'COMPRADO' e 'PRODUZIDO'.")
+
+    return lista_de_erros
