@@ -15,7 +15,7 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
         forma_venda TEXT NOT NULL
             CHECK (forma_venda IN ('PESO', 'UNIDADE')),
         preco_venda_centavos INTEGER NOT NULL
-            CHECK (preco_venda_centavos >= 0),
+            CHECK (preco_venda_centavos > 0),
         origem TEXT NOT NULL
             CHECK (origem IN ('COMPRADO', 'PRODUZIDO')),
         ativo INTEGER NOT NULL DEFAULT 1
