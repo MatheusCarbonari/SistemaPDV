@@ -27,7 +27,7 @@ def test_tabela_produtos_existe(banco_teste):
             SELECT name
             FROM sqlite_master
             WHERE type = 'table'
-              AND name = 'produtos'
+            AND name = 'produtos'
             """
         ).fetchone()
 

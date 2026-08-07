@@ -1,8 +1,10 @@
 from models.produto import Produto
+from database.conexao import CAMINHO_BANCO
+from repositories.produto_repository import codigo_existe
 
 
 # Normaliza e valida os dados antes de criar um produto.
-def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, origem):
+def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, origem, caminho_banco=CAMINHO_BANCO):
 
     codigo_limpo = limpar_codigo(codigo) 
     lista_de_erros = validar_codigo(codigo_limpo)
@@ -20,6 +22,12 @@ def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, or
 
     origem_limpa = limpar_origem(origem)
     lista_de_erros.extend(validar_origem(origem_limpa))
+
+    if lista_de_erros:
+        return None, lista_de_erros
+
+    if codigo_existe(codigo_limpo, caminho_banco):
+        lista_de_erros.append("Já existe um produto com esse código.")
 
     if lista_de_erros:
         return None, lista_de_erros

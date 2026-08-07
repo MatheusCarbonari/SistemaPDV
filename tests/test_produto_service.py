@@ -1,4 +1,7 @@
+import sqlite3
+
 from services.produto_service import criar_produto
+from database.schema import criar_tabelas
 
 
 # Cenário válido e normalização dos dados.
@@ -336,3 +339,50 @@ def test_criar_produto_com_origem_invalida() -> None:
 
     assert produto is None
     assert "A origem do produto permite apenas 'COMPRADO' e 'PRODUZIDO'." in erros
+
+def test_criar_produto_retorna_erro_quando_codigo_ja_existe(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+
+    criar_tabelas(caminho_banco)
+
+    conexao = sqlite3.connect(caminho_banco)
+
+    try:
+        conexao.execute(
+            """
+            INSERT INTO produtos (
+                codigo,
+                nome,
+                categoria,
+                forma_venda,
+                preco_venda_centavos,
+                origem
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "101",
+                "Picanha",
+                "BOVINOS",
+                "PESO",
+                7990,
+                "COMPRADO",
+            ),
+        )
+
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    produto, erros = criar_produto(
+        codigo="101",
+        nome="Alcatra",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=6990,
+        origem="COMPRADO",
+        caminho_banco=caminho_banco,
+    )
+
+    assert produto is None
+    assert "Já existe um produto com esse código." in erros
