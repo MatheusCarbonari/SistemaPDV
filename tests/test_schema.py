@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 import sqlite3
 
 from database.conexao import conectar
@@ -9,7 +8,6 @@ from database.schema import criar_tabelas
 # Cria um banco isolado para cada teste, sem tocar nos dados principais.
 @pytest.fixture
 def banco_teste(tmp_path):
-    caminho = Path("tests/banco_teste.db")
 
     caminho = tmp_path / "banco_teste.db"
 
@@ -302,5 +300,34 @@ def test_produto_valido_e_cadastrado_com_valores_automaticos(banco_teste)->None:
         assert resultado["criado_em"] is not None
         assert resultado["atualizado_em"] is not None
 
+    finally:
+        conexao.close()
+
+def test_preco_zero_nao_aceito(banco_teste) -> None:
+    conexao = conectar(banco_teste)
+
+    try:
+        with pytest.raises(sqlite3.IntegrityError):
+            conexao.execute(
+                """
+                INSERT INTO produtos(
+                    codigo,
+                    nome,
+                    categoria,
+                    forma_venda,
+                    preco_venda_centavos,
+                    origem
+                )
+                VALUES(?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "106",
+                    "Frango Assado",
+                    "ASSADOS",
+                    "UNIDADE",
+                    0,
+                    'PRODUZIDO'
+                ),
+            )
     finally:
         conexao.close()

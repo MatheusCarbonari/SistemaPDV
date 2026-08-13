@@ -1,11 +1,16 @@
 import sqlite3
 
+from database.schema import criar_tabelas
 from services.produto_service import criar_produto
 from database.schema import criar_tabelas
 
 
 # Cenário válido e normalização dos dados.
-def test_criar_produto() -> None:
+def test_criar_produto(tmp_path) -> None:
+
+    caminho_banco = tmp_path / "teste_produto_service.db"
+
+    criar_tabelas(caminho_banco)
 
     produto, erros = criar_produto(
         codigo=" 101 ",
@@ -13,7 +18,8 @@ def test_criar_produto() -> None:
         categoria=" bovinos ",
         forma_venda=" peso ",
         preco_venda_centavos=7990,
-        origem=" comprado "
+        origem=" comprado ",
+        caminho_banco=caminho_banco,
     )
 
     assert erros == []
