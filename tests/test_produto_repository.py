@@ -1,4 +1,5 @@
 import sqlite3
+import pytest
 
 from datetime import datetime
 from models.produto import Produto
@@ -75,3 +76,79 @@ def test_salvar_produto_retorna_produto_persistido(tmp_path) -> None:
     assert produto_salvo.ativo is True
     assert isinstance(produto_salvo.criado_em, datetime)
     assert isinstance(produto_salvo.atualizado_em, datetime)
+
+
+# Confirma a persistência com uma consulta independente do retorno da função.
+def test_salvar_produto_persiste_dados_no_banco(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    produto = Produto(
+        codigo="102",
+        nome="Alcatra",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=6990,
+        origem="COMPRADO",
+    )
+
+    salvar_produto(produto, caminho_banco)
+
+    conexao = sqlite3.connect(caminho_banco)
+    conexao.row_factory = sqlite3.Row
+
+    try:
+        produto_persistido = conexao.execute(
+            """
+            SELECT
+                codigo,
+                nome,
+                categoria,
+                forma_venda,
+                preco_venda_centavos,
+                origem,
+                ativo
+            FROM produtos
+            WHERE codigo = ?
+            """,
+            ("102",),
+        ).fetchone()
+    finally:
+        conexao.close()
+
+    assert produto_persistido is not None
+    assert produto_persistido["codigo"] == "102"
+    assert produto_persistido["nome"] == "Alcatra"
+    assert produto_persistido["categoria"] == "BOVINOS"
+    assert produto_persistido["forma_venda"] == "PESO"
+    assert produto_persistido["preco_venda_centavos"] == 6990
+    assert produto_persistido["origem"] == "COMPRADO"
+    assert produto_persistido["ativo"] == 1
+
+
+# Garante que o repositório respeite a unicidade do código definida no schema.
+def test_salvar_produto_nao_permite_codigo_duplicado(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    primeiro_produto = Produto(
+        codigo="103",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=7990,
+        origem="COMPRADO",
+    )
+    produto_duplicado = Produto(
+        codigo="103",
+        nome="Alcatra",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=6990,
+        origem="COMPRADO",
+    )
+
+    salvar_produto(primeiro_produto, caminho_banco)
+
+    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
+        salvar_produto(produto_duplicado, caminho_banco)
