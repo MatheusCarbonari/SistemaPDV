@@ -362,3 +362,90 @@ def test_listar_produtos_retorna_produtos_ordenados_por_nome(tmp_path) -> None:
     produtos = listar_produtos(caminho_banco)
 
     assert [produto.nome for produto in produtos] == ["Alcatra", "Picanha"]
+
+
+# Confirma que a listagem padrão retorna somente produtos ativos.
+def test_listar_produtos_retorna_somente_ativos_por_padrao(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("305", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("306", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        conexao.execute(
+            "UPDATE produtos SET ativo = 0 WHERE codigo = ?",
+            ("306",),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    produtos = listar_produtos(caminho_banco)
+
+    assert [produto.codigo for produto in produtos] == ["305"]
+
+
+# Confirma que o filtro False retorna somente produtos inativos.
+def test_listar_produtos_retorna_somente_inativos(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("307", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("308", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        conexao.execute(
+            "UPDATE produtos SET ativo = 0 WHERE codigo = ?",
+            ("308",),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    produtos = listar_produtos(caminho_banco, ativo=False)
+
+    assert [produto.codigo for produto in produtos] == ["308"]
+
+
+# Confirma que o filtro None retorna produtos ativos e inativos.
+def test_listar_produtos_retorna_ativos_e_inativos(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("309", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("310", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        conexao.execute(
+            "UPDATE produtos SET ativo = 0 WHERE codigo = ?",
+            ("310",),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    produtos = listar_produtos(caminho_banco, ativo=None)
+
+    assert {produto.codigo for produto in produtos} == {"309", "310"}

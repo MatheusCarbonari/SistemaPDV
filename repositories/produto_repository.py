@@ -155,12 +155,14 @@ def montar_produto(produto_buscado) -> Produto:
 
     return novo_produto
 
-def listar_produtos(caminho_banco=CAMINHO_BANCO) -> list[Produto]:
+def listar_produtos(
+    caminho_banco=CAMINHO_BANCO,
+    ativo: bool | None = True,
+) -> list[Produto]:
     conexao = conectar(caminho_banco)
 
     try:
-        produtos_encontrados = conexao.execute(
-            """
+        consulta = """
             SELECT
                 id,
                 codigo,
@@ -173,8 +175,18 @@ def listar_produtos(caminho_banco=CAMINHO_BANCO) -> list[Produto]:
                 criado_em,
                 atualizado_em
             FROM produtos
-            ORDER BY nome
             """
+        parametros = ()
+
+        if ativo is not None:
+            consulta += "\nWHERE ativo = ?"
+            parametros = (int(ativo),)
+
+        consulta += "\nORDER BY nome"
+
+        produtos_encontrados = conexao.execute(
+            consulta,
+            parametros,
         ).fetchall()
 
     finally:
