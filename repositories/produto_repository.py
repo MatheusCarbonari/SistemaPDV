@@ -154,3 +154,30 @@ def montar_produto(produto_buscado) -> Produto:
     )
 
     return novo_produto
+
+def listar_produtos(caminho_banco=CAMINHO_BANCO) -> list[Produto]:
+    conexao = conectar(caminho_banco)
+
+    try:
+        produtos_encontrados = conexao.execute(
+            """
+            SELECT
+                id,
+                codigo,
+                nome,
+                categoria,
+                forma_venda,
+                preco_venda_centavos,
+                origem,
+                ativo,
+                criado_em,
+                atualizado_em
+            FROM produtos
+            ORDER BY nome
+            """
+        ).fetchall()
+
+    finally:
+        conexao.close()
+
+    return [montar_produto(produto) for produto in produtos_encontrados]

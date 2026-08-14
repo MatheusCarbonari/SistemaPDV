@@ -8,6 +8,7 @@ from repositories.produto_repository import (
     buscar_produto_banco_pelo_id,
     buscar_produto_por_codigo,
     codigo_existe,
+    listar_produtos,
     salvar_produto,
 )
 import repositories.produto_repository as produto_repository
@@ -309,3 +310,55 @@ def test_buscar_produto_por_codigo_retorna_none_quando_nao_existe(tmp_path) -> N
     produto_buscado = buscar_produto_por_codigo("999", caminho_banco)
 
     assert produto_buscado is None
+
+
+# Confirma que um banco sem produtos resulta em uma lista vazia.
+def test_listar_produtos_retorna_lista_vazia_quando_nao_ha_produtos(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    produtos = listar_produtos(caminho_banco)
+
+    assert produtos == []
+
+
+# Confirma que todos os registros são convertidos em objetos Produto.
+def test_listar_produtos_retorna_todos_os_produtos(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("301", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("302", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    produtos = listar_produtos(caminho_banco)
+
+    assert len(produtos) == 2
+    assert all(isinstance(produto, Produto) for produto in produtos)
+    assert {produto.codigo for produto in produtos} == {"301", "302"}
+
+
+# Confirma que a listagem mantém a ordenação alfabética definida na consulta.
+def test_listar_produtos_retorna_produtos_ordenados_por_nome(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("303", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("304", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    produtos = listar_produtos(caminho_banco)
+
+    assert [produto.nome for produto in produtos] == ["Alcatra", "Picanha"]
