@@ -159,6 +159,7 @@ def listar_produtos(
     caminho_banco=CAMINHO_BANCO,
     ativo: bool | None = True,
     categoria: str | None = None,
+    nome: str | None = None,
 ) -> list[Produto]:
     conexao = conectar(caminho_banco)
 
@@ -187,6 +188,10 @@ def listar_produtos(
         if categoria is not None:
             condicoes.append("categoria = ?")
             parametros.append(categoria)
+
+        if nome is not None:
+            condicoes.append("nome LIKE ?")
+            parametros.append(f"%{nome}%")
 
         if condicoes:
             consulta += "\nWHERE " + " AND ".join(condicoes)

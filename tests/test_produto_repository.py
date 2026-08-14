@@ -598,3 +598,113 @@ def test_listar_produtos_combina_categoria_com_ativo_none(tmp_path) -> None:
     )
 
     assert {produto.codigo for produto in produtos} == {"321", "322"}
+
+
+# Confirma que um trecho encontra todos os nomes correspondentes.
+def test_listar_produtos_retorna_produtos_com_trecho_no_nome(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto(
+            "324",
+            "Alcatra tradicional",
+            "BOVINOS",
+            "PESO",
+            6990,
+            "COMPRADO",
+        ),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto(
+            "325",
+            "Alcatra maturada",
+            "BOVINOS",
+            "PESO",
+            7490,
+            "COMPRADO",
+        ),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("326", "Costela", "BOVINOS", "PESO", 3990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    produtos = listar_produtos(caminho_banco, nome="catra")
+
+    assert {produto.codigo for produto in produtos} == {"324", "325"}
+
+
+# Confirma que um trecho ausente resulta em uma lista vazia.
+def test_listar_produtos_retorna_lista_vazia_para_nome_inexistente(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("327", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    produtos = listar_produtos(caminho_banco, nome="Costela")
+
+    assert produtos == []
+
+
+# Confirma que letras maiúsculas e minúsculas não impedem a busca.
+def test_listar_produtos_busca_nome_sem_diferenciar_maiusculas(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("328", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    produtos = listar_produtos(caminho_banco, nome="ALCATRA")
+
+    assert [produto.codigo for produto in produtos] == ["328"]
+
+
+# Confirma que nome, categoria e situação são aplicados juntos.
+def test_listar_produtos_combina_filtros_de_nome_categoria_e_ativo(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("329", "Alcatra bovina", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("330", "Alcatra maturada", "BOVINOS", "PESO", 7490, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("331", "Alcatra suína", "SUINOS", "PESO", 5990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        conexao.execute(
+            "UPDATE produtos SET ativo = 0 WHERE codigo = ?",
+            ("330",),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    produtos = listar_produtos(
+        caminho_banco,
+        categoria="BOVINOS",
+        nome="Alcatra",
+    )
+
+    assert [produto.codigo for produto in produtos] == ["329"]
