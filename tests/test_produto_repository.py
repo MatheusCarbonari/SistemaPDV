@@ -8,7 +8,7 @@ from repositories.produto_repository import (
     buscar_produto_banco_pelo_id,
     buscar_produto_por_codigo,
     codigo_existe,
-    listar_produtos,
+    listar_produtos_repository,
     salvar_produto,
 )
 import repositories.produto_repository as produto_repository
@@ -319,7 +319,7 @@ def test_listar_produtos_retorna_lista_vazia_quando_nao_ha_produtos(
     caminho_banco = tmp_path / "teste_repository.db"
     criar_tabelas(caminho_banco)
 
-    produtos = listar_produtos(caminho_banco)
+    produtos = listar_produtos_repository(caminho_banco)
 
     assert produtos == []
 
@@ -338,7 +338,7 @@ def test_listar_produtos_retorna_todos_os_produtos(tmp_path) -> None:
         caminho_banco,
     )
 
-    produtos = listar_produtos(caminho_banco)
+    produtos = listar_produtos_repository(caminho_banco)
 
     assert len(produtos) == 2
     assert all(isinstance(produto, Produto) for produto in produtos)
@@ -359,7 +359,7 @@ def test_listar_produtos_retorna_produtos_ordenados_por_nome(tmp_path) -> None:
         caminho_banco,
     )
 
-    produtos = listar_produtos(caminho_banco)
+    produtos = listar_produtos_repository(caminho_banco)
 
     assert [produto.nome for produto in produtos] == ["Alcatra", "Picanha"]
 
@@ -388,7 +388,7 @@ def test_listar_produtos_retorna_somente_ativos_por_padrao(tmp_path) -> None:
     finally:
         conexao.close()
 
-    produtos = listar_produtos(caminho_banco)
+    produtos = listar_produtos_repository(caminho_banco)
 
     assert [produto.codigo for produto in produtos] == ["305"]
 
@@ -417,7 +417,7 @@ def test_listar_produtos_retorna_somente_inativos(tmp_path) -> None:
     finally:
         conexao.close()
 
-    produtos = listar_produtos(caminho_banco, ativo=False)
+    produtos = listar_produtos_repository(caminho_banco, ativo=False)
 
     assert [produto.codigo for produto in produtos] == ["308"]
 
@@ -446,7 +446,7 @@ def test_listar_produtos_retorna_ativos_e_inativos(tmp_path) -> None:
     finally:
         conexao.close()
 
-    produtos = listar_produtos(caminho_banco, ativo=None)
+    produtos = listar_produtos_repository(caminho_banco, ativo=None)
 
     assert {produto.codigo for produto in produtos} == {"309", "310"}
 
@@ -471,7 +471,7 @@ def test_listar_produtos_retorna_produtos_da_categoria_existente(
         caminho_banco,
     )
 
-    produtos = listar_produtos(caminho_banco, categoria="BOVINOS")
+    produtos = listar_produtos_repository(caminho_banco, categoria="BOVINOS")
 
     assert {produto.codigo for produto in produtos} == {"311", "312"}
 
@@ -488,7 +488,7 @@ def test_listar_produtos_retorna_lista_vazia_para_categoria_inexistente(
         caminho_banco,
     )
 
-    produtos = listar_produtos(caminho_banco, categoria="SUINOS")
+    produtos = listar_produtos_repository(caminho_banco, categoria="SUINOS")
 
     assert produtos == []
 
@@ -521,7 +521,7 @@ def test_listar_produtos_combina_filtros_de_categoria_e_ativo(tmp_path) -> None:
     finally:
         conexao.close()
 
-    produtos = listar_produtos(caminho_banco, categoria="BOVINOS")
+    produtos = listar_produtos_repository(caminho_banco, categoria="BOVINOS")
 
     assert [produto.codigo for produto in produtos] == ["315"]
 
@@ -554,7 +554,7 @@ def test_listar_produtos_combina_categoria_com_ativo_false(tmp_path) -> None:
     finally:
         conexao.close()
 
-    produtos = listar_produtos(
+    produtos = listar_produtos_repository(
         caminho_banco,
         ativo=False,
         categoria="BOVINOS",
@@ -591,7 +591,7 @@ def test_listar_produtos_combina_categoria_com_ativo_none(tmp_path) -> None:
     finally:
         conexao.close()
 
-    produtos = listar_produtos(
+    produtos = listar_produtos_repository(
         caminho_banco,
         ativo=None,
         categoria="BOVINOS",
@@ -632,7 +632,7 @@ def test_listar_produtos_retorna_produtos_com_trecho_no_nome(tmp_path) -> None:
         caminho_banco,
     )
 
-    produtos = listar_produtos(caminho_banco, nome="catra")
+    produtos = listar_produtos_repository(caminho_banco, nome="catra")
 
     assert {produto.codigo for produto in produtos} == {"324", "325"}
 
@@ -649,7 +649,7 @@ def test_listar_produtos_retorna_lista_vazia_para_nome_inexistente(
         caminho_banco,
     )
 
-    produtos = listar_produtos(caminho_banco, nome="Costela")
+    produtos = listar_produtos_repository(caminho_banco, nome="Costela")
 
     assert produtos == []
 
@@ -666,7 +666,7 @@ def test_listar_produtos_busca_nome_sem_diferenciar_maiusculas(
         caminho_banco,
     )
 
-    produtos = listar_produtos(caminho_banco, nome="ALCATRA")
+    produtos = listar_produtos_repository(caminho_banco, nome="ALCATRA")
 
     assert [produto.codigo for produto in produtos] == ["328"]
 
@@ -701,7 +701,7 @@ def test_listar_produtos_combina_filtros_de_nome_categoria_e_ativo(
     finally:
         conexao.close()
 
-    produtos = listar_produtos(
+    produtos = listar_produtos_repository(
         caminho_banco,
         categoria="BOVINOS",
         nome="Alcatra",

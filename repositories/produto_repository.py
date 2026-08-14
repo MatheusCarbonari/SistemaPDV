@@ -155,7 +155,7 @@ def montar_produto(produto_buscado) -> Produto:
 
     return novo_produto
 
-def listar_produtos(
+def listar_produtos_repository(
     caminho_banco=CAMINHO_BANCO,
     ativo: bool | None = True,
     categoria: str | None = None,
