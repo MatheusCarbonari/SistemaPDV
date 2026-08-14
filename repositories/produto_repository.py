@@ -51,7 +51,24 @@ def salvar_produto(produto:Produto, caminho_banco=CAMINHO_BANCO) -> Produto:
         conexao.commit()
 
         produto_id = cursor.lastrowid
+        produto.id = produto_id
 
+        produto_buscado = buscar_produto_banco_pelo_id(produto_id, caminho_banco)
+
+        if produto_buscado is None:
+            return produto
+
+        novo_produto = montar_produto(produto_buscado)
+
+    finally:
+        conexao.close()
+
+    return novo_produto
+
+def buscar_produto_banco_pelo_id(produto_id:int, caminho_banco=CAMINHO_BANCO):
+    conexao = conectar(caminho_banco)
+
+    try:
         produto_buscado = conexao.execute(
             """
             SELECT
@@ -71,30 +88,33 @@ def salvar_produto(produto:Produto, caminho_banco=CAMINHO_BANCO) -> Produto:
             (produto_id,),
         ).fetchone()
 
-        criado_em = datetime.strptime(
-            produto_buscado["criado_em"],
-            "%Y-%m-%d %H:%M:%S"
-        )
-
-        atualizado_em = datetime.strptime(
-            produto_buscado["atualizado_em"],
-            "%Y-%m-%d %H:%M:%S"
-        )
-
-        novo_produto = Produto(
-            codigo=produto_buscado["codigo"],
-            nome=produto_buscado["nome"],
-            categoria=produto_buscado["categoria"],
-            forma_venda=produto_buscado["forma_venda"],
-            preco_venda_centavos=produto_buscado["preco_venda_centavos"],
-            origem=produto_buscado["origem"],
-            ativo=bool(produto_buscado["ativo"]),
-            id=produto_buscado["id"],
-            criado_em=criado_em,
-            atualizado_em=atualizado_em,
-        )
-
     finally:
         conexao.close()
+
+    return produto_buscado
+
+def montar_produto(produto_buscado) -> Produto:
+    criado_em = datetime.strptime(
+        produto_buscado["criado_em"],
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    atualizado_em = datetime.strptime(
+        produto_buscado["atualizado_em"],
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    novo_produto = Produto(
+        codigo=produto_buscado["codigo"],
+        nome=produto_buscado["nome"],
+        categoria=produto_buscado["categoria"],
+        forma_venda=produto_buscado["forma_venda"],
+        preco_venda_centavos=produto_buscado["preco_venda_centavos"],
+        origem=produto_buscado["origem"],
+        ativo=bool(produto_buscado["ativo"]),
+        id=produto_buscado["id"],
+        criado_em=criado_em,
+        atualizado_em=atualizado_em,
+    )
 
     return novo_produto
