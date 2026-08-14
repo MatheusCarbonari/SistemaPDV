@@ -23,6 +23,7 @@ def codigo_existe(codigo: str, caminho_banco=CAMINHO_BANCO) -> bool:
 
     return resposta is not None
 
+# Persiste o produto e devolve seus dados completos após o cadastro.
 def salvar_produto(produto:Produto, caminho_banco=CAMINHO_BANCO) -> Produto:
     conexao = conectar(caminho_banco)
 
@@ -55,6 +56,7 @@ def salvar_produto(produto:Produto, caminho_banco=CAMINHO_BANCO) -> Produto:
 
         produto_buscado = buscar_produto_banco_pelo_id(produto_id, caminho_banco)
 
+        # Mantém o cadastro disponível mesmo se a releitura não encontrar a linha.
         if produto_buscado is None:
             return produto
 
@@ -65,6 +67,7 @@ def salvar_produto(produto:Produto, caminho_banco=CAMINHO_BANCO) -> Produto:
 
     return novo_produto
 
+# Busca no banco a linha correspondente ao ID informado.
 def buscar_produto_banco_pelo_id(produto_id:int, caminho_banco=CAMINHO_BANCO):
     conexao = conectar(caminho_banco)
 
@@ -93,6 +96,7 @@ def buscar_produto_banco_pelo_id(produto_id:int, caminho_banco=CAMINHO_BANCO):
 
     return produto_buscado
 
+# Busca um produto pelo código e devolve None quando não o encontra.
 def buscar_produto_por_codigo(codigo:str, caminho_banco=CAMINHO_BANCO) -> Produto | None:
     conexao = conectar(caminho_banco)
 
@@ -124,6 +128,7 @@ def buscar_produto_por_codigo(codigo:str, caminho_banco=CAMINHO_BANCO) -> Produt
     
     return montar_produto(produto_buscado)
 
+# Converte uma linha retornada pelo SQLite em uma instância de Produto.
 def montar_produto(produto_buscado) -> Produto:
     criado_em = datetime.strptime(
         produto_buscado["criado_em"],
