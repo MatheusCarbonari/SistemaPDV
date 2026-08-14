@@ -93,6 +93,37 @@ def buscar_produto_banco_pelo_id(produto_id:int, caminho_banco=CAMINHO_BANCO):
 
     return produto_buscado
 
+def buscar_produto_por_codigo(codigo:str, caminho_banco=CAMINHO_BANCO) -> Produto | None:
+    conexao = conectar(caminho_banco)
+
+    try:
+        produto_buscado = conexao.execute(
+            """
+            SELECT
+                id,
+                codigo,
+                nome,
+                categoria, 
+                forma_venda,
+                preco_venda_centavos,
+                origem,
+                ativo,
+                criado_em,
+                atualizado_em
+            FROM produtos
+            WHERE codigo = ?
+            """,
+            (codigo,),
+        ).fetchone()
+
+    finally:
+        conexao.close()
+
+    if produto_buscado is None:
+        return None
+    
+    return montar_produto(produto_buscado)
+
 def montar_produto(produto_buscado) -> Produto:
     criado_em = datetime.strptime(
         produto_buscado["criado_em"],

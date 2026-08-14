@@ -6,6 +6,7 @@ from models.produto import Produto
 from database.schema import criar_tabelas
 from repositories.produto_repository import (
     buscar_produto_banco_pelo_id,
+    buscar_produto_por_codigo,
     codigo_existe,
     salvar_produto,
 )
@@ -275,3 +276,32 @@ def test_salvar_produto_retorna_produto_com_id_quando_releitura_falha(
     assert produto_persistido is not None
     assert produto_persistido[0] == produto_salvo.id
     assert produto_persistido[1] == "203"
+
+def test_buscar_produto_por_codigo_retorna_produto_quando_existe(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    produto = Produto(
+        codigo="101",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=7990,
+        origem="COMPRADO",
+    )
+
+    salvar_produto(produto, caminho_banco)
+
+    produto_buscado = buscar_produto_por_codigo("101", caminho_banco)
+
+    assert produto_buscado is not None
+    assert produto_buscado.codigo == "101"
+    assert produto_buscado.nome == "Picanha"
+
+def test_buscar_produto_por_codigo_retorna_none_quando_nao_existe(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    produto_buscado = buscar_produto_por_codigo("999", caminho_banco)
+
+    assert produto_buscado is None
