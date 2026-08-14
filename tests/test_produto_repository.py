@@ -449,3 +449,152 @@ def test_listar_produtos_retorna_ativos_e_inativos(tmp_path) -> None:
     produtos = listar_produtos(caminho_banco, ativo=None)
 
     assert {produto.codigo for produto in produtos} == {"309", "310"}
+
+
+# Confirma que o filtro retorna todos os produtos da categoria informada.
+def test_listar_produtos_retorna_produtos_da_categoria_existente(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("311", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("312", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("313", "Peito de frango", "AVES", "PESO", 2490, "COMPRADO"),
+        caminho_banco,
+    )
+
+    produtos = listar_produtos(caminho_banco, categoria="BOVINOS")
+
+    assert {produto.codigo for produto in produtos} == {"311", "312"}
+
+
+# Confirma que uma categoria não cadastrada resulta em uma lista vazia.
+def test_listar_produtos_retorna_lista_vazia_para_categoria_inexistente(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("314", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    produtos = listar_produtos(caminho_banco, categoria="SUINOS")
+
+    assert produtos == []
+
+
+# Confirma que os filtros de categoria e situação são aplicados juntos.
+def test_listar_produtos_combina_filtros_de_categoria_e_ativo(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("315", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("316", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("317", "Peito de frango", "AVES", "PESO", 2490, "COMPRADO"),
+        caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        conexao.execute(
+            "UPDATE produtos SET ativo = 0 WHERE codigo = ?",
+            ("316",),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    produtos = listar_produtos(caminho_banco, categoria="BOVINOS")
+
+    assert [produto.codigo for produto in produtos] == ["315"]
+
+
+# Confirma que categoria e False retornam somente inativos correspondentes.
+def test_listar_produtos_combina_categoria_com_ativo_false(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("318", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("319", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("320", "Peito de frango", "AVES", "PESO", 2490, "COMPRADO"),
+        caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        conexao.execute(
+            "UPDATE produtos SET ativo = 0 WHERE codigo IN (?, ?)",
+            ("319", "320"),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    produtos = listar_produtos(
+        caminho_banco,
+        ativo=False,
+        categoria="BOVINOS",
+    )
+
+    assert [produto.codigo for produto in produtos] == ["319"]
+
+
+# Confirma que None ignora a situação, mas mantém o filtro de categoria.
+def test_listar_produtos_combina_categoria_com_ativo_none(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto("321", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("322", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto("323", "Peito de frango", "AVES", "PESO", 2490, "COMPRADO"),
+        caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        conexao.execute(
+            "UPDATE produtos SET ativo = 0 WHERE codigo = ?",
+            ("322",),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    produtos = listar_produtos(
+        caminho_banco,
+        ativo=None,
+        categoria="BOVINOS",
+    )
+
+    assert {produto.codigo for produto in produtos} == {"321", "322"}

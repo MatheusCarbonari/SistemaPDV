@@ -158,6 +158,7 @@ def montar_produto(produto_buscado) -> Produto:
 def listar_produtos(
     caminho_banco=CAMINHO_BANCO,
     ativo: bool | None = True,
+    categoria: str | None = None,
 ) -> list[Produto]:
     conexao = conectar(caminho_banco)
 
@@ -176,11 +177,19 @@ def listar_produtos(
                 atualizado_em
             FROM produtos
             """
-        parametros = ()
+        condicoes = []
+        parametros = []
 
         if ativo is not None:
-            consulta += "\nWHERE ativo = ?"
-            parametros = (int(ativo),)
+            condicoes.append("ativo = ?")
+            parametros.append(int(ativo))
+
+        if categoria is not None:
+            condicoes.append("categoria = ?")
+            parametros.append(categoria)
+
+        if condicoes:
+            consulta += "\nWHERE " + " AND ".join(condicoes)
 
         consulta += "\nORDER BY nome"
 
