@@ -13,7 +13,7 @@ from repositories.produto_repository import (
 import repositories.produto_repository as produto_repository
 
 
-# Valida os dois resultados possíveis da consulta de existência do código.
+# Confirma que um código cadastrado é identificado pelo repositório.
 def test_codigo_existe_retorna_true_quando_codigo_esta_cadastrado(tmp_path) -> None:
     caminho_banco = tmp_path / "teste_repository.db"
 
@@ -50,6 +50,7 @@ def test_codigo_existe_retorna_true_quando_codigo_esta_cadastrado(tmp_path) -> N
 
     assert codigo_existe("101", caminho_banco) is True
 
+# Confirma que um código ausente não é identificado como cadastrado.
 def test_codigo_existe_retorna_false_quando_codigo_nao_esta_cadastrado(tmp_path) -> None:
     caminho_banco = tmp_path / "teste_repository.db"
 
@@ -57,6 +58,7 @@ def test_codigo_existe_retorna_false_quando_codigo_nao_esta_cadastrado(tmp_path)
 
     assert codigo_existe("999", caminho_banco) is False
 
+# Verifica se o cadastro devolve o produto completo com os dados do banco.
 def test_salvar_produto_retorna_produto_persistido(tmp_path) -> None:
     caminho_banco = tmp_path / "teste_repository.db"
     criar_tabelas(caminho_banco)
@@ -277,6 +279,7 @@ def test_salvar_produto_retorna_produto_com_id_quando_releitura_falha(
     assert produto_persistido[0] == produto_salvo.id
     assert produto_persistido[1] == "203"
 
+# Confirma que a busca por código devolve o produto correspondente.
 def test_buscar_produto_por_codigo_retorna_produto_quando_existe(tmp_path) -> None:
     caminho_banco = tmp_path / "teste_repository.db"
     criar_tabelas(caminho_banco)
@@ -298,6 +301,7 @@ def test_buscar_produto_por_codigo_retorna_produto_quando_existe(tmp_path) -> No
     assert produto_buscado.codigo == "101"
     assert produto_buscado.nome == "Picanha"
 
+# Define None como resultado esperado para um código inexistente.
 def test_buscar_produto_por_codigo_retorna_none_quando_nao_existe(tmp_path) -> None:
     caminho_banco = tmp_path / "teste_repository.db"
     criar_tabelas(caminho_banco)
