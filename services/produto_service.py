@@ -1,6 +1,6 @@
 from models.produto import Produto
 from database.conexao import CAMINHO_BANCO
-from repositories.produto_repository import codigo_existe
+from repositories.produto_repository import codigo_existe, listar_produtos_repository
 
 
 # Normaliza e valida os dados antes de criar um produto.
@@ -43,6 +43,34 @@ def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, or
     )
 
     return produto, []
+
+
+# Prepara os filtros e solicita ao repository a listagem de produtos.
+def listar_produtos(
+    ativo: bool | None = True,
+    categoria: str | None = None,
+    nome: str | None = None,
+    caminho_banco=CAMINHO_BANCO,
+):
+    categoria_limpa = (
+        limpar_categoria(categoria) or None
+        if categoria is not None
+        else None
+    )
+    nome_limpo = (
+        nome.strip() or None
+        if nome is not None
+        else None
+    )
+
+    produtos = listar_produtos_repository(
+        caminho_banco=caminho_banco,
+        ativo=ativo,
+        categoria=categoria_limpa,
+        nome=nome_limpo,
+    )
+
+    return produtos, []
 
 
 # Valida se o código foi informado e contém somente números.

@@ -1,6 +1,9 @@
 import sqlite3
 
 from database.schema import criar_tabelas
+from models.produto import Produto
+from repositories.produto_repository import salvar_produto
+from services import produto_service
 from services.produto_service import criar_produto
 from database.schema import criar_tabelas
 
@@ -394,3 +397,155 @@ def test_criar_produto_retorna_erro_quando_codigo_ja_existe(tmp_path) -> None:
 
     assert produto is None
     assert "Já existe um produto com esse código." in erros
+
+
+# Confirma que o service padroniza a categoria antes de consultar o repository.
+def test_listar_produtos_service_padroniza_categoria(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_listagem_produto_service.db"
+
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto(
+            codigo="201",
+            nome="Alcatra",
+            categoria="BOVINOS",
+            forma_venda="PESO",
+            preco_venda_centavos=6990,
+            origem="COMPRADO",
+        ),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto(
+            codigo="202",
+            nome="Coxa de frango",
+            categoria="AVES",
+            forma_venda="PESO",
+            preco_venda_centavos=1890,
+            origem="COMPRADO",
+        ),
+        caminho_banco,
+    )
+
+    produtos, erros = produto_service.listar_produtos(
+        categoria="  bovinos  ",
+        caminho_banco=caminho_banco,
+    )
+
+    assert erros == []
+    assert [produto.codigo for produto in produtos] == ["201"]
+
+
+# Confirma que espaços externos não interferem na busca parcial pelo nome.
+def test_listar_produtos_service_limpa_filtro_de_nome(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_listagem_produto_service.db"
+
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto(
+            codigo="203",
+            nome="Alcatra",
+            categoria="BOVINOS",
+            forma_venda="PESO",
+            preco_venda_centavos=6990,
+            origem="COMPRADO",
+        ),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto(
+            codigo="204",
+            nome="Acem",
+            categoria="BOVINOS",
+            forma_venda="PESO",
+            preco_venda_centavos=3990,
+            origem="COMPRADO",
+        ),
+        caminho_banco,
+    )
+
+    produtos, erros = produto_service.listar_produtos(
+        nome="  catr  ",
+        caminho_banco=caminho_banco,
+    )
+
+    assert erros == []
+    assert [produto.codigo for produto in produtos] == ["203"]
+
+
+# Trata um nome composto apenas por espaços como ausência do filtro.
+def test_listar_produtos_service_ignora_nome_vazio(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_listagem_produto_service.db"
+
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto(
+            codigo="205",
+            nome="Alcatra",
+            categoria="BOVINOS",
+            forma_venda="PESO",
+            preco_venda_centavos=6990,
+            origem="COMPRADO",
+        ),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto(
+            codigo="206",
+            nome="Coxa de frango",
+            categoria="AVES",
+            forma_venda="PESO",
+            preco_venda_centavos=1890,
+            origem="COMPRADO",
+        ),
+        caminho_banco,
+    )
+
+    produtos, erros = produto_service.listar_produtos(
+        nome="   ",
+        caminho_banco=caminho_banco,
+    )
+
+    assert erros == []
+    assert [produto.codigo for produto in produtos] == ["205", "206"]
+
+
+# Trata uma categoria composta apenas por espaços como ausência do filtro.
+def test_listar_produtos_service_ignora_categoria_vazia(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_listagem_produto_service.db"
+
+    criar_tabelas(caminho_banco)
+
+    salvar_produto(
+        Produto(
+            codigo="207",
+            nome="Alcatra",
+            categoria="BOVINOS",
+            forma_venda="PESO",
+            preco_venda_centavos=6990,
+            origem="COMPRADO",
+        ),
+        caminho_banco,
+    )
+    salvar_produto(
+        Produto(
+            codigo="208",
+            nome="Coxa de frango",
+            categoria="AVES",
+            forma_venda="PESO",
+            preco_venda_centavos=1890,
+            origem="COMPRADO",
+        ),
+        caminho_banco,
+    )
+
+    produtos, erros = produto_service.listar_produtos(
+        categoria="   ",
+        caminho_banco=caminho_banco,
+    )
+
+    assert erros == []
+    assert [produto.codigo for produto in produtos] == ["207", "208"]
