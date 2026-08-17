@@ -37,6 +37,10 @@ O service normaliza os dados de cadastro:
 - converte categoria, forma de venda e origem para letras maiúsculas;
 - verifica duplicidade do código somente depois das validações básicas.
 
+Após o `commit`, se a releitura pelo ID não encontrar o registro, o cadastro
+permanece válido. Nesse caso, `salvar_produto()` devolve o objeto original com o
+ID gerado, mesmo que as datas automáticas ainda não tenham sido carregadas.
+
 ## Consulta
 
 As seguintes consultas estão implementadas no repository:

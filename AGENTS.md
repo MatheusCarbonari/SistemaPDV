@@ -4,7 +4,9 @@ Este arquivo define como trabalhar neste repositório. Antes de alterar código,
 consulte também:
 
 - `docs/ARQUITETURA.md` quando a tarefa envolver responsabilidades das camadas;
-- `docs/REGRAS_NEGOCIO.md` quando a tarefa envolver comportamento de produtos.
+- `docs/REGRAS_NEGOCIO.md` quando a tarefa envolver comportamento de produtos;
+- `docs/REGRAS_BANCO_DADOS.md` antes de criar ou modificar persistência, schema,
+  migrações, transações ou testes de banco.
 
 ## Forma de colaboração
 

@@ -33,6 +33,9 @@ Centraliza a conexão SQLite, o caminho do banco principal e a criação das
 tabelas. As operações aceitam outro caminho quando necessário para permitir
 testes isolados.
 
+Regras detalhadas de conexão, transações, migrações, backup e segurança estão em
+`docs/REGRAS_BANCO_DADOS.md`.
+
 ### `interface/`
 
 Será responsável por campos, botões, tabelas, mensagens e formatação apresentada
