@@ -110,7 +110,7 @@ def alterar_situacao_produto(
     if not foi_atualizado:
         return False, ["Produto não encontrado."]
 
-    return foi_atualizado, []
+    return foi_atualizado, [] ####### devolver produto? para mostrar ao cliente.
 
 
 # Valida se o código foi informado e contém somente números.
