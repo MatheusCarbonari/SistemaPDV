@@ -52,6 +52,9 @@ def listar_produtos(
     nome: str | None = None,
     caminho_banco=CAMINHO_BANCO,
 ):
+    if ativo is not None and not isinstance(ativo, bool):
+        return [], ["A situação informada para a listagem é inválida."]
+
     categoria_limpa = (
         limpar_categoria(categoria) or None
         if categoria is not None

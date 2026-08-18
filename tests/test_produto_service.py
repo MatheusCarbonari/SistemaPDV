@@ -549,3 +549,34 @@ def test_listar_produtos_service_ignora_categoria_vazia(tmp_path) -> None:
 
     assert erros == []
     assert [produto.codigo for produto in produtos] == ["207", "208"]
+
+
+# Considera normal uma consulta válida que não encontra produtos.
+def test_listar_produtos_service_retorna_lista_vazia_quando_banco_esta_vazio(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_listagem_produto_service.db"
+
+    criar_tabelas(caminho_banco)
+
+    produtos, erros = produto_service.listar_produtos(
+        caminho_banco=caminho_banco,
+    )
+
+    assert produtos == []
+    assert erros == []
+
+
+# Impede que valores diferentes de True, False ou None cheguem ao repository.
+def test_listar_produtos_service_rejeita_ativo_invalido(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_listagem_produto_service.db"
+
+    criar_tabelas(caminho_banco)
+
+    produtos, erros = produto_service.listar_produtos(
+        ativo="ATIVOS",
+        caminho_banco=caminho_banco,
+    )
+
+    assert produtos == []
+    assert erros == ["A situação informada para a listagem é inválida."]
