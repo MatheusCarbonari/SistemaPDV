@@ -207,3 +207,31 @@ def listar_produtos_repository(
         conexao.close()
 
     return [montar_produto(produto) for produto in produtos_encontrados]
+
+
+# Altera a situação do produto e informa se o ID foi encontrado.
+def alterar_situacao_produto_repository(
+    produto_id: int,
+    ativo: bool,
+    caminho_banco=CAMINHO_BANCO,
+) -> bool:
+    conexao = conectar(caminho_banco)
+
+    try:
+        cursor = conexao.execute(
+            """
+            UPDATE produtos
+            SET
+                ativo = ?,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (int(ativo), produto_id),
+        )
+        conexao.commit()
+
+        foi_atualizado = cursor.rowcount > 0
+    finally:
+        conexao.close()
+
+    return foi_atualizado

@@ -580,3 +580,84 @@ def test_listar_produtos_service_rejeita_ativo_invalido(tmp_path) -> None:
 
     assert produtos == []
     assert erros == ["A situação informada para a listagem é inválida."]
+
+
+# Confirma que o service solicita a inativação de um produto existente.
+def test_alterar_situacao_produto_service_inativa_produto_existente(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto = salvar_produto(
+        Produto("209", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    foi_atualizado, erros = produto_service.alterar_situacao_produto(
+        produto_id=produto.id,
+        ativo=False,
+        caminho_banco=caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        situacao_salva = conexao.execute(
+            "SELECT ativo FROM produtos WHERE id = ?",
+            (produto.id,),
+        ).fetchone()
+    finally:
+        conexao.close()
+
+    assert foi_atualizado is True
+    assert erros == []
+    assert situacao_salva[0] == 0
+
+
+# Impede que um identificador inválido seja enviado ao repository.
+def test_alterar_situacao_produto_service_rejeita_id_invalido(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    foi_atualizado, erros = produto_service.alterar_situacao_produto(
+        produto_id="1",
+        ativo=False,
+        caminho_banco=caminho_banco,
+    )
+
+    assert foi_atualizado is False
+    assert erros == ["O identificador do produto é inválido."]
+
+
+# Impede que uma situação diferente de True ou False chegue ao repository.
+def test_alterar_situacao_produto_service_rejeita_ativo_invalido(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    foi_atualizado, erros = produto_service.alterar_situacao_produto(
+        produto_id=1,
+        ativo=None,
+        caminho_banco=caminho_banco,
+    )
+
+    assert foi_atualizado is False
+    assert erros == ["A situação do produto é inválida."]
+
+
+# Informa quando os dados são válidos, mas o produto não existe.
+def test_alterar_situacao_produto_service_retorna_erro_para_id_inexistente(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    foi_atualizado, erros = produto_service.alterar_situacao_produto(
+        produto_id=999,
+        ativo=False,
+        caminho_banco=caminho_banco,
+    )
+
+    assert foi_atualizado is False
+    assert erros == ["Produto não encontrado."]

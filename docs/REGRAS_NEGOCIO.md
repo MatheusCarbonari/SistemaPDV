@@ -61,6 +61,15 @@ Na listagem:
 - filtros informados são combinados com `AND`;
 - ausência de resultados produz uma lista vazia.
 
+## Situação do produto
+
+- produtos podem ser inativados e reativados sem apagar seu cadastro;
+- a alteração usa o identificador interno do produto;
+- o service aceita somente um identificador inteiro positivo e uma situação
+  booleana;
+- um identificador inexistente produz a mensagem `Produto não encontrado.`;
+- a alteração atualiza automaticamente a data de modificação do registro.
+
 ## Garantias do banco
 
 O schema também protege:
@@ -76,7 +85,6 @@ Essas garantias complementam as mensagens amigáveis produzidas pelo service.
 
 - cadastro próprio de categorias;
 - atualização de produtos;
-- inativação e reativação por uma operação do sistema;
 - filtros por múltiplas categorias;
 - tratamento específico de erros operacionais do SQLite;
 - interface gráfica de cadastro e consulta.

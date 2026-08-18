@@ -68,15 +68,22 @@ interface futura
 
 ```text
 interface futura
-    -> produto_service preparará os filtros
+    -> produto_service prepara e valida os filtros
     -> produto_repository monta a consulta parametrizada
     -> SQLite retorna as linhas
     -> repository converte as linhas em objetos Produto
     -> interface apresenta o resultado
 ```
 
-A operação de listagem no service ainda não está implementada. Atualmente, os
-filtros existem apenas no repository.
+### Alteração da situação do produto
+
+```text
+interface futura mantém o ID do produto selecionado
+    -> produto_service valida o ID e a nova situação
+    -> produto_repository atualiza o registro pelo ID
+    -> SQLite preserva o produto e altera sua situação
+    -> interface recebe sucesso ou uma mensagem de erro
+```
 
 ## Princípios adotados
 

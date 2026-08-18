@@ -708,3 +708,102 @@ def test_listar_produtos_combina_filtros_de_nome_categoria_e_ativo(
     )
 
     assert [produto.codigo for produto in produtos] == ["329"]
+
+
+# Confirma no banco que um produto existente pode ser inativado.
+def test_alterar_situacao_produto_inativa_produto_existente(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    produto = salvar_produto(
+        Produto("332", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    foi_atualizado = produto_repository.alterar_situacao_produto_repository(
+        produto.id,
+        ativo=False,
+        caminho_banco=caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        situacao_salva = conexao.execute(
+            "SELECT ativo FROM produtos WHERE id = ?",
+            (produto.id,),
+        ).fetchone()
+    finally:
+        conexao.close()
+
+    assert foi_atualizado is True
+    assert situacao_salva[0] == 0
+
+
+# Confirma que um ID inexistente não modifica os produtos cadastrados.
+def test_alterar_situacao_produto_retorna_false_para_id_inexistente(
+    tmp_path,
+) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    produto = salvar_produto(
+        Produto("333", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    foi_atualizado = produto_repository.alterar_situacao_produto_repository(
+        produto_id=produto.id + 999,
+        ativo=False,
+        caminho_banco=caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        situacao_salva = conexao.execute(
+            "SELECT ativo FROM produtos WHERE id = ?",
+            (produto.id,),
+        ).fetchone()
+    finally:
+        conexao.close()
+
+    assert foi_atualizado is False
+    assert situacao_salva[0] == 1
+
+
+# Confirma no banco que um produto inativo pode ser reativado.
+def test_alterar_situacao_produto_reativa_produto_existente(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    produto = salvar_produto(
+        Produto("334", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        conexao.execute(
+            "UPDATE produtos SET ativo = 0 WHERE id = ?",
+            (produto.id,),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    foi_atualizado = produto_repository.alterar_situacao_produto_repository(
+        produto_id=produto.id,
+        ativo=True,
+        caminho_banco=caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        situacao_salva = conexao.execute(
+            "SELECT ativo FROM produtos WHERE id = ?",
+            (produto.id,),
+        ).fetchone()
+    finally:
+        conexao.close()
+
+    assert foi_atualizado is True
+    assert situacao_salva[0] == 1

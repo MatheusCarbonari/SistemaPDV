@@ -1,6 +1,10 @@
 from models.produto import Produto
 from database.conexao import CAMINHO_BANCO
-from repositories.produto_repository import codigo_existe, listar_produtos_repository
+from repositories.produto_repository import (
+    alterar_situacao_produto_repository,
+    codigo_existe,
+    listar_produtos_repository,
+)
 
 
 # Normaliza e valida os dados antes de criar um produto.
@@ -74,6 +78,39 @@ def listar_produtos(
     )
 
     return produtos, []
+
+
+# Solicita ao repository a alteração da situação de um produto.
+def alterar_situacao_produto(
+    produto_id: int,
+    ativo: bool,
+    caminho_banco=CAMINHO_BANCO,
+):
+    erros = []
+
+    if (
+        not isinstance(produto_id, int)
+        or isinstance(produto_id, bool)
+        or produto_id <= 0
+    ):
+        erros.append("O identificador do produto é inválido.")
+
+    if not isinstance(ativo, bool):
+        erros.append("A situação do produto é inválida.")
+
+    if erros:
+        return False, erros
+
+    foi_atualizado = alterar_situacao_produto_repository(
+        produto_id=produto_id,
+        ativo=ativo,
+        caminho_banco=caminho_banco,
+    )
+
+    if not foi_atualizado:
+        return False, ["Produto não encontrado."]
+
+    return foi_atualizado, []
 
 
 # Valida se o código foi informado e contém somente números.
