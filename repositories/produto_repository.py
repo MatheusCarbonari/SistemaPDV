@@ -235,3 +235,53 @@ def alterar_situacao_produto_repository(
         conexao.close()
 
     return foi_atualizado
+
+def atualizar_produto_repository(
+        produto: Produto,
+        caminho_banco=CAMINHO_BANCO
+) -> Produto | None:
+
+    conexao = conectar(caminho_banco)
+
+    try:
+        cursor = conexao.execute(
+            """
+            UPDATE produtos
+            SET
+                codigo = ?,
+                nome = ?,
+                categoria = ?,
+                forma_venda = ?,
+                preco_venda_centavos = ?,
+                origem = ?,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                produto.codigo,
+                produto.nome,
+                produto.categoria,
+                produto.forma_venda,
+                produto.preco_venda_centavos,
+                produto.origem,
+                produto.id,
+            ),
+        )
+
+        conexao.commit()
+
+        if cursor.rowcount == 0:
+            return None
+
+    finally:
+        conexao.close()
+
+    produto_buscado = buscar_produto_banco_pelo_id(
+        produto.id,
+        caminho_banco
+    )
+
+    if produto_buscado is None:
+        return None
+
+    return montar_produto(produto_buscado)

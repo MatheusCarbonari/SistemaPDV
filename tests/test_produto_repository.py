@@ -10,6 +10,7 @@ from repositories.produto_repository import (
     codigo_existe,
     listar_produtos_repository,
     salvar_produto,
+    atualizar_produto_repository
 )
 import repositories.produto_repository as produto_repository
 
@@ -807,3 +808,52 @@ def test_alterar_situacao_produto_reativa_produto_existente(tmp_path) -> None:
 
     assert foi_atualizado is True
     assert situacao_salva[0] == 1
+
+def test_atualizar_produto_repository_atualiza_produto_existente(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    produto = Produto(
+        codigo="101",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=7990,
+        origem="COMPRADO",
+    )
+
+    produto_salvo = salvar_produto(produto, caminho_banco)
+
+    produto_salvo.nome = "Picanha Maturada"
+    produto_salvo.preco_venda_centavos = 8490
+
+    produto_atualizado = atualizar_produto_repository(
+        produto_salvo,
+        caminho_banco
+    )
+
+    assert produto_atualizado is not None
+    assert produto_atualizado.nome == "Picanha Maturada"
+    assert produto_atualizado.preco_venda_centavos == 8490
+    assert produto_atualizado.id == produto_salvo.id
+
+def test_atualizar_produto_repository_retorna_none_quando_id_nao_existe(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_repository.db"
+    criar_tabelas(caminho_banco)
+
+    produto = Produto(
+        codigo="999",
+        nome="Produto inexistente",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=5000,
+        origem="COMPRADO",
+        id=999,
+    )
+
+    resultado = atualizar_produto_repository(
+        produto,
+        caminho_banco
+    )
+
+    assert resultado is None
