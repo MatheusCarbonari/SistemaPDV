@@ -4,8 +4,11 @@ from database.schema import criar_tabelas
 from models.produto import Produto
 from repositories.produto_repository import salvar_produto
 from services import produto_service
-from services.produto_service import criar_produto, atualizar_produto
 from database.schema import criar_tabelas
+from services.produto_service import (
+    criar_produto, 
+    atualizar_produto, 
+    consultar_produto_por_codigo)
 
 
 # Cenário válido e normalização dos dados.
@@ -817,3 +820,56 @@ def test_atualizar_produto_retorna_erro_quando_forma_venda_invalida(tmp_path) ->
 
     assert produto_atualizado is None
     assert "Forma de venda permite apenas 'PESO' e 'UNIDADE'." in erros
+
+
+def test_consultar_produto_por_codigo_retorna_produto_quando_existe(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto = Produto(
+        codigo="101",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=7990,
+        origem="COMPRADO",
+    )
+
+    salvar_produto(produto, caminho_banco)
+
+    produto_buscado, erros = consultar_produto_por_codigo(
+        " 101 ",
+        caminho_banco
+    )
+
+    assert erros == []
+    assert produto_buscado is not None
+    assert produto_buscado.codigo == "101"
+    assert produto_buscado.nome == "Picanha"
+
+
+def test_consultar_produto_por_codigo_retorna_erro_quando_nao_existe(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto_buscado, erros = consultar_produto_por_codigo(
+        "101",
+        caminho_banco
+    )
+
+    assert produto_buscado is None
+    assert "Produto não encontrado." in erros
+
+
+def test_consultar_produto_por_codigo_retorna_erro_quando_codigo_invalido(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto_buscado, erros = consultar_produto_por_codigo(
+        "ABC",
+        caminho_banco
+    )
+
+    assert produto_buscado is None
+    assert "O código deve conter apenas números." in erros
+

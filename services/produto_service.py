@@ -322,3 +322,21 @@ def atualizar_produto(
         return None, ["Não foi possivel atualizar o produto."]
 
     return produto_salvo, []
+
+
+def consultar_produto_por_codigo(
+        codigo,
+        caminho_banco=CAMINHO_BANCO
+):
+    codigo_limpo = limpar_codigo(codigo)
+    erros_codigo = validar_codigo(codigo_limpo)
+
+    if erros_codigo:
+        return None, erros_codigo
+
+    produto_buscado = buscar_produto_por_codigo(codigo_limpo, caminho_banco)
+
+    if produto_buscado is None:
+        return None, ["Produto não encontrado."]
+
+    return produto_buscado, []
