@@ -4,7 +4,7 @@ from database.schema import criar_tabelas
 from models.produto import Produto
 from repositories.produto_repository import salvar_produto
 from services import produto_service
-from services.produto_service import criar_produto
+from services.produto_service import criar_produto, atualizar_produto
 from database.schema import criar_tabelas
 
 
@@ -661,3 +661,159 @@ def test_alterar_situacao_produto_service_retorna_erro_para_id_inexistente(
 
     assert foi_atualizado is False
     assert erros == ["Produto não encontrado."]
+
+
+def test_atualizar_produto_com_dados_validos(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto = Produto(
+        codigo="101",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=7990,
+        origem="COMPRADO",
+    )
+
+    produto_salvo = salvar_produto(produto, caminho_banco)
+
+    produto_atualizado, erros = atualizar_produto(
+        produto_id=produto_salvo.id,
+        codigo=" 101 ",
+        nome=" picanha maturada ",
+        categoria=" bovinos ",
+        forma_venda=" peso ",
+        preco_venda_centavos=8490,
+        origem=" comprado ",
+        caminho_banco=caminho_banco,
+    )
+
+    assert erros == []
+    assert produto_atualizado is not None
+    assert produto_atualizado.id == produto_salvo.id
+    assert produto_atualizado.codigo == "101"
+    assert produto_atualizado.nome == "Picanha maturada"
+    assert produto_atualizado.categoria == "BOVINOS"
+    assert produto_atualizado.forma_venda == "PESO"
+    assert produto_atualizado.preco_venda_centavos == 8490
+    assert produto_atualizado.origem == "COMPRADO"
+
+
+def test_atualizar_produto_retorna_erro_quando_produto_nao_existe(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto_atualizado, erros = atualizar_produto(
+        produto_id=999,
+        codigo="101",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=7990,
+        origem="COMPRADO",
+        caminho_banco=caminho_banco,
+    )
+
+    assert produto_atualizado is None
+    assert "Produto não encontrado." in erros
+
+
+def test_atualizar_produto_retorna_erro_quando_codigo_pertence_a_outro_produto(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto_1 = Produto(
+        codigo="101",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=7990,
+        origem="COMPRADO",
+    )
+
+    produto_2 = Produto(
+        codigo="202",
+        nome="Alcatra",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=6990,
+        origem="COMPRADO",
+    )
+
+    produto_1_salvo = salvar_produto(produto_1, caminho_banco)
+    produto_2_salvo = salvar_produto(produto_2, caminho_banco)
+
+    produto_atualizado, erros = atualizar_produto(
+        produto_id=produto_2_salvo.id,
+        codigo=produto_1_salvo.codigo,
+        nome="Alcatra",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=6990,
+        origem="COMPRADO",
+        caminho_banco=caminho_banco,
+    )
+
+    assert produto_atualizado is None
+    assert "Já existe outro produto com esse código." in erros
+
+
+def test_atualizar_produto_retorna_erro_quando_preco_invalido(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto = Produto(
+        codigo="101",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=7990,
+        origem="COMPRADO",
+    )
+
+    produto_salvo = salvar_produto(produto, caminho_banco)
+
+    produto_atualizado, erros = atualizar_produto(
+        produto_id=produto_salvo.id,
+        codigo="101",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=0,
+        origem="COMPRADO",
+        caminho_banco=caminho_banco,
+    )
+
+    assert produto_atualizado is None
+    assert "O preço de venda deve ser maior que zero." in erros
+
+
+def test_atualizar_produto_retorna_erro_quando_forma_venda_invalida(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto = Produto(
+        codigo="101",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="PESO",
+        preco_venda_centavos=7990,
+        origem="COMPRADO",
+    )
+
+    produto_salvo = salvar_produto(produto, caminho_banco)
+
+    produto_atualizado, erros = atualizar_produto(
+        produto_id=produto_salvo.id,
+        codigo="101",
+        nome="Picanha",
+        categoria="BOVINOS",
+        forma_venda="a prazo",
+        preco_venda_centavos=7990,
+        origem="COMPRADO",
+        caminho_banco=caminho_banco,
+    )
+
+    assert produto_atualizado is None
+    assert "Forma de venda permite apenas 'PESO' e 'UNIDADE'." in erros

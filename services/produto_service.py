@@ -4,6 +4,9 @@ from repositories.produto_repository import (
     alterar_situacao_produto_repository,
     codigo_existe,
     listar_produtos_repository,
+    buscar_produto_banco_pelo_id,
+    buscar_produto_por_codigo,
+    atualizar_produto_repository
 )
 
 
@@ -251,3 +254,71 @@ def validar_origem(origem):
         lista_de_erros.append("A origem do produto permite apenas 'COMPRADO' e 'PRODUZIDO'.")
 
     return lista_de_erros
+
+
+def atualizar_produto(
+    produto_id,
+    codigo,
+    nome,
+    categoria,
+    forma_venda,
+    preco_venda_centavos,
+    origem,
+    caminho_banco=CAMINHO_BANCO, 
+):
+    produto_atual = buscar_produto_banco_pelo_id(
+        produto_id,
+        caminho_banco,
+    )
+
+    if produto_atual is None:
+        return None, ["Produto não encontrado."]
+
+    codigo_limpo = limpar_codigo(codigo)
+    nome_limpo = limpar_nome(nome)
+    categoria_limpa = limpar_categoria(categoria)
+    forma_venda_limpa = limpar_forma_venda(forma_venda)
+    origem_limpa = limpar_origem(origem)
+
+    lista_de_erros = []
+
+    lista_de_erros.extend(validar_codigo(codigo_limpo))
+    lista_de_erros.extend(validar_nome(nome_limpo))
+    lista_de_erros.extend(validar_categoria(categoria_limpa))
+    lista_de_erros.extend(validar_forma_venda(forma_venda_limpa))
+    lista_de_erros.extend(validar_origem(origem_limpa))
+    lista_de_erros.extend(validar_preco_venda_centavos(preco_venda_centavos))
+
+    if lista_de_erros:
+        return None, lista_de_erros
+
+    produto_com_mesmo_codigo = buscar_produto_por_codigo(
+        codigo_limpo,
+        caminho_banco
+    )
+
+    if(
+        produto_com_mesmo_codigo is not None
+        and produto_com_mesmo_codigo.id != produto_id
+    ):
+        return None, ["Já existe outro produto com esse código."]
+
+    produto_atualizado = Produto(
+        id=produto_id,
+        codigo=codigo_limpo,
+        nome=nome_limpo,
+        categoria=categoria_limpa,
+        forma_venda=forma_venda_limpa,
+        preco_venda_centavos=preco_venda_centavos,
+        origem=origem_limpa,
+    )
+
+    produto_salvo = atualizar_produto_repository(
+        produto_atualizado,
+        caminho_banco
+    )
+
+    if produto_salvo is None:
+        return None, ["Não foi possivel atualizar o produto."]
+
+    return produto_salvo, []
