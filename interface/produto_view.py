@@ -54,6 +54,7 @@ def abrir_tela_consulta_produto():
             resultado_label.configure(
                 text="\n".join(erros)
             )
+            botao_editar.configure(state="disable")
             return
 
         resultado_label.configure(
@@ -67,12 +68,21 @@ def abrir_tela_consulta_produto():
             )
         )
 
+        botao_editar.configure(state="normal")
+
     botao_buscar = ctk.CTkButton(
         janela,
         text="Buscar",
         command=buscar_produto,
     )
     botao_buscar.pack(pady=10)
+
+    botao_editar = ctk.CTkButton(
+        janela,
+        text="Editar",
+        state="disable"
+    )
+    botao_editar.pack(pady=10)
 
     resultado_label = ctk.CTkLabel(
         janela,
