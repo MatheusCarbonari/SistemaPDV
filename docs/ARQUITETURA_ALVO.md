@@ -1,0 +1,30 @@
+# Arquitetura-alvo (planejada)
+
+## Componentes
+- `interface/`: PySide6 Qt Widgets; captura de eventos, foco, formulários e apresentação; nunca SQL.
+- `services/` ou módulos de aplicação: casos de uso e coordenação de operações, autorização e transações.
+- `models/` / domínio: regras de leitura, valores monetários, itens, quantidades, pagamentos; idealmente sem importação de Qt.
+- `repositories/`: acesso parametrizado a dados.
+- `database/`: conexão, esquema, migrações, transações.
+- Serviços transversais: logging, backup, diagnósticos, instalação, recuperação.
+
+## Dados e integridade
+- SQLite único local, foreign_keys habilitado, transação atômica ao gravar venda+itens+pagamentos.
+- `id` técnico não é `codigo` operacional. ID de venda persistente e único; usar identificador separado por tentativa para idempotência.
+- Snapshot de cada item para não depender de mudanças no cadastro; `produto_id` opcional para Diversos.
+- Preços monetários em centavos; multiplicação de kg usa Decimal e política explícita de arredondamento.
+- Guardar forma de entrada e procedência da quantidade, especialmente se estimada por valor/preço.
+- Cadastro editável durante venda; alterações só afetam novas inclusões.
+- No futuro, categorias em tabela editável; não impor enumeração rígida.
+
+## Falhas
+Falha de gravação não prova ausência de commit. Nova tentativa deve reutilizar identificador estável e verificar resultado quando possível. Se banco indisponível, modo de cálculo pode usar catálogo em memória; em reinício com banco indisponível não há garantia de recuperação. Sem persistência alternativa na V1.
+
+## Distribuição
+Binário Windows empacotado, arquivos de dados fora da instalação; instalador atualiza só programa e executa migrador quando necessário; backup válido e migração segura, sem retrocesso automático de banco em falha. Compatibilidade/licença PySide6 deve ser avaliada em entrega comercial.
+
+## Riscos e validações ainda necessários
+- Verificar padrão real de todas as etiquetas de balança, dígito verificador e semântica dos campos.
+- Inspecionar scripts, dependências, base real e testes do ZIP antes de reaproveitar/refatorar.
+- Definir limites precisos de precisão/arredondamento e política de cadastro código/forma de venda antes de implementar.
+- Testar o leitor físico, lock SQLite, transações incertas, restauração e metas de latência no equipamento alvo.

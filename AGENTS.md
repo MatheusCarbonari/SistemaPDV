@@ -1,46 +1,25 @@
-# Orientações gerais para agentes de IA
+# Sistema-PDV — orientações de desenvolvimento
 
-Este arquivo reúne regras válidas para praticamente todas as tarefas no projeto.
-Procedimentos especializados ficam nas Skills indicadas ao final.
+Fonte de verdade do planejamento: `docs/README.md`, `docs/DECISOES.md`, `docs/REVISOES.md`, `docs/ESCOPO.md` e `docs/TICKETS.md`.
+O código legado deve ser examinado antes de qualquer alteração. Planejado NÃO significa implementado.
 
-## Colaboração
+## Método de colaboração
+- Um ticket pequeno por vez; evitar misturar GUI, modelo de dados, migrações e regra de negócio na mesma entrega quando puder separar.
+- Antes de implementar: explicar objetivo comercial, conceito técnico empregado, alternativas, arquivos afetados, critérios de aceitação e testes.
+- Explicar *por que* uma classe, composição, herança, transação, evento ou padrão seria necessário; não introduzir abstrações por exibicionismo.
+- Se pedido for análise ou documentação: não alterar código. Não iniciar implementação sem autorização.
+- Prompts para Codex: concisos, com restrições, testes e escopo explícito.
+- Testes SQLite sempre isolados em `tmp_path`; nunca usar o banco principal. Exigir teste de regressão para erro corrigido.
+- Preservar dados do estabelecimento; nunca apagar ou recriar um banco real como atalho.
+- Não executar commit, push, merge ou alterações destrutivas fora do pedido.
+- Executar e relatar testes pertinentes; distinguir não testado de aprovado.
+- Criar ou atualizar documentação quando uma decisão mudar.
 
-- Explique decisões e mudanças relevantes de forma didática, pois o projeto
-  também é usado para estudar programação.
-- Quando o pedido for somente analisar, revisar ou explicar, não altere arquivos.
-- Não implemente funcionalidades futuras sem solicitação explícita.
-- Faça mudanças pequenas, coerentes e limitadas ao objetivo atual.
-- Preserve alterações existentes que não pertençam ao escopo da tarefa.
+## Arquitetura-alvo (não necessariamente implementada)
+Windows, Python, PySide6 Qt Widgets, SQLite, monólito modular, dinheiro em centavos, divisão clara entre interface/domínio/persistência. Nenhuma venda fiscal na V1.
 
-## Arquitetura
+## Situação do repositório recebido
+Há código com `customtkinter`, módulos de cadastro e testes; `requirements.txt` ainda não inclui PySide6. Não afirmar que a migração já ocorreu. Primeiro trabalho: auditoria somente leitura em `T01`.
 
-- `interface/` apresenta dados e recebe ações do usuário.
-- `services/` coordena regras de negócio, validações e fluxos da aplicação.
-- `repositories/` acessa e modifica a persistência.
-- `database/` configura conexão e schema.
-- `models/` representa entidades e dados do domínio.
-- `utils/` contém somente comportamentos com reutilização concreta.
-- Respeite as responsabilidades das camadas e evite refatorações de arquitetura
-  junto com mudanças não relacionadas.
-
-## Git
-
-- Não execute commit, push, merge ou outra operação irreversível sem solicitação
-  explícita do usuário.
-- Antes de concluir uma mudança, revise o diff e os testes apropriados.
-- Quando solicitado, crie commits coerentes e use Conventional Commits.
-- Separe mudanças independentes quando isso tornar o histórico mais claro.
-
-## Documentação
-
-- Mantenha a documentação consistente quando uma mudança alterar arquitetura,
-  regras de negócio ou comportamento documentado.
-- Não registre como implementada uma funcionalidade que exista apenas como plano.
-
-## Procedimentos especializados
-
-- Use a Skill `database-sqlite` em tarefas de SQLite, schema, SQL, repositories,
-  persistência, transações, migrações ou integridade de dados.
-- Use a Skill `testing-pytest` para criar, corrigir ou revisar testes com pytest.
-- Use a Skill `review-change` em revisões finais, auditorias de alterações ou
-  pedidos de análise de diff e estado do projeto.
+## Referências históricas
+Arquivos anteriores em `docs/legado/` são material de referência do projeto antigo, não fonte normativa do planejamento novo.

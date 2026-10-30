@@ -1,0 +1,35 @@
+# Registro de decisões arquiteturais (ADR resumido)
+
+**Status de todas as decisões abaixo: aprovadas no planejamento; não necessariamente implementadas.** A numeração `DEC-012+1` é intencional.
+
+- **DEC-001** — Venda ativa em memória; apenas venda confirmada persiste; desenho permite futura recuperação.
+- **DEC-002** — Aplicativo desktop instalado.
+- **DEC-003** — Windows primeiro, sem impedir portabilidade futura.
+- **DEC-004** — Python como linguagem principal.
+- **DEC-005** — PySide6 Qt Widgets; separar domínio do Qt e verificar obrigações de licença.
+- **DEC-006** — SQLite local; transações, integridade, migrações e backups.
+- **DEC-007** — Monólito modular sem interfaces/abstrações antecipadas.
+- **DEC-008** — Dinheiro em centavos (int), Decimal onde necessário; evitar float monetário.
+- **DEC-009** — Código EAN-13 da etiqueta: subtotal codificado é a referência; validar padrão e preservar código bruto.
+- **DEC-010** — Mostrar referência do catálogo e peso estimado; aviso não bloqueante quando aplicável; sem integração com balança.
+- **DEC-011** — Produtos PESO/UNIDADE; para unidade, estimativa inicial inteira corrigível, sem modificar subtotal codificado; guardar procedência.
+- **DEC-012** — Campo único de entrada; código curto abre diálogo contextual; 9999 abre Diversos; Enter/Esc e foco.
+- **DEC-012+1** — Uma linha por etiqueta lida, mesmo para produtos iguais; inclusão manual pode agrupar quantidade.
+- **DEC-014** — Remover linha da venda aberta e desfazer apenas a última remoção.
+- **DEC-015** — Confirmar fechamento e detalhamento dos pagamentos em diálogo antes de transação atômica.
+- **DEC-016** — Cancelamento interno integral, com motivo/data, preservando histórico; sem estorno automático financeiro/fiscal.
+- **DEC-017** — ID de venda inteiro crescente, não reaproveitado; exibição com zeros à esquerda; pesquisa ID/data.
+- **DEC-018** — Pagamentos 1:N, modalidades repetíveis, sugestão de saldo restante, divisão igual em centavos; sem controle de troco/caixa.
+- **DEC-019** — Cadastro e edição permitidos durante venda; snapshot preserva itens; registrar histórico de alteração de preços com consulta aos 12 meses, sem exclusão automática.
+- **DEC-020** — Login inicial; contas básicas Administrador e Caixa; autorização por operação crítica, sem sessão administrativa permanente; preparado para usuários individuais.
+- **DEC-021** — Logs, modo de cálculo degradado quando possível; sem fila durável na V1; nova tentativa idempotente e protocolo manual para persistência incerta.
+- **DEC-022** — Backup automático local e externo, integridade e restauração testada; falha em backup externo não bloqueia caixa.
+- **DEC-023** — Instalador Windows com atualização manual, programa e dados separados, migrações versionadas seguras.
+- **DEC-024** — pytest unitário/integração, pytest-qt para fluxos críticos e teste no hardware real; metas objetivas.
+
+## Decisões que exigem cuidado
+- Produtos existentes podem ter o código ou forma de venda protegidos por regras específicas; essas regras serão validadas antes de alteração em produção.
+- Uma quantidade derivada do preço é **estimada**, nunca prova de pesagem. Quantidade informada manualmente não equivale a pesagem certificada.
+- Recuperação de acesso: códigos únicos offline gerados na configuração, armazenados por hash e consumidos uma vez.
+- Código `9999` reservado; nenhum produto comum poderá usá-lo.
+- A fila de contingência de persistência e eventual fila de documentos fiscais são responsabilidades diferentes e futuras. NFC-e tem regras específicas da SEFAZ, não é mero reenvio livre de totais.
