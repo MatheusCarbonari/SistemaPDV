@@ -124,6 +124,8 @@ def validar_codigo(codigo):
         lista_de_erros.append("O código é obrigatório.")
     elif not codigo.isdigit():
         lista_de_erros.append("O código deve conter apenas números.")
+    elif codigo == "9999":
+        lista_de_erros.append("O código 9999 é reservado para a função Diversos.")
 
     return lista_de_erros
 

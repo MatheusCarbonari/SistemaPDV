@@ -66,6 +66,48 @@ def test_criar_produto_com_codigo_nao_numerico() -> None:
     assert "O código deve conter apenas números." in erros
 
 
+def test_validar_codigo_rejeita_apenas_codigo_reservado_9999() -> None:
+    assert produto_service.validar_codigo("9999") == [
+        "O código 9999 é reservado para a função Diversos."
+    ]
+    assert produto_service.validar_codigo("9998") == []
+    assert produto_service.validar_codigo("10000") == []
+
+
+def test_criar_produto_rejeita_codigo_9999_e_preserva_dados(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto_existente = salvar_produto(
+        Produto("101", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    produto, erros = criar_produto(
+        codigo="9999",
+        nome="Produto comum",
+        categoria="OUTROS",
+        forma_venda="UNIDADE",
+        preco_venda_centavos=1000,
+        origem="COMPRADO",
+        caminho_banco=caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        produtos_salvos = conexao.execute(
+            "SELECT id, codigo, nome FROM produtos ORDER BY id"
+        ).fetchall()
+    finally:
+        conexao.close()
+
+    assert produto is None
+    assert erros == ["O código 9999 é reservado para a função Diversos."]
+    assert produtos_salvos == [
+        (produto_existente.id, "101", "Picanha"),
+    ]
+
+
 # Validações do nome.
 def test_criar_produto_com_nome_vazio() -> None:
     produto, erros = criar_produto(
@@ -701,6 +743,52 @@ def test_atualizar_produto_com_dados_validos(tmp_path) -> None:
     assert produto_atualizado.forma_venda == "PESO"
     assert produto_atualizado.preco_venda_centavos == 8490
     assert produto_atualizado.origem == "COMPRADO"
+
+
+def test_atualizar_produto_rejeita_codigo_9999_e_preserva_dados(tmp_path) -> None:
+    caminho_banco = tmp_path / "teste_produto_service.db"
+    criar_tabelas(caminho_banco)
+
+    produto_salvo = salvar_produto(
+        Produto("101", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+        caminho_banco,
+    )
+
+    produto_atualizado, erros = atualizar_produto(
+        produto_id=produto_salvo.id,
+        codigo="9999",
+        nome="Nome alterado",
+        categoria="OUTROS",
+        forma_venda="UNIDADE",
+        preco_venda_centavos=1000,
+        origem="PRODUZIDO",
+        caminho_banco=caminho_banco,
+    )
+
+    conexao = sqlite3.connect(caminho_banco)
+    try:
+        dados_salvos = conexao.execute(
+            """
+            SELECT codigo, nome, categoria, forma_venda,
+                   preco_venda_centavos, origem
+            FROM produtos
+            WHERE id = ?
+            """,
+            (produto_salvo.id,),
+        ).fetchone()
+    finally:
+        conexao.close()
+
+    assert produto_atualizado is None
+    assert erros == ["O código 9999 é reservado para a função Diversos."]
+    assert dados_salvos == (
+        "101",
+        "Picanha",
+        "BOVINOS",
+        "PESO",
+        7990,
+        "COMPRADO",
+    )
 
 
 def test_atualizar_produto_retorna_erro_quando_produto_nao_existe(tmp_path) -> None:
