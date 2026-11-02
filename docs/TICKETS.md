@@ -76,9 +76,9 @@ O código de produto extraído remove zeros à esquerda e somente essa forma nor
 **Entrega verificável:** Representar em memória uma sequência imutável e ordenada de itens, sem operações de carrinho ou persistência.
 **Conceito a estudar:** Coleções imutáveis, agregados em memória e invariantes.
 
-### T17 — Janela PySide6 mínima
-**Entrega verificável:** Criar janela/shell e campo de leitura, sem lógica comercial na GUI.
-**Conceito a estudar:** Qt Widgets, sinais/slots.
+### T17 — Adicionar itens à venda
+**Entrega verificável:** Retornar nova versão da venda em andamento com o item acrescentado ao final, sem mutação ou agrupamento.
+**Conceito a estudar:** Atualização imutável, identidade de objetos e versionamento em memória.
 
 ### T18 — Entrada e atalhos
 **Entrega verificável:** Enter/Esc, diálogos contextuais e restauração do foco.
