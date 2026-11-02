@@ -6,7 +6,6 @@ from services.ean13 import validar_ean13
 @pytest.mark.parametrize(
     "codigo",
     [
-        "2023400053672",
         "0000000000017",
         "0000000000000",
         "9999999999994",

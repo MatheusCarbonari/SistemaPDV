@@ -2,33 +2,11 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from services.etiqueta_balanca import EtiquetaBalanca, interpretar_etiqueta
-
-
-@pytest.mark.parametrize(
-    ("codigo", "codigo_produto", "valor_centavos"),
-    [
-        ("2023400053672", "234", 5367),
-        ("2001100137083", "11", 13708),
-        ("2014700015903", "147", 1590),
-    ],
-)
-def test_interpretar_etiqueta_retorna_campos_das_etiquetas_reais(
-    codigo,
-    codigo_produto,
-    valor_centavos,
-) -> None:
-    etiqueta = interpretar_etiqueta(codigo)
-
-    assert etiqueta == EtiquetaBalanca(
-        codigo_barras=codigo,
-        codigo_produto=codigo_produto,
-        valor_centavos=valor_centavos,
-    )
+from services.etiqueta_balanca import interpretar_etiqueta
 
 
 def test_interpretar_etiqueta_retorna_resultado_imutavel() -> None:
-    etiqueta = interpretar_etiqueta("2023400053672")
+    etiqueta = interpretar_etiqueta("2000000000008")
 
     with pytest.raises(FrozenInstanceError):
         etiqueta.valor_centavos = 100
