@@ -88,9 +88,9 @@ O código de produto extraído remove zeros à esquerda e somente essa forma nor
 **Entrega verificável:** Retornar nova versão da venda com um item inserido no índice indicado, preparando o futuro desfazer sem implementá-lo.
 **Conceito a estudar:** Inserção imutável por slicing, índices e identidade de objetos.
 
-### T20 — Medição de leitura
-**Entrega verificável:** Instrumentar latência e testar leitor físico e repetição.
-**Conceito a estudar:** Profiling, métricas.
+### T20 — Desfazer última remoção
+**Entrega verificável:** Manter somente a última remoção em estado imutável, restaurá-la uma vez e invalidá-la após outras inclusões.
+**Conceito a estudar:** Estado imutável, undo de uma etapa e composição de operações puras.
 
 ## Marco 2 — Operação comercial
 
