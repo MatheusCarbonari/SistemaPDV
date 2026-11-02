@@ -56,9 +56,9 @@ O código de produto extraído remove zeros à esquerda e somente essa forma nor
 **Entrega verificável:** Definir um item imutável com snapshot comercial, origem, subtotal e metadados opcionais de quantidade, sem carrinho ou cálculos.
 **Conceito a estudar:** Invariantes de domínio, dataclasses imutáveis e Decimal.
 
-### T11 — Totalização
-**Entrega verificável:** Soma exata e políticas de arredondamento testadas.
-**Conceito a estudar:** Centavos, Decimal.
+### T11 — Criar ItemVenda a partir de ProdutoEtiqueta
+**Entrega verificável:** Transformar uma etiqueta já associada em item imutável, copiando snapshot, subtotal e código original sem recálculo.
+**Conceito a estudar:** Função de fábrica, composição de modelos e isolamento de mutabilidade.
 
 ### T12 — Remover e desfazer
 **Entrega verificável:** Remoção por identificador de linha e undo único.
