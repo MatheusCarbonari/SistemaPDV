@@ -60,9 +60,9 @@ O código de produto extraído remove zeros à esquerda e somente essa forma nor
 **Entrega verificável:** Transformar uma etiqueta já associada em item imutável, copiando snapshot, subtotal e código original sem recálculo.
 **Conceito a estudar:** Função de fábrica, composição de modelos e isolamento de mutabilidade.
 
-### T12 — Remover e desfazer
-**Entrega verificável:** Remoção por identificador de linha e undo único.
-**Conceito a estudar:** Comandos reversíveis.
+### T12 — Estimativa de peso
+**Entrega verificável:** Estimar quilogramas a partir de subtotal e preço por kg em centavos, com três casas decimais e arredondamento explícito.
+**Conceito a estudar:** Decimal, quantização e ROUND_HALF_UP.
 
 ### T14 — Entrada manual por unidade
 **Entrega verificável:** Quantidade em diálogo lógico; subtotal apropriado.
