@@ -52,9 +52,9 @@ O código de produto extraído remove zeros à esquerda e somente essa forma nor
 **Entrega verificável:** Copiar os dados comerciais atuais do produto para um snapshot imutável e independente, sem criar item de venda.
 **Conceito a estudar:** Objetos de valor, imutabilidade e snapshot.
 
-### T10 — Inclusão de linha
-**Entrega verificável:** Adicionar etiquetas separadamente; teste com mesmo produto repetido.
-**Conceito a estudar:** Estado em memória.
+### T10 — Modelo de item da venda
+**Entrega verificável:** Definir um item imutável com snapshot comercial, origem, subtotal e metadados opcionais de quantidade, sem carrinho ou cálculos.
+**Conceito a estudar:** Invariantes de domínio, dataclasses imutáveis e Decimal.
 
 ### T11 — Totalização
 **Entrega verificável:** Soma exata e políticas de arredondamento testadas.
