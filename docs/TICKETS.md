@@ -72,9 +72,9 @@ O código de produto extraído remove zeros à esquerda e somente essa forma nor
 **Entrega verificável:** Criar item de etiqueta com estimativa de peso ou unidades quando os dados permitirem, preservando fallback sem quantidade.
 **Conceito a estudar:** Composição de funções puras, fallback e isolamento de mutabilidade.
 
-### T16 — Diversos
-**Entrega verificável:** Atalho 9999, descrição fixa, valor sem produto associado.
-**Conceito a estudar:** Representação opcional.
+### T16 — Modelo VendaEmAndamento
+**Entrega verificável:** Representar em memória uma sequência imutável e ordenada de itens, sem operações de carrinho ou persistência.
+**Conceito a estudar:** Coleções imutáveis, agregados em memória e invariantes.
 
 ### T17 — Janela PySide6 mínima
 **Entrega verificável:** Criar janela/shell e campo de leitura, sem lógica comercial na GUI.
