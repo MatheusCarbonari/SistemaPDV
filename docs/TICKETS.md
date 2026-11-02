@@ -42,9 +42,11 @@ Cada ticket deve gerar uma alteração pequena, revisão fácil e testes apropri
 **Entrega verificável:** Extrair código e subtotal em centavos; preservar código bruto.
 **Conceito a estudar:** Domínio, precisão.
 
-### T08 — Catálogo de etiquetas reais
-**Entrega verificável:** Testes parametrizados com amostras autorizadas, incluindo unidades e códigos ruins.
-**Conceito a estudar:** Testes de tabela.
+### T08 — Associação entre etiqueta e produto
+**Entrega verificável:** Associar etiqueta válida ao produto ativo pelo código normalizado, sem criar item de venda.
+**Conceito a estudar:** Composição de serviços e contratos de retorno.
+
+O código de produto extraído remove zeros à esquerda e somente essa forma normalizada é consultada. Cadastros como `234` e `0234` são distintos; não há busca automática por variantes, portanto uma etiqueta com campo `0234` não encontra um produto cadastrado apenas como `0234`.
 
 ### T09 — Modelo de item em memória
 **Entrega verificável:** Definir dados históricos, origem e estimativas sem GUI.
