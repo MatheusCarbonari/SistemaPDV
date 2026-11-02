@@ -80,9 +80,9 @@ O código de produto extraído remove zeros à esquerda e somente essa forma nor
 **Entrega verificável:** Retornar nova versão da venda em andamento com o item acrescentado ao final, sem mutação ou agrupamento.
 **Conceito a estudar:** Atualização imutável, identidade de objetos e versionamento em memória.
 
-### T18 — Entrada e atalhos
-**Entrega verificável:** Enter/Esc, diálogos contextuais e restauração do foco.
-**Conceito a estudar:** Eventos Qt, pytest-qt.
+### T18 — Remover item da venda
+**Entrega verificável:** Retornar nova versão da venda sem o item do índice indicado, preservando ordem e identidade dos demais.
+**Conceito a estudar:** Fatiamento de tuples, índices e atualização imutável.
 
 ### T19 — Lista de itens
 **Entrega verificável:** Exibir linhas, subtotais, estimativas e remoção; conferir interface.
