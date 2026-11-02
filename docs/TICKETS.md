@@ -68,9 +68,9 @@ O código de produto extraído remove zeros à esquerda e somente essa forma nor
 **Entrega verificável:** Quantidade em diálogo lógico; subtotal apropriado.
 **Conceito a estudar:** Regras de negócio.
 
-### T15 — Entrada manual por peso
-**Entrega verificável:** Último campo editado define recálculo; registrar peso informado vs estimado.
-**Conceito a estudar:** Eventos, arredondamento.
+### T15 — Integrar estimativas ao ItemVenda
+**Entrega verificável:** Criar item de etiqueta com estimativa de peso ou unidades quando os dados permitirem, preservando fallback sem quantidade.
+**Conceito a estudar:** Composição de funções puras, fallback e isolamento de mutabilidade.
 
 ### T16 — Diversos
 **Entrega verificável:** Atalho 9999, descrição fixa, valor sem produto associado.
