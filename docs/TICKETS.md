@@ -84,9 +84,9 @@ O código de produto extraído remove zeros à esquerda e somente essa forma nor
 **Entrega verificável:** Retornar nova versão da venda sem o item do índice indicado, preservando ordem e identidade dos demais.
 **Conceito a estudar:** Fatiamento de tuples, índices e atualização imutável.
 
-### T19 — Lista de itens
-**Entrega verificável:** Exibir linhas, subtotais, estimativas e remoção; conferir interface.
-**Conceito a estudar:** MVC/MVP pragmaticamente.
+### T19 — Inserir item por posição
+**Entrega verificável:** Retornar nova versão da venda com um item inserido no índice indicado, preparando o futuro desfazer sem implementá-lo.
+**Conceito a estudar:** Inserção imutável por slicing, índices e identidade de objetos.
 
 ### T20 — Medição de leitura
 **Entrega verificável:** Instrumentar latência e testar leitor físico e repetição.
