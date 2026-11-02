@@ -48,9 +48,9 @@ Cada ticket deve gerar uma alteração pequena, revisão fácil e testes apropri
 
 O código de produto extraído remove zeros à esquerda e somente essa forma normalizada é consultada. Cadastros como `234` e `0234` são distintos; não há busca automática por variantes, portanto uma etiqueta com campo `0234` não encontra um produto cadastrado apenas como `0234`.
 
-### T09 — Modelo de item em memória
-**Entrega verificável:** Definir dados históricos, origem e estimativas sem GUI.
-**Conceito a estudar:** Objetos de domínio, snapshot.
+### T09 — Snapshot comercial do produto
+**Entrega verificável:** Copiar os dados comerciais atuais do produto para um snapshot imutável e independente, sem criar item de venda.
+**Conceito a estudar:** Objetos de valor, imutabilidade e snapshot.
 
 ### T10 — Inclusão de linha
 **Entrega verificável:** Adicionar etiquetas separadamente; teste com mesmo produto repetido.
