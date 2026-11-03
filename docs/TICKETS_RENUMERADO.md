@@ -339,6 +339,18 @@ A remoção por índice e o desfazer já atendem aos requisitos atuais. A decis�
 **Entrega verificável:** Scanner, pagamentos simulados, falhas, backups e checklist release.
 **Conceito a estudar:** Aceitação e regressão.
 
+## Pendências de planejamento posterior
+
+### Revisão de layout e usabilidade operacional do PDV
+
+Executar após a implementação e validação do fluxo completo de vendas, antes do
+acabamento visual definitivo.
+
+**Escopo:** revisar a distribuição da tela, reduzir espaçamentos excessivos,
+avaliar o posicionamento e o destaque do total, melhorar a legibilidade da
+tabela, a hierarquia das informações e a produtividade no uso por teclado e
+mouse. Esta pendência não autoriza mudanças visuais antes dessa etapa.
+
 ## Regras de acompanhamento daqui em diante
 
 - O próximo ticket executável é **T21**; depois T22, T23 etc. Sem retroceder à numeração original.
