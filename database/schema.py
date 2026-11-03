@@ -1,7 +1,7 @@
 from database.conexao import CAMINHO_BANCO, conectar
 
 
-VERSAO_ESQUEMA = 1
+VERSAO_ESQUEMA = 2
 
 _COMANDO_CRIAR_PRODUTOS = """
 CREATE TABLE IF NOT EXISTS produtos (
@@ -38,6 +38,96 @@ CREATE TABLE IF NOT EXISTS vendas (
 );
 """
 
+_COMANDO_CRIAR_ITENS_VENDA = """
+CREATE TABLE IF NOT EXISTS itens_venda (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    venda_id INTEGER NOT NULL,
+    posicao INTEGER NOT NULL
+        CHECK (typeof(posicao) = 'integer' AND posicao >= 0),
+    produto_id INTEGER,
+    codigo_snapshot TEXT,
+    nome_snapshot TEXT,
+    forma_venda_snapshot TEXT,
+    preco_referencia_centavos INTEGER,
+    tipo_item TEXT
+        CHECK (tipo_item IN ('PRODUTO', 'DIVERSOS') OR tipo_item IS NULL),
+    origem TEXT NOT NULL
+        CHECK (origem IN ('ETIQUETA', 'MANUAL')),
+    origem_quantidade TEXT NOT NULL
+        CHECK (
+            origem_quantidade IN (
+                'INFORMADA',
+                'ESTIMADA',
+                'NAO_INFORMADA'
+            )
+        ),
+    quantidade_decimal TEXT,
+    codigo_barras TEXT,
+    subtotal_centavos INTEGER NOT NULL
+        CHECK (
+            typeof(subtotal_centavos) = 'integer'
+            AND subtotal_centavos >= 0
+        ),
+    FOREIGN KEY (venda_id) REFERENCES vendas(id) ON DELETE RESTRICT,
+    FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE RESTRICT,
+    UNIQUE (venda_id, posicao),
+    CHECK (
+        (
+            tipo_item = 'PRODUTO'
+            AND typeof(codigo_snapshot) = 'text'
+            AND length(trim(codigo_snapshot)) > 0
+            AND typeof(nome_snapshot) = 'text'
+            AND length(trim(nome_snapshot)) > 0
+            AND typeof(forma_venda_snapshot) = 'text'
+            AND forma_venda_snapshot IN ('PESO', 'UNIDADE')
+            AND typeof(preco_referencia_centavos) = 'integer'
+            AND preco_referencia_centavos > 0
+        )
+        OR (
+            tipo_item = 'DIVERSOS'
+            AND produto_id IS NULL
+            AND codigo_snapshot IS NULL
+            AND typeof(nome_snapshot) = 'text'
+            AND nome_snapshot = 'Diversos'
+            AND forma_venda_snapshot IS NULL
+            AND preco_referencia_centavos IS NULL
+        )
+        OR (
+            tipo_item IS NULL
+            AND produto_id IS NULL
+            AND codigo_snapshot IS NULL
+            AND nome_snapshot IS NULL
+            AND forma_venda_snapshot IS NULL
+            AND preco_referencia_centavos IS NULL
+        )
+    ),
+    CHECK (
+        (
+            quantidade_decimal IS NULL
+            AND origem_quantidade = 'NAO_INFORMADA'
+        )
+        OR (
+            typeof(quantidade_decimal) = 'text'
+            AND length(quantidade_decimal) > 0
+            AND quantidade_decimal NOT GLOB '*[^0-9.]*'
+            AND quantidade_decimal NOT GLOB '.*'
+            AND quantidade_decimal NOT GLOB '*.'
+            AND quantidade_decimal NOT GLOB '*.*.*'
+            AND CAST(quantidade_decimal AS NUMERIC) > 0
+            AND origem_quantidade IN ('INFORMADA', 'ESTIMADA')
+        )
+    ),
+    CHECK (
+        (
+            origem = 'ETIQUETA'
+            AND typeof(codigo_barras) = 'text'
+            AND length(codigo_barras) > 0
+        )
+        OR (origem = 'MANUAL' AND codigo_barras IS NULL)
+    )
+);
+"""
+
 
 def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
     """
@@ -59,9 +149,17 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
         # DDL também participa da transação no SQLite. Se qualquer comando
         # falhar, nem as tabelas anteriores nem a nova versão são confirmadas.
         conexao.execute("BEGIN IMMEDIATE")
-        conexao.execute(_COMANDO_CRIAR_PRODUTOS)
-        conexao.execute(_COMANDO_CRIAR_VENDAS)
-        conexao.execute(f"PRAGMA user_version = {VERSAO_ESQUEMA}")
+
+        if versao_atual < 1:
+            conexao.execute(_COMANDO_CRIAR_PRODUTOS)
+            conexao.execute(_COMANDO_CRIAR_VENDAS)
+            versao_atual = 1
+
+        if versao_atual < 2:
+            conexao.execute(_COMANDO_CRIAR_ITENS_VENDA)
+            versao_atual = 2
+
+        conexao.execute(f"PRAGMA user_version = {versao_atual}")
         conexao.commit()
     except Exception:
         conexao.rollback()
