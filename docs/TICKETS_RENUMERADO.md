@@ -141,6 +141,8 @@ As entregas deste marco são originalmente previstas no Marco 1; executá-las an
 **Origem:** backlog original T12.
 **Entrega verificável:** Complementar remoção por índice e desfazer existentes com identificação estável de linha para seleção na interface; preservar duplicatas, última remoção e estado imutável. Avaliar a menor mudança compatível antes de editar contratos.
 **Conceito a estudar:** Identidade de linha versus índice e integridade do undo.
+**Observação da revisão T24:** A identificação estável não foi implementada por não ser necessária ao funcionamento inicial do PDV.
+A remoção por índice e o desfazer já atendem aos requisitos atuais. A decisão poderá ser reavaliada caso a interface futura exija identificação independente da posição.
 
 ### T25 — Entrada manual por unidade
 **Origem:** backlog original T14.
