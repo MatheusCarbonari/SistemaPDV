@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from models.item_venda import ItemVenda
+from models.item_venda import DESCRICAO_DIVERSOS, ItemVenda
 from models.produto_snapshot import ProdutoSnapshot
 
 
@@ -46,6 +46,7 @@ def test_item_venda_manual_aceita_produto_e_quantidade_ausentes() -> None:
     assert item.produto is None
     assert item.codigo_barras is None
     assert item.quantidade is None
+    assert item.tipo_item is None
 
 
 def test_item_venda_manual_aceita_quantidade_decimal_informada() -> None:
@@ -59,6 +60,80 @@ def test_item_venda_manual_aceita_quantidade_decimal_informada() -> None:
 
     assert item.quantidade == Decimal("2")
     assert item.origem_quantidade == "INFORMADA"
+    assert item.tipo_item == "PRODUTO"
+
+
+def test_item_venda_normaliza_tipo_omitido_com_snapshot_para_produto() -> None:
+    item = ItemVenda(
+        produto=criar_snapshot_de_teste(),
+        origem="MANUAL",
+        subtotal_centavos=1000,
+        origem_quantidade="NAO_INFORMADA",
+    )
+
+    assert item.tipo_item == "PRODUTO"
+
+
+def test_item_venda_aceita_tipos_explicitos_coerentes() -> None:
+    item_produto = ItemVenda(
+        produto=criar_snapshot_de_teste(),
+        origem="MANUAL",
+        subtotal_centavos=1000,
+        origem_quantidade="NAO_INFORMADA",
+        tipo_item="PRODUTO",
+    )
+    item_diversos = ItemVenda(
+        origem="MANUAL",
+        subtotal_centavos=1000,
+        origem_quantidade="NAO_INFORMADA",
+        tipo_item="DIVERSOS",
+    )
+
+    assert item_produto.tipo_item == "PRODUTO"
+    assert item_diversos.tipo_item == "DIVERSOS"
+    assert item_diversos.produto is None
+    assert DESCRICAO_DIVERSOS == "Diversos"
+
+
+def test_item_venda_rejeita_produto_explicito_sem_snapshot() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Item do tipo PRODUTO exige um ProdutoSnapshot.",
+    ):
+        ItemVenda(
+            origem="MANUAL",
+            subtotal_centavos=1000,
+            origem_quantidade="NAO_INFORMADA",
+            tipo_item="PRODUTO",
+        )
+
+
+def test_item_venda_rejeita_diversos_com_snapshot() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Item do tipo DIVERSOS não deve possuir produto.",
+    ):
+        ItemVenda(
+            produto=criar_snapshot_de_teste(),
+            origem="MANUAL",
+            subtotal_centavos=1000,
+            origem_quantidade="NAO_INFORMADA",
+            tipo_item="DIVERSOS",
+        )
+
+
+@pytest.mark.parametrize("tipo_item", ["OUTRO", "", 1, True])
+def test_item_venda_rejeita_tipo_invalido(tipo_item) -> None:
+    with pytest.raises(
+        ValueError,
+        match="O tipo do item deve ser PRODUTO, DIVERSOS ou None.",
+    ):
+        ItemVenda(
+            origem="MANUAL",
+            subtotal_centavos=1000,
+            origem_quantidade="NAO_INFORMADA",
+            tipo_item=tipo_item,
+        )
 
 
 @pytest.mark.parametrize("subtotal", [-1, True, 10.5, Decimal("10")])

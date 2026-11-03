@@ -8,6 +8,7 @@ from services.etiqueta_balanca import EtiquetaBalanca
 from services.item_venda_service import (
     criar_item_de_etiqueta,
     criar_item_de_etiqueta_com_estimativa,
+    criar_item_diversos,
     criar_item_manual_peso_por_quantidade,
     criar_item_manual_peso_por_valor,
     criar_item_manual_unidade,
@@ -73,6 +74,39 @@ def criar_produto_peso_de_teste(
     )
 
 
+@pytest.mark.parametrize("valor_centavos", [1, 1000, 99999999])
+def test_criar_item_diversos_preserva_valor_exato(valor_centavos) -> None:
+    item = criar_item_diversos(valor_centavos)
+
+    assert item.tipo_item == "DIVERSOS"
+    assert item.produto is None
+    assert item.origem == "MANUAL"
+    assert item.subtotal_centavos == valor_centavos
+    assert item.codigo_barras is None
+    assert item.quantidade is None
+    assert item.origem_quantidade == "NAO_INFORMADA"
+
+
+@pytest.mark.parametrize("valor_centavos", [0, -1])
+def test_criar_item_diversos_rejeita_valor_nao_positivo(valor_centavos) -> None:
+    with pytest.raises(ValueError, match="O valor deve ser maior que zero."):
+        criar_item_diversos(valor_centavos)
+
+
+@pytest.mark.parametrize(
+    "valor_centavos",
+    [True, False, 1.0, Decimal("1"), "1", None],
+)
+def test_criar_item_diversos_rejeita_tipo_de_valor_invalido(
+    valor_centavos,
+) -> None:
+    with pytest.raises(
+        TypeError,
+        match="O valor deve ser um número inteiro em centavos.",
+    ):
+        criar_item_diversos(valor_centavos)
+
+
 @pytest.mark.parametrize(
     ("quantidade", "preco_kg_centavos", "subtotal_esperado"),
     [
@@ -96,6 +130,7 @@ def test_criar_item_manual_peso_por_quantidade(
     assert item.quantidade is quantidade
     assert item.subtotal_centavos == subtotal_esperado
     assert item.codigo_barras is None
+    assert item.tipo_item == "PRODUTO"
     assert item.produto.preco_referencia_centavos == preco_kg_centavos
 
 
@@ -120,6 +155,7 @@ def test_criar_item_manual_peso_por_valor_preserva_subtotal_e_estima_peso(
     assert item.subtotal_centavos == subtotal_centavos
     assert item.codigo_barras is None
     assert item.produto.preco_referencia_centavos == 9900
+    assert item.tipo_item == "PRODUTO"
 
 
 def test_modos_de_peso_preservam_a_ultima_informacao_principal() -> None:
@@ -352,6 +388,7 @@ def test_criar_item_manual_unidade_com_quantidade_valida(
     assert item.produto.nome == "Espetinho"
     assert item.produto.forma_venda == "UNIDADE"
     assert item.produto.preco_referencia_centavos == 1500
+    assert item.tipo_item == "PRODUTO"
 
 
 @pytest.mark.parametrize(
@@ -499,6 +536,7 @@ def test_criar_item_de_etiqueta_copia_valores_exatos() -> None:
     assert item.produto.nome == "Picanha"
     assert item.produto.forma_venda == "PESO"
     assert item.produto.preco_referencia_centavos == 7990
+    assert item.tipo_item == "PRODUTO"
 
 
 def test_item_criado_nao_mantem_referencia_mutavel_ao_produto() -> None:

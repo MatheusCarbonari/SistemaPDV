@@ -11,6 +11,25 @@ from services.produto_etiqueta import ProdutoEtiqueta
 CENTAVO_INTEIRO = Decimal("1")
 
 
+def criar_item_diversos(valor_centavos: int) -> ItemVenda:
+    """Cria um item Diversos manual, sem vínculo com produto cadastrado."""
+    if not isinstance(valor_centavos, int) or isinstance(valor_centavos, bool):
+        raise TypeError("O valor deve ser um número inteiro em centavos.")
+
+    if valor_centavos <= 0:
+        raise ValueError("O valor deve ser maior que zero.")
+
+    return ItemVenda(
+        produto=None,
+        origem="MANUAL",
+        subtotal_centavos=valor_centavos,
+        codigo_barras=None,
+        quantidade=None,
+        origem_quantidade="NAO_INFORMADA",
+        tipo_item="DIVERSOS",
+    )
+
+
 def criar_item_manual_unidade(
     produto: Produto,
     quantidade: Decimal,

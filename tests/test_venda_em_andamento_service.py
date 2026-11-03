@@ -2,11 +2,13 @@ import pytest
 
 from models.estado_venda import EstadoVenda
 from models.item_venda import ItemVenda
+from models.produto_snapshot import ProdutoSnapshot
 from models.venda_em_andamento import VendaEmAndamento
 from services.estado_venda_service import (
     desfazer_ultima_remocao,
     remover_com_desfazer,
 )
+from services.item_venda_service import criar_item_diversos
 from services.venda_em_andamento_service import (
     adicionar_item,
     calcular_total,
@@ -106,6 +108,32 @@ def test_calcular_total_nao_modifica_venda_ou_itens() -> None:
     assert venda.itens[1] is segundo_item
     assert primeiro_item.subtotal_centavos == 1001
     assert segundo_item.subtotal_centavos == 250
+
+
+def test_calcular_total_de_venda_com_produto_e_diversos() -> None:
+    item_produto = ItemVenda(
+        produto=ProdutoSnapshot(
+            produto_id=42,
+            codigo="234",
+            nome="Picanha",
+            forma_venda="PESO",
+            preco_referencia_centavos=9900,
+        ),
+        origem="MANUAL",
+        subtotal_centavos=2500,
+        origem_quantidade="NAO_INFORMADA",
+    )
+    venda_vazia = VendaEmAndamento()
+    item_diversos = criar_item_diversos(375)
+
+    venda_com_produto = adicionar_item(venda_vazia, item_produto)
+    venda = adicionar_item(venda_com_produto, item_diversos)
+
+    assert calcular_total(venda) == 2875
+    assert venda_vazia.itens == ()
+    assert item_produto.tipo_item == "PRODUTO"
+    assert item_diversos.tipo_item == "DIVERSOS"
+    assert venda.itens == (item_produto, item_diversos)
 
 
 def test_adicionar_item_em_venda_vazia() -> None:
