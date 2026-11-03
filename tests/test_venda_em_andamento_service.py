@@ -1,9 +1,15 @@
 import pytest
 
+from models.estado_venda import EstadoVenda
 from models.item_venda import ItemVenda
 from models.venda_em_andamento import VendaEmAndamento
+from services.estado_venda_service import (
+    desfazer_ultima_remocao,
+    remover_com_desfazer,
+)
 from services.venda_em_andamento_service import (
     adicionar_item,
+    calcular_total,
     inserir_item,
     remover_item,
 )
@@ -15,6 +21,91 @@ def criar_item_de_teste(subtotal_centavos=1000) -> ItemVenda:
         subtotal_centavos=subtotal_centavos,
         origem_quantidade="NAO_INFORMADA",
     )
+
+
+def test_calcular_total_de_venda_vazia_retorna_zero_inteiro() -> None:
+    total = calcular_total(VendaEmAndamento())
+
+    assert total == 0
+    assert isinstance(total, int)
+
+
+@pytest.mark.parametrize(
+    ("subtotais", "total_esperado"),
+    [
+        ((1234,), 1234),
+        ((1099, 205, 1), 1305),
+    ],
+)
+def test_calcular_total_soma_um_ou_varios_subtotais_em_centavos(
+    subtotais,
+    total_esperado,
+) -> None:
+    venda = VendaEmAndamento(
+        itens=tuple(criar_item_de_teste(subtotal) for subtotal in subtotais),
+    )
+
+    assert calcular_total(venda) == total_esperado
+
+
+def test_calcular_total_conta_itens_iguais_e_mesma_instancia_repetida() -> None:
+    item = criar_item_de_teste(1234)
+    item_igual = criar_item_de_teste(1234)
+    venda = VendaEmAndamento(itens=(item, item_igual, item))
+
+    assert item == item_igual
+    assert item is not item_igual
+    assert calcular_total(venda) == 3702
+
+
+def test_calcular_total_reflete_adicao_e_remocao() -> None:
+    primeiro_item = criar_item_de_teste(1001)
+    segundo_item = criar_item_de_teste(250)
+    venda_original = VendaEmAndamento(itens=(primeiro_item,))
+
+    venda_com_adicao = adicionar_item(venda_original, segundo_item)
+    venda_apos_remocao = remover_item(venda_com_adicao, 0)
+
+    assert calcular_total(venda_original) == 1001
+    assert calcular_total(venda_com_adicao) == 1251
+    assert calcular_total(venda_apos_remocao) == 250
+
+
+def test_calcular_total_apos_desfazer_remocao() -> None:
+    venda = VendaEmAndamento(
+        itens=(criar_item_de_teste(1001), criar_item_de_teste(250)),
+    )
+    estado = EstadoVenda(venda=venda)
+
+    estado_com_remocao = remover_com_desfazer(estado, 0)
+    estado_restaurado = desfazer_ultima_remocao(estado_com_remocao)
+
+    assert calcular_total(estado_com_remocao.venda) == 250
+    assert calcular_total(estado_restaurado.venda) == 1251
+
+
+@pytest.mark.parametrize("venda_invalida", [None, (), "venda", 1])
+def test_calcular_total_rejeita_venda_invalida(venda_invalida) -> None:
+    with pytest.raises(
+        TypeError,
+        match="A venda deve ser uma instância de VendaEmAndamento.",
+    ):
+        calcular_total(venda_invalida)
+
+
+def test_calcular_total_nao_modifica_venda_ou_itens() -> None:
+    primeiro_item = criar_item_de_teste(1001)
+    segundo_item = criar_item_de_teste(250)
+    itens = (primeiro_item, segundo_item)
+    venda = VendaEmAndamento(itens=itens)
+
+    calcular_total(venda)
+
+    assert venda.itens is itens
+    assert venda.itens[0] is primeiro_item
+    assert venda.itens[1] is segundo_item
+    assert primeiro_item.subtotal_centavos == 1001
+    assert segundo_item.subtotal_centavos == 250
 
 
 def test_adicionar_item_em_venda_vazia() -> None:

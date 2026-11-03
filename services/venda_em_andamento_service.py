@@ -2,6 +2,14 @@ from models.item_venda import ItemVenda
 from models.venda_em_andamento import VendaEmAndamento
 
 
+def calcular_total(venda: VendaEmAndamento) -> int:
+    """Soma os subtotais dos itens da venda em centavos."""
+    if not isinstance(venda, VendaEmAndamento):
+        raise TypeError("A venda deve ser uma instância de VendaEmAndamento.")
+
+    return sum(item.subtotal_centavos for item in venda.itens)
+
+
 def adicionar_item(
     venda: VendaEmAndamento,
     item: ItemVenda,
