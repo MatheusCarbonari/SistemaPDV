@@ -161,8 +161,9 @@ A remoção por índice e o desfazer já atendem aos requisitos atuais. A decis�
 
 ### T28 — Janela PySide6 mínima
 **Origem:** backlog original T17.
-**Entrega verificável:** Criar shell Qt Widgets do caixa com campo único de entrada, sem regra comercial na GUI e sem interferir no legado CustomTkinter.
+**Entrega verificável:** Remover a interface CustomTkinter e criar o shell Qt Widgets do caixa, sem regra comercial na GUI.
 **Conceito a estudar:** Qt Widgets, sinais e separação de camadas.
+**Observação:** A remoção do CustomTkinter foi antecipada e incorporada ao T28 por decisão aprovada, evitando duas aplicações gráficas concorrentes.
 
 ### T29 — Entrada e atalhos
 **Origem:** backlog original T18.
