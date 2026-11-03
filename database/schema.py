@@ -1,7 +1,7 @@
 from database.conexao import CAMINHO_BANCO, conectar
 
 
-VERSAO_ESQUEMA = 2
+VERSAO_ESQUEMA = 3
 
 _COMANDO_CRIAR_PRODUTOS = """
 CREATE TABLE IF NOT EXISTS produtos (
@@ -128,6 +128,21 @@ CREATE TABLE IF NOT EXISTS itens_venda (
 );
 """
 
+_COMANDO_CRIAR_PAGAMENTOS = """
+CREATE TABLE IF NOT EXISTS pagamentos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    venda_id INTEGER NOT NULL,
+    modalidade TEXT NOT NULL
+        CHECK (modalidade IN ('DINHEIRO', 'CREDITO', 'DEBITO', 'PIX')),
+    valor_centavos INTEGER NOT NULL
+        CHECK (
+            typeof(valor_centavos) = 'integer'
+            AND valor_centavos > 0
+        ),
+    FOREIGN KEY (venda_id) REFERENCES vendas(id) ON DELETE RESTRICT
+);
+"""
+
 
 def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
     """
@@ -158,6 +173,10 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
         if versao_atual < 2:
             conexao.execute(_COMANDO_CRIAR_ITENS_VENDA)
             versao_atual = 2
+
+        if versao_atual < 3:
+            conexao.execute(_COMANDO_CRIAR_PAGAMENTOS)
+            versao_atual = 3
 
         conexao.execute(f"PRAGMA user_version = {versao_atual}")
         conexao.commit()

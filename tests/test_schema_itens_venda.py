@@ -110,7 +110,7 @@ def _criar_banco_versao_1(caminho_banco) -> tuple[int, int]:
         conexao.close()
 
 
-def test_banco_novo_cria_tabela_itens_venda_na_versao_2(banco_teste) -> None:
+def test_banco_novo_cria_tabela_itens_venda(banco_teste) -> None:
     conexao = conectar(banco_teste)
 
     try:
@@ -146,7 +146,7 @@ def test_banco_novo_cria_tabela_itens_venda_na_versao_2(banco_teste) -> None:
             "codigo_barras",
             "subtotal_centavos",
         }
-        assert versao == 2
+        assert versao == schema.VERSAO_ESQUEMA
     finally:
         conexao.close()
 
@@ -175,7 +175,7 @@ def test_migracao_da_versao_1_preserva_produto_e_venda(tmp_path) -> None:
         assert tuple(produto) == ("234", "Picanha")
         assert venda["total_centavos"] == 10000
         assert tabela_itens["name"] == "itens_venda"
-        assert versao == 2
+        assert versao == schema.VERSAO_ESQUEMA
     finally:
         conexao.close()
 
