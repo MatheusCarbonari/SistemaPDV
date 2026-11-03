@@ -180,6 +180,15 @@ A remoção por índice e o desfazer já atendem aos requisitos atuais. A decis�
 **Entrega verificável:** Instrumentar latência da leitura até atualização da lista; testar leitor físico, entradas repetidas e foco, registrando resultados e gargalos.
 **Conceito a estudar:** Profiling e métricas operacionais.
 
+**Validação simulada:** o fluxo foi exercitado com eventos reais de teclado Qt,
+etiquetas documentadas, banco temporário, leituras consecutivas e integração até
+a lista e o estado da venda. A medição com equipamento físico não foi realizada.
+
+**Homologação física pendente:** não há leitor disponível neste momento. Quando
+o equipamento estiver disponível, verificar: (1) leitura sem Enter manual e sem
+duplicação quando o leitor enviar Enter; (2) leituras consecutivas e repetidas;
+(3) foco, subtotal e quantidade de linhas após leituras válidas e inválidas.
+
 ## Marco 2 — Operação comercial (T32–T48)
 
 ### T32 — Esquema de vendas
