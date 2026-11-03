@@ -16,25 +16,104 @@ def criar_item_manual_unidade(
     quantidade: Decimal,
 ) -> ItemVenda:
     """Cria um item manual por unidade com quantidade informada."""
+    _validar_produto_manual(produto, "UNIDADE", "unitário")
+    _validar_quantidade_manual(quantidade)
+
+    subtotal_decimal = quantidade * Decimal(produto.preco_venda_centavos)
+    subtotal_centavos = _arredondar_centavos(subtotal_decimal)
+
+    return _criar_item_manual(
+        produto=produto,
+        quantidade=quantidade,
+        subtotal_centavos=subtotal_centavos,
+        origem_quantidade="INFORMADA",
+    )
+
+
+def criar_item_manual_peso_por_quantidade(
+    produto: Produto,
+    quantidade: Decimal,
+) -> ItemVenda:
+    """Cria item de PESO usando os quilogramas como informação principal."""
+    _validar_produto_manual(produto, "PESO", "por kg")
+    _validar_quantidade_manual(quantidade)
+
+    subtotal_decimal = quantidade * Decimal(produto.preco_venda_centavos)
+    subtotal_centavos = _arredondar_centavos(subtotal_decimal)
+
+    if subtotal_centavos == 0:
+        raise ValueError("O subtotal calculado deve ser maior que zero.")
+
+    return _criar_item_manual(
+        produto=produto,
+        quantidade=quantidade,
+        subtotal_centavos=subtotal_centavos,
+        origem_quantidade="INFORMADA",
+    )
+
+
+def criar_item_manual_peso_por_valor(
+    produto: Produto,
+    subtotal_centavos: int,
+) -> ItemVenda:
+    """Cria item de PESO preservando o subtotal como informação principal."""
+    _validar_produto_manual(produto, "PESO", "por kg")
+
+    if (
+        not isinstance(subtotal_centavos, int)
+        or isinstance(subtotal_centavos, bool)
+    ):
+        raise TypeError("O subtotal deve ser um número inteiro em centavos.")
+
+    if subtotal_centavos <= 0:
+        raise ValueError("O subtotal deve ser maior que zero.")
+
+    quantidade = estimar_peso(
+        subtotal_centavos,
+        produto.preco_venda_centavos,
+    )
+
+    if quantidade == 0:
+        raise ValueError("O peso estimado deve ser maior que zero.")
+
+    return _criar_item_manual(
+        produto=produto,
+        quantidade=quantidade,
+        subtotal_centavos=subtotal_centavos,
+        origem_quantidade="ESTIMADA",
+    )
+
+
+def _validar_produto_manual(
+    produto: Produto,
+    forma_venda: str,
+    descricao_preco: str,
+) -> None:
     if not isinstance(produto, Produto):
         raise TypeError("O produto deve ser uma instância de Produto.")
 
     if produto.ativo is not True:
         raise ValueError("O produto deve estar ativo.")
 
-    if produto.forma_venda != "UNIDADE":
-        raise ValueError("O produto deve possuir forma de venda UNIDADE.")
+    if produto.forma_venda != forma_venda:
+        raise ValueError(
+            f"O produto deve possuir forma de venda {forma_venda}."
+        )
 
     if (
         not isinstance(produto.preco_venda_centavos, int)
         or isinstance(produto.preco_venda_centavos, bool)
     ):
         raise TypeError(
-            "O preço unitário deve ser um número inteiro em centavos."
+            f"O preço {descricao_preco} deve ser um número inteiro em centavos."
         )
 
     if produto.preco_venda_centavos <= 0:
-        raise ValueError("O preço unitário deve ser maior que zero.")
+        raise ValueError(f"O preço {descricao_preco} deve ser maior que zero.")
+
+
+def _validar_quantidade_manual(quantidade: Decimal) -> None:
+    """Valida quantidade ou peso informado com até três casas decimais."""
 
     if not isinstance(quantidade, Decimal):
         raise TypeError("A quantidade deve ser informada como Decimal.")
@@ -47,21 +126,26 @@ def criar_item_manual_unidade(
             "A quantidade deve possuir no máximo três casas decimais."
         )
 
-    subtotal_decimal = quantidade * Decimal(produto.preco_venda_centavos)
-    subtotal_centavos = int(
-        subtotal_decimal.quantize(
-            CENTAVO_INTEIRO,
-            rounding=ROUND_HALF_UP,
-        )
+
+def _arredondar_centavos(valor_centavos: Decimal) -> int:
+    return int(
+        valor_centavos.quantize(CENTAVO_INTEIRO, rounding=ROUND_HALF_UP)
     )
 
+
+def _criar_item_manual(
+    produto: Produto,
+    quantidade: Decimal,
+    subtotal_centavos: int,
+    origem_quantidade: str,
+) -> ItemVenda:
     return ItemVenda(
         produto=criar_snapshot_produto(produto),
         origem="MANUAL",
         subtotal_centavos=subtotal_centavos,
         codigo_barras=None,
         quantidade=quantidade,
-        origem_quantidade="INFORMADA",
+        origem_quantidade=origem_quantidade,
     )
 
 
