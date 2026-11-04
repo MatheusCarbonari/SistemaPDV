@@ -2,6 +2,7 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog
 
+from database.schema import criar_tabelas
 from interface.dialogo_confirmacao_venda import DialogoConfirmacaoVenda
 from interface.dialogo_pagamentos import DialogoPagamentos
 from interface.janela_principal import JanelaPrincipal
@@ -261,7 +262,10 @@ def test_cancelar_confirmacao_preserva_venda_e_pagamentos(
     assert janela.resultado_confirmacao is None
 
 
-def test_confirmar_nao_limpa_venda_nem_grava_sqlite(janela, qtbot) -> None:
+def test_confirmar_entrega_resultado_ao_fechamento_operacional(
+    janela,
+    qtbot,
+) -> None:
     item = criar_item(1000)
     janela.item_criado.emit(item)
     venda_anterior = janela.estado_venda.venda
@@ -270,7 +274,7 @@ def test_confirmar_nao_limpa_venda_nem_grava_sqlite(janela, qtbot) -> None:
     resultados = []
     janela.venda_confirmada.connect(resultados.append)
 
-    assert not caminho_banco.exists()
+    criar_tabelas(caminho_banco)
 
     janela.abrir_dialogo_confirmacao()
     qtbot.waitUntil(janela.dialogo_atual.isVisible)
@@ -278,10 +282,8 @@ def test_confirmar_nao_limpa_venda_nem_grava_sqlite(janela, qtbot) -> None:
     qtbot.waitUntil(lambda: janela.dialogo_atual is None)
 
     assert len(resultados) == 1
-    assert resultados[0] is janela.resultado_confirmacao
     assert resultados[0].venda is venda_anterior
     assert resultados[0].pagamentos is pagamentos_anteriores
-    assert janela.estado_venda.venda is venda_anterior
-    assert janela.estado_venda.venda.itens == (item,)
-    assert janela.composicao_pagamentos is pagamentos_anteriores
-    assert not caminho_banco.exists()
+    assert janela.estado_venda.venda.itens == ()
+    assert janela.composicao_pagamentos is None
+    assert caminho_banco.exists()

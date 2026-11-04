@@ -2,8 +2,12 @@ import importlib
 
 from PySide6.QtWidgets import QApplication, QWidget
 
-from interface.aplicacao import obter_aplicacao
+from database.conexao import conectar
+from database.schema import VERSAO_ESQUEMA
+import interface.aplicacao as aplicacao_module
+from interface.aplicacao import criar_janela_principal, obter_aplicacao
 from interface.janela_principal import JanelaPrincipal
+from services.inicializacao_banco_service import InicializacaoBancoError
 
 
 def test_janela_principal_possui_configuracao_minima(qtbot) -> None:
@@ -42,6 +46,50 @@ def test_importar_ponto_de_entrada_nao_abre_janela(qapp) -> None:
     importlib.reload(modulo)
 
     assert set(qapp.topLevelWidgets()) == janelas_antes
+
+
+def test_criar_janela_principal_prepara_banco_novo(qtbot, tmp_path) -> None:
+    caminho = tmp_path / "aplicacao.db"
+
+    janela = criar_janela_principal(caminho)
+    qtbot.addWidget(janela)
+
+    conexao = conectar(caminho)
+    try:
+        assert conexao.execute("PRAGMA user_version").fetchone()[0] == (
+            VERSAO_ESQUEMA
+        )
+    finally:
+        conexao.close()
+    assert janela.caminho_banco == caminho
+
+
+def test_falha_de_inicializacao_nao_abre_operacao_comercial(
+    qapp,
+    monkeypatch,
+) -> None:
+    mensagens = []
+    monkeypatch.setattr(
+        aplicacao_module,
+        "criar_janela_principal",
+        lambda caminho: (_ for _ in ()).throw(
+            InicializacaoBancoError("backup indisponível")
+        ),
+    )
+    monkeypatch.setattr(
+        aplicacao_module.QMessageBox,
+        "critical",
+        lambda parent, titulo, mensagem: mensagens.append(
+            (titulo, mensagem)
+        ),
+    )
+
+    resultado = aplicacao_module.executar_aplicacao([], "incompativel.db")
+
+    assert resultado == 1
+    assert mensagens == [
+        ("Falha ao iniciar o Sistema-PDV", "backup indisponível")
+    ]
 
 
 def test_camadas_existentes_continuam_importaveis() -> None:

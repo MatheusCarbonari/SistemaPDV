@@ -26,6 +26,10 @@
 - **DEC-022** — Backup automático local e externo, integridade e restauração testada; falha em backup externo não bloqueia caixa.
 - **DEC-023** — Instalador Windows com atualização manual, programa e dados separados, migrações versionadas seguras.
 - **DEC-024** — pytest unitário/integração, pytest-qt para fluxos críticos e teste no hardware real; metas objetivas.
+- **DEC-025** — Antes de migrar banco existente desatualizado, criar backup
+  único pela API SQLite em `backups/pre_migracao` ao lado do banco e exigir
+  `PRAGMA integrity_check = ok`; falha bloqueia a aplicação sem migrar. Banco
+  novo ou já atualizado não gera cópia, e versão futura é recusada.
 
 ## Decisões que exigem cuidado
 - Produtos existentes podem ter o código ou forma de venda protegidos por regras específicas; essas regras serão validadas antes de alteração em produção.

@@ -1,3 +1,5 @@
+import services.persistencia_venda_service as persistencia_venda_service
+
 from PySide6.QtCore import QSignalBlocker, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -44,6 +46,7 @@ class JanelaPrincipal(QMainWindow):
     item_criado = Signal(object)
     pagamentos_confirmados = Signal(object)
     venda_confirmada = Signal(object)
+    venda_persistida = Signal(int)
 
     def __init__(self, caminho_banco=CAMINHO_BANCO) -> None:
         super().__init__()
@@ -52,6 +55,11 @@ class JanelaPrincipal(QMainWindow):
         self.estado_venda = EstadoVenda(venda=VendaEmAndamento())
         self.composicao_pagamentos: PagamentosEmAndamento | None = None
         self.resultado_confirmacao: VendaConfirmada | None = None
+        self.identificador_tentativa_fechamento: str | None = None
+        self.confirmacao_pendente: VendaConfirmada | None = None
+        self.ultimo_id_venda_persistida: int | None = None
+        self._fechamento_em_processamento = False
+        self._fechamento_incerto = False
         self._processando_entrada = False
         self._ignorar_proximo_enter = False
         self.setWindowTitle("Sistema-PDV")
@@ -115,10 +123,18 @@ class JanelaPrincipal(QMainWindow):
             area_vendas,
         )
         self.botao_confirmar_venda.setObjectName("botao_confirmar_venda")
+        self.botao_verificar_fechamento = QPushButton(
+            "Verificar fechamento",
+            area_vendas,
+        )
+        self.botao_verificar_fechamento.setObjectName(
+            "botao_verificar_fechamento"
+        )
         layout_acoes.addWidget(self.botao_remover)
         layout_acoes.addWidget(self.botao_desfazer)
         layout_acoes.addWidget(self.botao_pagamento)
         layout_acoes.addWidget(self.botao_confirmar_venda)
+        layout_acoes.addWidget(self.botao_verificar_fechamento)
         layout_acoes.addStretch()
 
         self.rotulo_total = QLabel("Total: R$ 0,00", area_vendas)
@@ -134,6 +150,9 @@ class JanelaPrincipal(QMainWindow):
         self.botao_confirmar_venda.clicked.connect(
             self.abrir_dialogo_confirmacao
         )
+        self.botao_verificar_fechamento.clicked.connect(
+            self.verificar_fechamento_pendente
+        )
         self._atualizar_venda_exibida()
 
     def showEvent(self, evento) -> None:
@@ -145,7 +164,11 @@ class JanelaPrincipal(QMainWindow):
         )
 
     def processar_entrada(self) -> None:
-        if self.dialogo_atual is not None or self._processando_entrada:
+        if (
+            self.dialogo_atual is not None
+            or self._processando_entrada
+            or self._fechamento_bloqueia_operacao()
+        ):
             return
 
         self._processando_entrada = True
@@ -242,12 +265,16 @@ class JanelaPrincipal(QMainWindow):
         self.item_criado.emit(item)
 
     def _adicionar_item_a_venda(self, item: ItemVenda) -> None:
+        if self._fechamento_bloqueia_operacao():
+            return
         havia_pagamentos = self.composicao_pagamentos is not None
         self.estado_venda = adicionar_no_estado(self.estado_venda, item)
         self._invalidar_pagamentos_apos_alteracao(havia_pagamentos)
         self._atualizar_venda_exibida()
 
     def remover_item_selecionado(self) -> None:
+        if self._fechamento_bloqueia_operacao():
+            return
         if not self.estado_venda.venda.itens:
             self._restaurar_foco_entrada()
             return
@@ -265,6 +292,8 @@ class JanelaPrincipal(QMainWindow):
         self._restaurar_foco_entrada()
 
     def desfazer_ultima_remocao(self) -> None:
+        if self._fechamento_bloqueia_operacao():
+            return
         estado_anterior = self.estado_venda
         havia_pagamentos = self.composicao_pagamentos is not None
         self.estado_venda = desfazer_ultima_remocao(self.estado_venda)
@@ -274,7 +303,10 @@ class JanelaPrincipal(QMainWindow):
         self._restaurar_foco_entrada()
 
     def abrir_dialogo_pagamentos(self) -> None:
-        if self.dialogo_atual is not None:
+        if (
+            self.dialogo_atual is not None
+            or self._fechamento_bloqueia_operacao()
+        ):
             return
 
         total_venda = calcular_total(self.estado_venda.venda)
@@ -300,14 +332,22 @@ class JanelaPrincipal(QMainWindow):
         dialogo.open()
 
     def _emitir_pagamentos_confirmados(self, pagamentos) -> None:
+        if self._fechamento_bloqueia_operacao():
+            return
+        composicao_alterada = pagamentos != self.composicao_pagamentos
         self.composicao_pagamentos = pagamentos
         self.resultado_confirmacao = None
+        if composicao_alterada:
+            self._reiniciar_tentativa_fechamento()
         self.rotulo_status.setText("Pagamentos compostos.")
         self.pagamentos_confirmados.emit(pagamentos)
         self._atualizar_venda_exibida()
 
     def abrir_dialogo_confirmacao(self) -> None:
-        if self.dialogo_atual is not None:
+        if (
+            self.dialogo_atual is not None
+            or self._fechamento_bloqueia_operacao()
+        ):
             return
 
         if self.composicao_pagamentos is None:
@@ -336,9 +376,79 @@ class JanelaPrincipal(QMainWindow):
         dialogo.open()
 
     def _receber_venda_confirmada(self, resultado: VendaConfirmada) -> None:
+        if self._fechamento_bloqueia_operacao():
+            return
         self.resultado_confirmacao = resultado
-        self.rotulo_status.setText("Venda confirmada para persistência.")
+        self.confirmacao_pendente = resultado
         self.venda_confirmada.emit(resultado)
+        self._persistir_fechamento_pendente()
+
+    def verificar_fechamento_pendente(self) -> None:
+        if (
+            not self._fechamento_incerto
+            or self.confirmacao_pendente is None
+            or self.identificador_tentativa_fechamento is None
+            or self._fechamento_em_processamento
+        ):
+            return
+
+        self._fechamento_incerto = False
+        self._persistir_fechamento_pendente()
+
+    def _persistir_fechamento_pendente(self) -> None:
+        if self._fechamento_em_processamento:
+            return
+        if self.confirmacao_pendente is None:
+            return
+
+        if self.identificador_tentativa_fechamento is None:
+            self.identificador_tentativa_fechamento = (
+                persistencia_venda_service.gerar_identificador_tentativa()
+            )
+
+        self._fechamento_em_processamento = True
+        self.rotulo_status.setText("Registrando venda...")
+        self._atualizar_venda_exibida()
+        try:
+            venda_id = (
+                persistencia_venda_service
+                .persistir_venda_confirmada_idempotente(
+                    self.confirmacao_pendente,
+                    self.identificador_tentativa_fechamento,
+                    self.caminho_banco,
+                )
+            )
+        except persistencia_venda_service.CommitVendaIncertoError:
+            self._fechamento_incerto = True
+            self.rotulo_status.setText(
+                "O resultado do fechamento é incerto. A venda foi preservada. "
+                "Use Verificar fechamento antes de continuar."
+            )
+        except Exception as erro:
+            self._fechamento_incerto = False
+            self.rotulo_status.setText(
+                "A venda não foi registrada. Os dados foram preservados: "
+                f"{erro}"
+            )
+        else:
+            self._concluir_fechamento_com_sucesso(venda_id)
+        finally:
+            self._fechamento_em_processamento = False
+            self._atualizar_venda_exibida()
+            self._restaurar_foco_entrada()
+
+    def _concluir_fechamento_com_sucesso(self, venda_id: int) -> None:
+        self.ultimo_id_venda_persistida = venda_id
+        self.estado_venda = EstadoVenda(venda=VendaEmAndamento())
+        self.composicao_pagamentos = None
+        self.resultado_confirmacao = None
+        self.confirmacao_pendente = None
+        self.identificador_tentativa_fechamento = None
+        self._fechamento_incerto = False
+        self.rotulo_status.setText(
+            f"Venda #{venda_id:06d} registrada com sucesso."
+        )
+        self.venda_persistida.emit(venda_id)
 
     def _invalidar_pagamentos_apos_alteracao(
         self,
@@ -346,6 +456,7 @@ class JanelaPrincipal(QMainWindow):
     ) -> None:
         self.composicao_pagamentos = None
         self.resultado_confirmacao = None
+        self._reiniciar_tentativa_fechamento()
         if havia_pagamentos:
             self.rotulo_status.setText(
                 "Os pagamentos foram invalidados porque a venda foi alterada."
@@ -372,14 +483,30 @@ class JanelaPrincipal(QMainWindow):
         self.tabela_itens.clearSelection()
         total = calcular_total(self.estado_venda.venda)
         self.rotulo_total.setText(f"Total: {formatar_centavos(total)}")
-        self.botao_remover.setEnabled(bool(itens))
+        operacao_bloqueada = self._fechamento_bloqueia_operacao()
+        self.campo_entrada.setEnabled(not operacao_bloqueada)
+        self.tabela_itens.setEnabled(not operacao_bloqueada)
+        self.botao_remover.setEnabled(bool(itens) and not operacao_bloqueada)
         self.botao_desfazer.setEnabled(
             self.estado_venda.ultima_remocao is not None
+            and not operacao_bloqueada
         )
-        self.botao_pagamento.setEnabled(total > 0)
+        self.botao_pagamento.setEnabled(total > 0 and not operacao_bloqueada)
         self.botao_confirmar_venda.setEnabled(
             self.composicao_pagamentos is not None
+            and not operacao_bloqueada
         )
+        self.botao_verificar_fechamento.setEnabled(
+            self._fechamento_incerto and not self._fechamento_em_processamento
+        )
+
+    def _reiniciar_tentativa_fechamento(self) -> None:
+        self.identificador_tentativa_fechamento = None
+        self.confirmacao_pendente = None
+        self._fechamento_incerto = False
+
+    def _fechamento_bloqueia_operacao(self) -> bool:
+        return self._fechamento_em_processamento or self._fechamento_incerto
 
     @staticmethod
     def _descricao_item(item: ItemVenda) -> str:

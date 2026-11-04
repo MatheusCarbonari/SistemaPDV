@@ -254,6 +254,31 @@ correção sem cancelar a venda inteira.
 **Entrega verificável:** Status, motivo, data, autorização e testes; sem apagar original.
 **Conceito a estudar:** Máquina de estados.
 
+## Integrações operacionais aprovadas — antes do T44
+
+### INT-A — Integração do fechamento operacional
+**Entrega verificável:** preparar ou migrar o banco antes de abrir a operação,
+com backup automático verificado para banco existente desatualizado; conectar a
+confirmação comercial à persistência idempotente; reutilizar o UUID em
+recuperações; limpar a venda somente após sucesso comprovado e bloquear um novo
+atendimento enquanto o resultado permanecer incerto.
+**Limite:** backup pré-migração pontual, sem rotação, agendamento ou restauração
+automática dos T55–T57.
+
+### INT-B — Interface de histórico de vendas
+**Entrega verificável:** disponibilizar na GUI as consultas resumidas e
+detalhadas já existentes, por ID e data, sem alterar os registros comerciais.
+
+### INT-C — Interface de administração de produtos
+**Entrega verificável:** cadastrar, listar, editar, ativar e inativar produtos
+pela interface, preservando snapshots e mantendo o histórico de preços como
+responsabilidade separada do T44.
+
+### INT-D — Interface de cancelamento de vendas
+**Entrega verificável:** integrar o cancelamento auditável à GUI com motivo,
+confirmação e autorização pontual. A exposição operacional depende dos
+contratos de autenticação e autorização dos T45–T47.
+
 ### T44 — Histórico de preços
 **Origem:** backlog original T33.
 **Entrega verificável:** Atualizar preço e registrar mudança em transação única; tela 12 meses depois.

@@ -15,5 +15,11 @@ Primeiro uso cria administrador, sem senha padrão; duas contas básicas (Admini
 ## Revisão 05 — Backup, atualização, restauração
 Programa/dados em locais diferentes. Instalador Windows e migrações versionadas; migrar somente após backup válido, com programa fechado. Falha: interrupção segura; não restaurar banco antigo automaticamente. Backup local **a cada 2 horas de funcionamento**, backup externo também **a cada 2 horas se disponível**; backup ao encerrar se houver mudanças; obrigatório antes de migrações. Retenção local **7 diários + 4 semanais** e externa **30 diários**; rotação respeita os pontos de restauração, sem destruir a última cópia boa. Validar integridade e testar restauração. Falha do destino externo avisa, sem impedir vendas. Restaurar exige administrador, confirmação e alerta de perda possível de dados mais recentes.
 
+**Aplicação na INT-A:** antes de abrir a janela comercial, banco existente e
+desatualizado recebe uma cópia pontual em `backups/pre_migracao`, produzida pela
+API de backup do SQLite e validada por `PRAGMA integrity_check`. A cópia é
+fechada antes da migração e preservada após o sucesso. Esta proteção não
+implementa rotação, agendamento nem restauração dos T55–T57.
+
 ## Revisão 06 — Escopo, marcos, aceitação
 Três marcos: (1) núcleo de leitura e cálculo; (2) fluxo comercial e autenticação; (3) confiabilidade e instalação. Metas iniciais: etiqueta até 200 ms; inclusão manual 200 ms; recálculo 100 ms; abertura pagamento 300 ms; finalização SQLite 1 s em operação normal. Medições repetidas e no equipamento real; metas ainda não validadas. Testes automatizados de regras, SQL e interface crítica; scanner e instalação testados fisicamente. Não liberar para produção só porque os testes unitários passam.
