@@ -375,6 +375,11 @@ confirma a edição; zerar o saldo não fecha automaticamente o diálogo; conclu
 exige botão ou atalho independente e explícito. Mesmo com saldo zero, permitir
 revisar, editar e remover pagamentos.
 
+O Enter usado para adicionar o último pagamento não deve concluir o diálogo
+automaticamente, comportamento corrigido no T38. Avaliar futuramente um atalho
+explícito e independente para concluir a composição, mantendo separadas as
+ações Adicionar, Concluir pagamentos e Confirmar venda.
+
 **Preservação do valor informado:** alterar a modalidade entre Dinheiro,
 Crédito, Débito e Pix não substitui o valor escolhido pelo operador. Sugerir o
 saldo restante somente ao iniciar uma nova entrada, sem sobrescrever valores
