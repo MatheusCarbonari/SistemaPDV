@@ -56,6 +56,49 @@ def adicionar_pagamento(
     )
 
 
+def editar_pagamento(
+    pagamentos: PagamentosEmAndamento,
+    indice: int,
+    pagamento: Pagamento,
+) -> PagamentosEmAndamento:
+    """Substitui o pagamento indicado sem modificar o estado recebido."""
+    _validar_pagamentos(pagamentos)
+    _validar_indice(pagamentos, indice)
+
+    if not isinstance(pagamento, Pagamento):
+        raise TypeError("O pagamento deve ser uma instância de Pagamento.")
+
+    novos_pagamentos = (
+        pagamentos.pagamentos[:indice]
+        + (pagamento,)
+        + pagamentos.pagamentos[indice + 1 :]
+    )
+
+    return PagamentosEmAndamento(
+        total_venda_centavos=pagamentos.total_venda_centavos,
+        pagamentos=novos_pagamentos,
+    )
+
+
+def remover_pagamento(
+    pagamentos: PagamentosEmAndamento,
+    indice: int,
+) -> PagamentosEmAndamento:
+    """Remove o pagamento indicado preservando a ordem dos demais."""
+    _validar_pagamentos(pagamentos)
+    _validar_indice(pagamentos, indice)
+
+    novos_pagamentos = (
+        pagamentos.pagamentos[:indice]
+        + pagamentos.pagamentos[indice + 1 :]
+    )
+
+    return PagamentosEmAndamento(
+        total_venda_centavos=pagamentos.total_venda_centavos,
+        pagamentos=novos_pagamentos,
+    )
+
+
 def calcular_total_pago(pagamentos: PagamentosEmAndamento) -> int:
     """Soma os pagamentos registrados em centavos."""
     _validar_pagamentos(pagamentos)
@@ -81,3 +124,14 @@ def _validar_pagamentos(pagamentos: PagamentosEmAndamento) -> None:
         raise TypeError(
             "Os pagamentos devem ser uma instância de PagamentosEmAndamento."
         )
+
+
+def _validar_indice(
+    pagamentos: PagamentosEmAndamento,
+    indice: int,
+) -> None:
+    if not isinstance(indice, int) or isinstance(indice, bool):
+        raise TypeError("O índice deve ser um número inteiro.")
+
+    if indice < 0 or indice >= len(pagamentos.pagamentos):
+        raise IndexError("O índice do pagamento está fora da faixa.")

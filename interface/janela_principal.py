@@ -19,6 +19,7 @@ from interface.dialogos_entrada import (
     DialogoPeso,
     DialogoUnidade,
 )
+from interface.dialogo_pagamentos import DialogoPagamentos
 from interface.formatacao import formatar_centavos
 from models.estado_venda import EstadoVenda
 from models.item_venda import DESCRICAO_DIVERSOS, ItemVenda
@@ -38,6 +39,7 @@ class JanelaPrincipal(QMainWindow):
     """Janela principal com entrada única para códigos do PDV."""
 
     item_criado = Signal(object)
+    pagamentos_confirmados = Signal(object)
 
     def __init__(self, caminho_banco=CAMINHO_BANCO) -> None:
         super().__init__()
@@ -100,8 +102,11 @@ class JanelaPrincipal(QMainWindow):
         self.botao_remover.setObjectName("botao_remover")
         self.botao_desfazer = QPushButton("Desfazer", area_vendas)
         self.botao_desfazer.setObjectName("botao_desfazer")
+        self.botao_pagamento = QPushButton("Pagamento", area_vendas)
+        self.botao_pagamento.setObjectName("botao_pagamento")
         layout_acoes.addWidget(self.botao_remover)
         layout_acoes.addWidget(self.botao_desfazer)
+        layout_acoes.addWidget(self.botao_pagamento)
         layout_acoes.addStretch()
 
         self.rotulo_total = QLabel("Total: R$ 0,00", area_vendas)
@@ -113,6 +118,7 @@ class JanelaPrincipal(QMainWindow):
         self.item_criado.connect(self._adicionar_item_a_venda)
         self.botao_remover.clicked.connect(self.remover_item_selecionado)
         self.botao_desfazer.clicked.connect(self.desfazer_ultima_remocao)
+        self.botao_pagamento.clicked.connect(self.abrir_dialogo_pagamentos)
         self._atualizar_venda_exibida()
 
     def showEvent(self, evento) -> None:
@@ -244,6 +250,32 @@ class JanelaPrincipal(QMainWindow):
         self._atualizar_venda_exibida()
         self._restaurar_foco_entrada()
 
+    def abrir_dialogo_pagamentos(self) -> None:
+        if self.dialogo_atual is not None:
+            return
+
+        total_venda = calcular_total(self.estado_venda.venda)
+        if total_venda <= 0:
+            self.rotulo_status.setText(
+                "Adicione ao menos um item com valor antes do pagamento."
+            )
+            self._restaurar_foco_entrada()
+            return
+
+        dialogo = DialogoPagamentos(total_venda, self)
+        self.dialogo_atual = dialogo
+        dialogo.pagamentos_confirmados.connect(
+            self._emitir_pagamentos_confirmados
+        )
+        dialogo.finished.connect(
+            lambda resultado: self._finalizar_dialogo(dialogo, resultado)
+        )
+        dialogo.open()
+
+    def _emitir_pagamentos_confirmados(self, pagamentos) -> None:
+        self.rotulo_status.setText("Pagamentos compostos.")
+        self.pagamentos_confirmados.emit(pagamentos)
+
     def _atualizar_venda_exibida(self) -> None:
         itens = self.estado_venda.venda.itens
         self.tabela_itens.setRowCount(len(itens))
@@ -269,6 +301,7 @@ class JanelaPrincipal(QMainWindow):
         self.botao_desfazer.setEnabled(
             self.estado_venda.ultima_remocao is not None
         )
+        self.botao_pagamento.setEnabled(total > 0)
 
     @staticmethod
     def _descricao_item(item: ItemVenda) -> str:
