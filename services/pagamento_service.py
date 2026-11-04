@@ -1,6 +1,42 @@
 from models.pagamento import Pagamento, PagamentosEmAndamento
 
 
+def dividir_valor_igualmente(
+    valor_total_centavos: int,
+    quantidade_partes: int,
+) -> tuple[int, ...]:
+    """Divide um valor em partes inteiras e distribui o resto no início."""
+    if (
+        not isinstance(valor_total_centavos, int)
+        or isinstance(valor_total_centavos, bool)
+    ):
+        raise TypeError("O valor total deve ser um número inteiro em centavos.")
+
+    if (
+        not isinstance(quantidade_partes, int)
+        or isinstance(quantidade_partes, bool)
+    ):
+        raise TypeError("A quantidade de partes deve ser um número inteiro.")
+
+    if valor_total_centavos <= 0:
+        raise ValueError("O valor total deve ser positivo.")
+
+    if quantidade_partes <= 0:
+        raise ValueError("A quantidade de partes deve ser positiva.")
+
+    if quantidade_partes > valor_total_centavos:
+        raise ValueError(
+            "A quantidade de partes não pode ultrapassar o valor em centavos."
+        )
+
+    valor_base, resto = divmod(valor_total_centavos, quantidade_partes)
+
+    return tuple(
+        valor_base + (1 if indice < resto else 0)
+        for indice in range(quantidade_partes)
+    )
+
+
 def adicionar_pagamento(
     pagamentos: PagamentosEmAndamento,
     pagamento: Pagamento,

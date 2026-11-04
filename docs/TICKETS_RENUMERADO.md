@@ -220,6 +220,9 @@ duplicação quando o leitor enviar Enter; (2) leituras consecutivas e repetidas
 **Origem:** backlog original T26.
 **Entrega verificável:** Diálogo para registros de pagamento; sem SQL na GUI.
 **Conceito a estudar:** Sinais, estado de formulário.
+**Pendência de fluxo:** permitir editar e remover pagamentos já informados,
+recalculando saldo e total pago, preservando os demais registros e permitindo
+correção sem cancelar a venda inteira.
 
 ### T38 — Confirmação de venda
 **Origem:** backlog original T27.
