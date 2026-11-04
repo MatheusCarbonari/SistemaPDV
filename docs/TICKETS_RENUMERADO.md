@@ -363,6 +363,29 @@ avaliar o posicionamento e o destaque do total, melhorar a legibilidade da
 tabela, a hierarquia das informações e a produtividade no uso por teclado e
 mouse. Esta pendência não autoriza mudanças visuais antes dessa etapa.
 
+### Revisão funcional e de usabilidade do diálogo de pagamentos
+
+Executar após a implementação e validação do fluxo completo de vendas, antes
+da homologação final. Prioridade importante para produtividade e prevenção de
+erros no caixa. Esta pendência não autoriza alterar agora a implementação do
+T37.
+
+**Separação entre Adicionar e Concluir:** Enter adiciona o pagamento ou
+confirma a edição; zerar o saldo não fecha automaticamente o diálogo; concluir
+exige botão ou atalho independente e explícito. Mesmo com saldo zero, permitir
+revisar, editar e remover pagamentos.
+
+**Preservação do valor informado:** alterar a modalidade entre Dinheiro,
+Crédito, Débito e Pix não substitui o valor escolhido pelo operador. Sugerir o
+saldo restante somente ao iniciar uma nova entrada, sem sobrescrever valores
+já definidos.
+
+**Persistência da divisão sugerida:** manter as parcelas sugeridas visíveis
+durante os lançamentos, identificar as utilizadas e exibir as ainda disponíveis.
+Não apagar a sugestão a cada pagamento nem exigir nova divisão pela quantidade
+restante. Permitir refazer ou limpar a divisão por ação expressa e, após edições
+manuais, manter consistência com o saldo real.
+
 ## Regras de acompanhamento daqui em diante
 
 - O próximo ticket executável é **T21**; depois T22, T23 etc. Sem retroceder à numeração original.
