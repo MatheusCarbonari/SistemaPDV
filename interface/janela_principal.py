@@ -19,10 +19,13 @@ from interface.dialogos_entrada import (
     DialogoPeso,
     DialogoUnidade,
 )
+from interface.dialogo_confirmacao_venda import DialogoConfirmacaoVenda
 from interface.dialogo_pagamentos import DialogoPagamentos
 from interface.formatacao import formatar_centavos
 from models.estado_venda import EstadoVenda
 from models.item_venda import DESCRICAO_DIVERSOS, ItemVenda
+from models.pagamento import PagamentosEmAndamento
+from models.venda_confirmada import VendaConfirmada
 from models.venda_em_andamento import VendaEmAndamento
 from services.estado_venda_service import (
     adicionar_no_estado,
@@ -40,12 +43,15 @@ class JanelaPrincipal(QMainWindow):
 
     item_criado = Signal(object)
     pagamentos_confirmados = Signal(object)
+    venda_confirmada = Signal(object)
 
     def __init__(self, caminho_banco=CAMINHO_BANCO) -> None:
         super().__init__()
         self.caminho_banco = caminho_banco
         self.dialogo_atual: QDialog | None = None
         self.estado_venda = EstadoVenda(venda=VendaEmAndamento())
+        self.composicao_pagamentos: PagamentosEmAndamento | None = None
+        self.resultado_confirmacao: VendaConfirmada | None = None
         self._processando_entrada = False
         self._ignorar_proximo_enter = False
         self.setWindowTitle("Sistema-PDV")
@@ -104,9 +110,15 @@ class JanelaPrincipal(QMainWindow):
         self.botao_desfazer.setObjectName("botao_desfazer")
         self.botao_pagamento = QPushButton("Pagamento", area_vendas)
         self.botao_pagamento.setObjectName("botao_pagamento")
+        self.botao_confirmar_venda = QPushButton(
+            "Confirmar venda",
+            area_vendas,
+        )
+        self.botao_confirmar_venda.setObjectName("botao_confirmar_venda")
         layout_acoes.addWidget(self.botao_remover)
         layout_acoes.addWidget(self.botao_desfazer)
         layout_acoes.addWidget(self.botao_pagamento)
+        layout_acoes.addWidget(self.botao_confirmar_venda)
         layout_acoes.addStretch()
 
         self.rotulo_total = QLabel("Total: R$ 0,00", area_vendas)
@@ -119,6 +131,9 @@ class JanelaPrincipal(QMainWindow):
         self.botao_remover.clicked.connect(self.remover_item_selecionado)
         self.botao_desfazer.clicked.connect(self.desfazer_ultima_remocao)
         self.botao_pagamento.clicked.connect(self.abrir_dialogo_pagamentos)
+        self.botao_confirmar_venda.clicked.connect(
+            self.abrir_dialogo_confirmacao
+        )
         self._atualizar_venda_exibida()
 
     def showEvent(self, evento) -> None:
@@ -227,7 +242,9 @@ class JanelaPrincipal(QMainWindow):
         self.item_criado.emit(item)
 
     def _adicionar_item_a_venda(self, item: ItemVenda) -> None:
+        havia_pagamentos = self.composicao_pagamentos is not None
         self.estado_venda = adicionar_no_estado(self.estado_venda, item)
+        self._invalidar_pagamentos_apos_alteracao(havia_pagamentos)
         self._atualizar_venda_exibida()
 
     def remover_item_selecionado(self) -> None:
@@ -241,12 +258,18 @@ class JanelaPrincipal(QMainWindow):
             if linhas_selecionadas
             else len(self.estado_venda.venda.itens) - 1
         )
+        havia_pagamentos = self.composicao_pagamentos is not None
         self.estado_venda = remover_com_desfazer(self.estado_venda, indice)
+        self._invalidar_pagamentos_apos_alteracao(havia_pagamentos)
         self._atualizar_venda_exibida()
         self._restaurar_foco_entrada()
 
     def desfazer_ultima_remocao(self) -> None:
+        estado_anterior = self.estado_venda
+        havia_pagamentos = self.composicao_pagamentos is not None
         self.estado_venda = desfazer_ultima_remocao(self.estado_venda)
+        if self.estado_venda is not estado_anterior:
+            self._invalidar_pagamentos_apos_alteracao(havia_pagamentos)
         self._atualizar_venda_exibida()
         self._restaurar_foco_entrada()
 
@@ -262,7 +285,11 @@ class JanelaPrincipal(QMainWindow):
             self._restaurar_foco_entrada()
             return
 
-        dialogo = DialogoPagamentos(total_venda, self)
+        dialogo = DialogoPagamentos(
+            total_venda,
+            self,
+            estado_inicial=self.composicao_pagamentos,
+        )
         self.dialogo_atual = dialogo
         dialogo.pagamentos_confirmados.connect(
             self._emitir_pagamentos_confirmados
@@ -273,8 +300,56 @@ class JanelaPrincipal(QMainWindow):
         dialogo.open()
 
     def _emitir_pagamentos_confirmados(self, pagamentos) -> None:
+        self.composicao_pagamentos = pagamentos
+        self.resultado_confirmacao = None
         self.rotulo_status.setText("Pagamentos compostos.")
         self.pagamentos_confirmados.emit(pagamentos)
+        self._atualizar_venda_exibida()
+
+    def abrir_dialogo_confirmacao(self) -> None:
+        if self.dialogo_atual is not None:
+            return
+
+        if self.composicao_pagamentos is None:
+            self.rotulo_status.setText(
+                "Conclua a composição dos pagamentos antes de confirmar."
+            )
+            self._restaurar_foco_entrada()
+            return
+
+        try:
+            dialogo = DialogoConfirmacaoVenda(
+                self.estado_venda.venda,
+                self.composicao_pagamentos,
+                self,
+            )
+        except (TypeError, ValueError) as erro:
+            self.rotulo_status.setText(str(erro))
+            self._restaurar_foco_entrada()
+            return
+
+        self.dialogo_atual = dialogo
+        dialogo.venda_confirmada.connect(self._receber_venda_confirmada)
+        dialogo.finished.connect(
+            lambda resultado: self._finalizar_dialogo(dialogo, resultado)
+        )
+        dialogo.open()
+
+    def _receber_venda_confirmada(self, resultado: VendaConfirmada) -> None:
+        self.resultado_confirmacao = resultado
+        self.rotulo_status.setText("Venda confirmada para persistência.")
+        self.venda_confirmada.emit(resultado)
+
+    def _invalidar_pagamentos_apos_alteracao(
+        self,
+        havia_pagamentos: bool,
+    ) -> None:
+        self.composicao_pagamentos = None
+        self.resultado_confirmacao = None
+        if havia_pagamentos:
+            self.rotulo_status.setText(
+                "Os pagamentos foram invalidados porque a venda foi alterada."
+            )
 
     def _atualizar_venda_exibida(self) -> None:
         itens = self.estado_venda.venda.itens
@@ -302,6 +377,9 @@ class JanelaPrincipal(QMainWindow):
             self.estado_venda.ultima_remocao is not None
         )
         self.botao_pagamento.setEnabled(total > 0)
+        self.botao_confirmar_venda.setEnabled(
+            self.composicao_pagamentos is not None
+        )
 
     @staticmethod
     def _descricao_item(item: ItemVenda) -> str:

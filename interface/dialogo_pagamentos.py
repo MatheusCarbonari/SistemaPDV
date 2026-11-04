@@ -39,9 +39,27 @@ MAXIMO_INTEIRO_QT = 2_147_483_647
 class DialogoPagamentos(QDialog):
     pagamentos_confirmados = Signal(object)
 
-    def __init__(self, total_venda_centavos: int, parent=None) -> None:
+    def __init__(
+        self,
+        total_venda_centavos: int,
+        parent=None,
+        estado_inicial: PagamentosEmAndamento | None = None,
+    ) -> None:
         super().__init__(parent)
-        self.estado_pagamentos = PagamentosEmAndamento(total_venda_centavos)
+        if estado_inicial is not None:
+            if not isinstance(estado_inicial, PagamentosEmAndamento):
+                raise TypeError(
+                    "O estado inicial deve ser PagamentosEmAndamento ou None."
+                )
+            if estado_inicial.total_venda_centavos != total_venda_centavos:
+                raise ValueError(
+                    "O estado inicial não corresponde ao total da venda."
+                )
+            self.estado_pagamentos = estado_inicial
+        else:
+            self.estado_pagamentos = PagamentosEmAndamento(
+                total_venda_centavos
+            )
         self._indice_edicao: int | None = None
         self._resultado_confirmado = False
         self.sugestoes_divisao: tuple[int, ...] = ()
@@ -175,6 +193,10 @@ class DialogoPagamentos(QDialog):
         QTimer.singleShot(0, self.combo_modalidade.setFocus)
 
     def keyPressEvent(self, evento) -> None:
+        if evento.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            evento.accept()
+            return
+
         if evento.key() == Qt.Key.Key_Escape and self._indice_edicao is not None:
             self._preparar_novo_lancamento()
             evento.accept()
