@@ -6,8 +6,8 @@
 
 - Inspeção de `interface/`, `services/`, `repositories/`, `database/`, `models/` e `docs/TICKETS_RENUMERADO.md` (T01–T62).
 - `pytest` excluindo sete arquivos que importam Qt: **722 testes aprovados**. Os testes gráficos não puderam ser executados neste ambiente por ausência de PySide6. O relatório prévio do Codex mencionou **795 testes aprovados** no Windows; esse resultado não foi reproduzido integralmente aqui.
-- **Atualização INT-A em 04/11/2026:** suíte completa executada no ambiente de
-  desenvolvimento com PySide6, totalizando **810 testes aprovados**. Todos os
+- **Atualização INT-A/INT-B em 04/11/2026:** suíte completa executada no ambiente de
+  desenvolvimento com PySide6, totalizando **822 testes aprovados**. Todos os
   bancos criados pelos novos testes permaneceram sob `tmp_path`.
 - Inspeção somente leitura do banco SQLite incluído no ZIP: **`PRAGMA user_version = 0`**, com tabela `produtos`; o código atual espera **versão 6** para persistência, histórico e cancelamento. O banco original não foi migrado.
 
@@ -34,13 +34,16 @@ operação comercial.
 **Cobertura:** registrada como **INT-A**; rotação, agendamento e restauração
 continuam pertencendo aos T55–T57.
 
-### P1 — Histórico de vendas não acessível pela GUI
+### Resolvido pela INT-B — Histórico acessível por página interna
 
-Serviços T41/T42 estão implementados, porém nenhuma janela/dialogo acessa `buscar_venda_resumida_por_id`, `listar_vendas_resumidas_por_data` ou `buscar_venda_detalhada_por_id`. `interface/` não possui tela de histórico.
+Uma única janela principal mantém menu horizontal e páginas internas. A página
+Histórico reutiliza `buscar_venda_resumida_por_id`,
+`listar_vendas_resumidas_por_data` e `buscar_venda_detalhada_por_id`, com busca
+por ID/data, apresentação local em São Paulo e detalhamento somente leitura de
+itens, snapshots, quantidades, pagamentos e cancelamento. A navegação preserva
+a venda aberta e é bloqueada durante commit incerto.
 
-**Cobertura futura:** registrada como **INT-B** no backlog oficial: GUI por ID
-e dia local, lista com uma linha por venda, detalhe, status de cancelamento e
-apresentação local das datas.
+**Cobertura:** registrada como **INT-B** no backlog oficial.
 
 ### P1 — Cancelamento sem interface, e autorização ainda não implementada
 
@@ -76,7 +79,7 @@ T44 prevê alteração de preço auditada e "tela 12 meses depois", mas a visual
 ## Recomendações de sequência (sem renumerar tickets existentes)
 
 1. **INT-A — resolvida:** bootstrap seguro e fechamento idempotente integrado.
-2. **INT-B — pendente:** GUI de histórico resumido/detalhado por data/ID, sem gravações.
+2. **INT-B — resolvida:** navegação por páginas e histórico completo somente leitura.
 3. **INT-C — pendente:** tela de cadastro, edição, listagem e ativação/desativação de produtos; histórico de preços permanece separado.
 4. **INT-D — pendente:** depois de T45–T47, GUI de cancelamento protegida por autorização pontual.
 5. Registrar ticket/entrega futura para visualização dos últimos 12 meses de preços e, se permanecer no escopo, categorias personalizáveis.
@@ -85,6 +88,7 @@ T44 prevê alteração de preço auditada e "tela 12 meses depois", mas a visual
 ## Critério de conclusão
 
 O fluxo gráfico entre confirmação e registro definitivo foi conectado pela
-INT-A. Permanecem ausentes as telas de histórico, administração de produtos e
+INT-A, e o histórico passou a ser acessível por página interna na INT-B.
+Permanecem ausentes as funcionalidades de administração de produtos e
 cancelamento. Os testes automatizados não substituem a validação operacional no
 Windows, e a homologação de leitor físico permanece pendente.

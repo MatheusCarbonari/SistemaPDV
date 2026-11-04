@@ -266,13 +266,20 @@ atendimento enquanto o resultado permanecer incerto.
 automática dos T55–T57.
 
 ### INT-B — Interface de histórico de vendas
-**Entrega verificável:** disponibilizar na GUI as consultas resumidas e
-detalhadas já existentes, por ID e data, sem alterar os registros comerciais.
+**Decisão de interface:** uma única janela principal com menu horizontal e
+páginas internas independentes para Frente de Caixa, Histórico e futuras áreas
+de Produtos e Administração.
+**Entrega verificável:** navegar sem recriar ou perder a venda em andamento;
+consultar vendas por ID ou dia civil de São Paulo; listar número, data/hora
+local, total e status; apresentar detalhes somente leitura com snapshots,
+quantidades, subtotais, pagamentos e metadados de cancelamento. Navegação não
+pode contornar fechamento com resultado incerto. Produtos e Administração
+permanecem indisponíveis até suas integrações próprias.
 
 ### INT-C — Interface de administração de produtos
 **Entrega verificável:** cadastrar, listar, editar, ativar e inativar produtos
-pela interface, preservando snapshots e mantendo o histórico de preços como
-responsabilidade separada do T44.
+em página interna da janela principal, preservando snapshots e mantendo o
+histórico de preços como responsabilidade separada do T44.
 
 ### INT-D — Interface de cancelamento de vendas
 **Entrega verificável:** integrar o cancelamento auditável à GUI com motivo,

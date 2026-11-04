@@ -18,7 +18,9 @@ def test_janela_principal_possui_configuracao_minima(qtbot) -> None:
     assert janela.width() == 1024
     assert janela.height() == 720
     assert isinstance(janela.centralWidget(), QWidget)
-    assert janela.centralWidget().objectName() == "area_vendas"
+    assert janela.centralWidget().objectName() == "estrutura_principal"
+    assert janela.pagina_frente_caixa.objectName() == "area_vendas"
+    assert janela.paginas.currentWidget() is janela.pagina_frente_caixa
 
 
 def test_janela_principal_pode_ser_aberta_e_fechada(qtbot) -> None:

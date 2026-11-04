@@ -3,12 +3,14 @@ import services.persistencia_venda_service as persistencia_venda_service
 from PySide6.QtCore import QSignalBlocker, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QButtonGroup,
     QDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
     QPushButton,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -24,6 +26,7 @@ from interface.dialogos_entrada import (
 from interface.dialogo_confirmacao_venda import DialogoConfirmacaoVenda
 from interface.dialogo_pagamentos import DialogoPagamentos
 from interface.formatacao import formatar_centavos
+from interface.pagina_historico import PaginaHistorico
 from models.estado_venda import EstadoVenda
 from models.item_venda import DESCRICAO_DIVERSOS, ItemVenda
 from models.pagamento import PagamentosEmAndamento
@@ -65,8 +68,51 @@ class JanelaPrincipal(QMainWindow):
         self.setWindowTitle("Sistema-PDV")
         self.resize(1024, 720)
 
-        area_vendas = QWidget(self)
+        estrutura_principal = QWidget(self)
+        estrutura_principal.setObjectName("estrutura_principal")
+        layout_principal = QVBoxLayout(estrutura_principal)
+
+        menu_superior = QWidget(estrutura_principal)
+        menu_superior.setObjectName("menu_superior")
+        layout_menu = QHBoxLayout(menu_superior)
+        self.botao_navegar_caixa = QPushButton("Frente de Caixa")
+        self.botao_navegar_caixa.setObjectName("navegar_frente_caixa")
+        self.botao_navegar_historico = QPushButton("Histórico")
+        self.botao_navegar_historico.setObjectName("navegar_historico")
+        self.botao_navegar_produtos = QPushButton("Produtos (em breve)")
+        self.botao_navegar_produtos.setObjectName("navegar_produtos")
+        self.botao_navegar_produtos.setEnabled(False)
+        self.botao_navegar_administracao = QPushButton(
+            "Administração (em breve)"
+        )
+        self.botao_navegar_administracao.setObjectName(
+            "navegar_administracao"
+        )
+        self.botao_navegar_administracao.setEnabled(False)
+        for botao in (
+            self.botao_navegar_caixa,
+            self.botao_navegar_historico,
+        ):
+            botao.setCheckable(True)
+        self.grupo_navegacao = QButtonGroup(self)
+        self.grupo_navegacao.setExclusive(True)
+        self.grupo_navegacao.addButton(self.botao_navegar_caixa)
+        self.grupo_navegacao.addButton(self.botao_navegar_historico)
+        self.botao_navegar_caixa.setChecked(True)
+        layout_menu.addWidget(self.botao_navegar_caixa)
+        layout_menu.addWidget(self.botao_navegar_historico)
+        layout_menu.addWidget(self.botao_navegar_produtos)
+        layout_menu.addWidget(self.botao_navegar_administracao)
+        layout_menu.addStretch()
+        layout_principal.addWidget(menu_superior)
+
+        self.paginas = QStackedWidget(estrutura_principal)
+        self.paginas.setObjectName("paginas_principais")
+        layout_principal.addWidget(self.paginas)
+
+        area_vendas = QWidget(self.paginas)
         area_vendas.setObjectName("area_vendas")
+        self.pagina_frente_caixa = area_vendas
 
         layout = QVBoxLayout(area_vendas)
         titulo = QLabel("Área de vendas", area_vendas)
@@ -142,8 +188,16 @@ class JanelaPrincipal(QMainWindow):
         layout_acoes.addWidget(self.rotulo_total)
         layout.addLayout(layout_acoes)
 
-        self.setCentralWidget(area_vendas)
+        self.pagina_historico = PaginaHistorico(
+            self.caminho_banco,
+            self.paginas,
+        )
+        self.paginas.addWidget(self.pagina_frente_caixa)
+        self.paginas.addWidget(self.pagina_historico)
+        self.setCentralWidget(estrutura_principal)
         self.item_criado.connect(self._adicionar_item_a_venda)
+        self.botao_navegar_caixa.clicked.connect(self.mostrar_frente_caixa)
+        self.botao_navegar_historico.clicked.connect(self.mostrar_historico)
         self.botao_remover.clicked.connect(self.remover_item_selecionado)
         self.botao_desfazer.clicked.connect(self.desfazer_ultima_remocao)
         self.botao_pagamento.clicked.connect(self.abrir_dialogo_pagamentos)
@@ -157,11 +211,29 @@ class JanelaPrincipal(QMainWindow):
 
     def showEvent(self, evento) -> None:
         super().showEvent(evento)
-        QTimer.singleShot(
-            0,
-            self.campo_entrada,
-            self.campo_entrada.setFocus,
-        )
+        if self.paginas.currentWidget() is self.pagina_frente_caixa:
+            self._restaurar_foco_entrada()
+
+    def mostrar_frente_caixa(self) -> None:
+        self.paginas.setCurrentWidget(self.pagina_frente_caixa)
+        self.botao_navegar_caixa.setChecked(True)
+        self._restaurar_foco_entrada()
+
+    def mostrar_historico(self) -> None:
+        if self.dialogo_atual is not None:
+            self.botao_navegar_caixa.setChecked(True)
+            return
+        if self._fechamento_bloqueia_operacao():
+            self.rotulo_status.setText(
+                "Resolva o fechamento pendente antes de sair da Frente de Caixa."
+            )
+            self.botao_navegar_caixa.setChecked(True)
+            self._restaurar_foco_entrada()
+            return
+
+        self.paginas.setCurrentWidget(self.pagina_historico)
+        self.botao_navegar_historico.setChecked(True)
+        self.pagina_historico.restaurar_foco()
 
     def processar_entrada(self) -> None:
         if (
@@ -484,6 +556,13 @@ class JanelaPrincipal(QMainWindow):
         total = calcular_total(self.estado_venda.venda)
         self.rotulo_total.setText(f"Total: {formatar_centavos(total)}")
         operacao_bloqueada = self._fechamento_bloqueia_operacao()
+        if (
+            operacao_bloqueada
+            and self.paginas.currentWidget() is not self.pagina_frente_caixa
+        ):
+            self.paginas.setCurrentWidget(self.pagina_frente_caixa)
+            self.botao_navegar_caixa.setChecked(True)
+        self.botao_navegar_historico.setEnabled(not operacao_bloqueada)
         self.campo_entrada.setEnabled(not operacao_bloqueada)
         self.tabela_itens.setEnabled(not operacao_bloqueada)
         self.botao_remover.setEnabled(bool(itens) and not operacao_bloqueada)
@@ -565,8 +644,11 @@ class JanelaPrincipal(QMainWindow):
         self._restaurar_foco_entrada()
 
     def _restaurar_foco_entrada(self) -> None:
-        QTimer.singleShot(
-            0,
-            self.campo_entrada,
-            self.campo_entrada.setFocus,
-        )
+        QTimer.singleShot(0, self._aplicar_foco_entrada)
+
+    def _aplicar_foco_entrada(self) -> None:
+        if (
+            self.paginas.currentWidget() is self.pagina_frente_caixa
+            and self.campo_entrada.isEnabled()
+        ):
+            self.campo_entrada.setFocus()

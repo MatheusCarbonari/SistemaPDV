@@ -62,7 +62,7 @@ def processar_codigo(janela, qtbot, codigo: str) -> None:
 
 
 def test_janela_possui_um_unico_campo_principal(janela) -> None:
-    campos = janela.centralWidget().findChildren(QLineEdit)
+    campos = janela.pagina_frente_caixa.findChildren(QLineEdit)
 
     assert campos == [janela.campo_entrada]
     assert janela.campo_entrada.objectName() == "campo_entrada"

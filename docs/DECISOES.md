@@ -30,6 +30,11 @@
   único pela API SQLite em `backups/pre_migracao` ao lado do banco e exigir
   `PRAGMA integrity_check = ok`; falha bloqueia a aplicação sem migrar. Banco
   novo ou já atualizado não gera cópia, e versão futura é recusada.
+- **DEC-026** — A interface operacional usa uma única janela principal com
+  menu horizontal persistente e páginas internas independentes. Frente de
+  Caixa mantém seu estado ao navegar; Histórico é somente leitura; páginas de
+  Produtos e Administração só são habilitadas quando suas integrações forem
+  implementadas. Commit incerto bloqueia a saída da Frente de Caixa.
 
 ## Decisões que exigem cuidado
 - Produtos existentes podem ter o código ou forma de venda protegidos por regras específicas; essas regras serão validadas antes de alteração em produção.

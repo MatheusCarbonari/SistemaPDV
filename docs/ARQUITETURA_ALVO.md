@@ -8,6 +8,14 @@
 - `database/`: conexão, esquema, migrações, transações.
 - Serviços transversais: logging, backup, diagnósticos, instalação, recuperação.
 
+## Navegação da interface
+A aplicação mantém uma única janela principal com menu horizontal persistente
+e páginas internas em `QStackedWidget`. A Frente de Caixa conserva venda e
+pagamentos em memória durante a navegação. Histórico consome somente os serviços
+de consulta e não contém SQL. Produtos e Administração são destinos futuros e
+permanecem desabilitados até suas integrações. Resultado de commit incerto fixa
+a operação na Frente de Caixa até verificação ou recuperação controlada.
+
 ## Dados e integridade
 - SQLite único local, foreign_keys habilitado, transação atômica ao gravar venda+itens+pagamentos.
 - `id` técnico não é `codigo` operacional. ID de venda persistente e único; usar identificador separado por tentativa para idempotência.
