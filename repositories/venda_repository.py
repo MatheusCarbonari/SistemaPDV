@@ -1,10 +1,17 @@
 import sqlite3
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from database.conexao import CAMINHO_BANCO, conectar
 from models.item_venda import DESCRICAO_DIVERSOS, ItemVenda
+from models.pagamento import Pagamento
+from models.produto_snapshot import ProdutoSnapshot
 from models.venda_confirmada import VendaConfirmada
+from models.venda_detalhada import (
+    ItemVendaDetalhado,
+    VendaDetalhada,
+)
 from models.venda_resumo import VendaResumo
 from services.venda_em_andamento_service import calcular_total
 
@@ -167,6 +174,72 @@ def listar_resumos_vendas_no_intervalo(
     return tuple(_montar_resumo_venda(venda) for venda in vendas)
 
 
+def buscar_detalhe_venda_por_id(
+    venda_id: int,
+    caminho_banco: str | Path = CAMINHO_BANCO,
+) -> VendaDetalhada | None:
+    conexao = conectar(caminho_banco)
+    try:
+        conexao.execute("BEGIN")
+        venda = conexao.execute(
+            """
+            SELECT id, total_centavos, registrada_em
+            FROM vendas
+            WHERE id = ?
+            """,
+            (venda_id,),
+        ).fetchone()
+        if venda is None:
+            return None
+
+        itens = conexao.execute(
+            """
+            SELECT
+                posicao,
+                produto_id,
+                codigo_snapshot,
+                nome_snapshot,
+                forma_venda_snapshot,
+                preco_referencia_centavos,
+                tipo_item,
+                origem,
+                origem_quantidade,
+                quantidade_decimal,
+                codigo_barras,
+                subtotal_centavos
+            FROM itens_venda
+            WHERE venda_id = ?
+            ORDER BY posicao ASC
+            """,
+            (venda_id,),
+        ).fetchall()
+        pagamentos = conexao.execute(
+            """
+            SELECT modalidade, valor_centavos
+            FROM pagamentos
+            WHERE venda_id = ?
+            ORDER BY id ASC
+            """,
+            (venda_id,),
+        ).fetchall()
+
+        return VendaDetalhada(
+            resumo=_montar_resumo_venda(venda),
+            itens=tuple(_montar_item_detalhado(item) for item in itens),
+            pagamentos=tuple(
+                Pagamento(
+                    modalidade=pagamento["modalidade"],
+                    valor_centavos=pagamento["valor_centavos"],
+                )
+                for pagamento in pagamentos
+            ),
+        )
+    finally:
+        if conexao.in_transaction:
+            conexao.rollback()
+        conexao.close()
+
+
 def _inserir_item(
     conexao: sqlite3.Connection,
     venda_id: int,
@@ -305,4 +378,35 @@ def _montar_resumo_venda(venda) -> VendaResumo:
         venda_id=venda["id"],
         total_centavos=venda["total_centavos"],
         registrada_em=registrada_em,
+    )
+
+
+def _montar_item_detalhado(item) -> ItemVendaDetalhado:
+    produto = None
+    if item["tipo_item"] == "PRODUTO":
+        produto = ProdutoSnapshot(
+            produto_id=item["produto_id"],
+            codigo=item["codigo_snapshot"],
+            nome=item["nome_snapshot"],
+            forma_venda=item["forma_venda_snapshot"],
+            preco_referencia_centavos=item["preco_referencia_centavos"],
+        )
+
+    quantidade = (
+        Decimal(item["quantidade_decimal"])
+        if item["quantidade_decimal"] is not None
+        else None
+    )
+    item_venda = ItemVenda(
+        origem=item["origem"],
+        subtotal_centavos=item["subtotal_centavos"],
+        origem_quantidade=item["origem_quantidade"],
+        produto=produto,
+        codigo_barras=item["codigo_barras"],
+        quantidade=quantidade,
+        tipo_item=item["tipo_item"],
+    )
+    return ItemVendaDetalhado(
+        posicao=item["posicao"],
+        item=item_venda,
     )
