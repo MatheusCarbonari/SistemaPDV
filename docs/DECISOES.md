@@ -35,4 +35,7 @@
 - O histórico diário converte o dia civil de São Paulo para intervalo UTC
   semiaberto e usa índice composto em `vendas(registrada_em, id)`; isso atende
   filtro e ordenação sem aplicar funções sobre a coluna persistida.
+- O T43 registra a identidade recebida em um contexto de autorização, mas não
+  valida credenciais. Somente a autorização pontual do T47 poderá produzir esse
+  contexto para o fluxo operacional; nenhuma ação gráfica é exposta antes disso.
 - A fila de contingência de persistência e eventual fila de documentos fiscais são responsabilidades diferentes e futuras. NFC-e tem regras específicas da SEFAZ, não é mero reenvio livre de totais.

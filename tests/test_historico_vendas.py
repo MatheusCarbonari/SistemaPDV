@@ -337,7 +337,7 @@ def test_funciona_com_vendas_dos_servicos_t39_e_t40(banco_teste) -> None:
     assert {venda.venda_id for venda in vendas} >= {venda_t39, venda_t40}
 
 
-def test_migra_versao_4_para_5_preservando_registros(tmp_path) -> None:
+def test_migra_versao_4_preservando_indice_e_registros(tmp_path) -> None:
     caminho = tmp_path / "migracao_v4_v5.db"
     venda_id = preparar_banco_versao_4(caminho)
 
@@ -353,7 +353,7 @@ def test_migra_versao_4_para_5_preservando_registros(tmp_path) -> None:
             linha["name"]
             for linha in conexao.execute("PRAGMA index_list(vendas)").fetchall()
         }
-        assert versao == 5
+        assert versao == schema.VERSAO_ESQUEMA
         assert tuple(venda) == (venda_id, 1234)
         assert "ux_vendas_identificador_tentativa" in indices
         assert "ix_vendas_registrada_em_id" in indices

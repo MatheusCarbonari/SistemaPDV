@@ -59,6 +59,10 @@ def test_tabela_vendas_existe_com_estrutura_esperada(banco_teste) -> None:
             "total_centavos",
             "registrada_em",
             "identificador_tentativa",
+            "motivo_cancelamento",
+            "cancelada_em",
+            "autorizador_identidade",
+            "status",
         }
         assert colunas["id"]["type"] == "INTEGER"
         assert colunas["id"]["pk"] == 1

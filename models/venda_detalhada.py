@@ -51,3 +51,19 @@ class VendaDetalhada:
     @property
     def registrada_em(self) -> datetime:
         return self.resumo.registrada_em
+
+    @property
+    def status(self) -> str:
+        return self.resumo.status
+
+    @property
+    def motivo_cancelamento(self) -> str | None:
+        return self.resumo.motivo_cancelamento
+
+    @property
+    def cancelada_em(self) -> datetime | None:
+        return self.resumo.cancelada_em
+
+    @property
+    def autorizador_identidade(self) -> str | None:
+        return self.resumo.autorizador_identidade

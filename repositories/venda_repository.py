@@ -140,7 +140,14 @@ def buscar_resumo_venda_por_id(
     try:
         venda = conexao.execute(
             """
-            SELECT id, total_centavos, registrada_em
+            SELECT
+                id,
+                total_centavos,
+                registrada_em,
+                status,
+                motivo_cancelamento,
+                cancelada_em,
+                autorizador_identidade
             FROM vendas
             WHERE id = ?
             """,
@@ -161,7 +168,14 @@ def listar_resumos_vendas_no_intervalo(
     try:
         vendas = conexao.execute(
             """
-            SELECT id, total_centavos, registrada_em
+            SELECT
+                id,
+                total_centavos,
+                registrada_em,
+                status,
+                motivo_cancelamento,
+                cancelada_em,
+                autorizador_identidade
             FROM vendas
             WHERE registrada_em >= ? AND registrada_em < ?
             ORDER BY registrada_em DESC, id DESC
@@ -183,7 +197,14 @@ def buscar_detalhe_venda_por_id(
         conexao.execute("BEGIN")
         venda = conexao.execute(
             """
-            SELECT id, total_centavos, registrada_em
+            SELECT
+                id,
+                total_centavos,
+                registrada_em,
+                status,
+                motivo_cancelamento,
+                cancelada_em,
+                autorizador_identidade
             FROM vendas
             WHERE id = ?
             """,
@@ -271,6 +292,7 @@ def _inserir_item(
         else None
     )
 
+
     conexao.execute(
         """
         INSERT INTO itens_venda (
@@ -306,6 +328,44 @@ def _inserir_item(
             item.subtotal_centavos,
         ),
     )
+
+
+def cancelar_venda_ativa(
+    conexao: sqlite3.Connection,
+    venda_id: int,
+    motivo: str,
+    cancelada_em: str,
+    autorizador_identidade: str,
+) -> bool:
+    cursor = conexao.execute(
+        """
+        UPDATE vendas
+        SET
+            status = 'CANCELADA',
+            motivo_cancelamento = ?,
+            cancelada_em = ?,
+            autorizador_identidade = ?
+        WHERE id = ? AND status = 'ATIVA'
+        """,
+        (
+            motivo,
+            cancelada_em,
+            autorizador_identidade,
+            venda_id,
+        ),
+    )
+    return cursor.rowcount == 1
+
+
+def buscar_status_venda(
+    conexao: sqlite3.Connection,
+    venda_id: int,
+) -> str | None:
+    venda = conexao.execute(
+        "SELECT status FROM vendas WHERE id = ?",
+        (venda_id,),
+    ).fetchone()
+    return venda["status"] if venda is not None else None
 
 
 def _produto_id_existente(
@@ -374,10 +434,22 @@ def _montar_resumo_venda(venda) -> VendaResumo:
     else:
         registrada_em = registrada_em.astimezone(UTC)
 
+    cancelada_em = None
+    if venda["cancelada_em"] is not None:
+        cancelada_em = datetime.fromisoformat(venda["cancelada_em"])
+        if cancelada_em.tzinfo is None:
+            cancelada_em = cancelada_em.replace(tzinfo=UTC)
+        else:
+            cancelada_em = cancelada_em.astimezone(UTC)
+
     return VendaResumo(
         venda_id=venda["id"],
         total_centavos=venda["total_centavos"],
         registrada_em=registrada_em,
+        status=venda["status"],
+        motivo_cancelamento=venda["motivo_cancelamento"],
+        cancelada_em=cancelada_em,
+        autorizador_identidade=venda["autorizador_identidade"],
     )
 
 

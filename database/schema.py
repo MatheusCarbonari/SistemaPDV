@@ -1,7 +1,7 @@
 from database.conexao import CAMINHO_BANCO, conectar
 
 
-VERSAO_ESQUEMA = 5
+VERSAO_ESQUEMA = 6
 
 _COMANDO_CRIAR_PRODUTOS = """
 CREATE TABLE IF NOT EXISTS produtos (
@@ -165,6 +165,64 @@ CREATE INDEX IF NOT EXISTS ix_vendas_registrada_em_id
 ON vendas (registrada_em DESC, id DESC);
 """
 
+_COMANDO_ADICIONAR_MOTIVO_CANCELAMENTO = """
+ALTER TABLE vendas
+ADD COLUMN motivo_cancelamento TEXT
+    CHECK (
+        motivo_cancelamento IS NULL
+        OR (
+            typeof(motivo_cancelamento) = 'text'
+            AND length(trim(motivo_cancelamento)) > 0
+        )
+    );
+"""
+
+_COMANDO_ADICIONAR_DATA_CANCELAMENTO = """
+ALTER TABLE vendas
+ADD COLUMN cancelada_em TEXT
+    CHECK (
+        cancelada_em IS NULL
+        OR (
+            typeof(cancelada_em) = 'text'
+            AND length(trim(cancelada_em)) > 0
+        )
+    );
+"""
+
+_COMANDO_ADICIONAR_AUTORIZADOR_CANCELAMENTO = """
+ALTER TABLE vendas
+ADD COLUMN autorizador_identidade TEXT
+    CHECK (
+        autorizador_identidade IS NULL
+        OR (
+            typeof(autorizador_identidade) = 'text'
+            AND length(trim(autorizador_identidade)) > 0
+        )
+    );
+"""
+
+_COMANDO_ADICIONAR_STATUS_VENDA = """
+ALTER TABLE vendas
+ADD COLUMN status TEXT NOT NULL DEFAULT 'ATIVA'
+    CHECK (
+        (
+            status = 'ATIVA'
+            AND motivo_cancelamento IS NULL
+            AND cancelada_em IS NULL
+            AND autorizador_identidade IS NULL
+        )
+        OR (
+            status = 'CANCELADA'
+            AND typeof(motivo_cancelamento) = 'text'
+            AND length(trim(motivo_cancelamento)) > 0
+            AND typeof(cancelada_em) = 'text'
+            AND length(trim(cancelada_em)) > 0
+            AND typeof(autorizador_identidade) = 'text'
+            AND length(trim(autorizador_identidade)) > 0
+        )
+    );
+"""
+
 
 def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
     """
@@ -208,6 +266,13 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
         if versao_atual < 5:
             conexao.execute(_COMANDO_CRIAR_INDICE_HISTORICO_VENDAS)
             versao_atual = 5
+
+        if versao_atual < 6:
+            conexao.execute(_COMANDO_ADICIONAR_MOTIVO_CANCELAMENTO)
+            conexao.execute(_COMANDO_ADICIONAR_DATA_CANCELAMENTO)
+            conexao.execute(_COMANDO_ADICIONAR_AUTORIZADOR_CANCELAMENTO)
+            conexao.execute(_COMANDO_ADICIONAR_STATUS_VENDA)
+            versao_atual = 6
 
         conexao.execute(f"PRAGMA user_version = {versao_atual}")
         conexao.commit()
