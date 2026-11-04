@@ -1,7 +1,7 @@
 from database.conexao import CAMINHO_BANCO, conectar
 
 
-VERSAO_ESQUEMA = 4
+VERSAO_ESQUEMA = 5
 
 _COMANDO_CRIAR_PRODUTOS = """
 CREATE TABLE IF NOT EXISTS produtos (
@@ -160,6 +160,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_vendas_identificador_tentativa
 ON vendas (identificador_tentativa);
 """
 
+_COMANDO_CRIAR_INDICE_HISTORICO_VENDAS = """
+CREATE INDEX IF NOT EXISTS ix_vendas_registrada_em_id
+ON vendas (registrada_em DESC, id DESC);
+"""
+
 
 def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
     """
@@ -199,6 +204,10 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
             conexao.execute(_COMANDO_ADICIONAR_IDENTIFICADOR_TENTATIVA)
             conexao.execute(_COMANDO_CRIAR_INDICE_TENTATIVA)
             versao_atual = 4
+
+        if versao_atual < 5:
+            conexao.execute(_COMANDO_CRIAR_INDICE_HISTORICO_VENDAS)
+            versao_atual = 5
 
         conexao.execute(f"PRAGMA user_version = {versao_atual}")
         conexao.commit()

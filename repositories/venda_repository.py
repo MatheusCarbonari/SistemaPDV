@@ -1,7 +1,11 @@
 import sqlite3
+from datetime import UTC, datetime
+from pathlib import Path
 
+from database.conexao import CAMINHO_BANCO, conectar
 from models.item_venda import DESCRICAO_DIVERSOS, ItemVenda
 from models.venda_confirmada import VendaConfirmada
+from models.venda_resumo import VendaResumo
 from services.venda_em_andamento_service import calcular_total
 
 
@@ -119,6 +123,48 @@ def venda_persistida_compativel(
     return [tuple(pagamento) for pagamento in pagamentos_persistidos] == (
         pagamentos_esperados
     )
+
+
+def buscar_resumo_venda_por_id(
+    venda_id: int,
+    caminho_banco: str | Path = CAMINHO_BANCO,
+) -> VendaResumo | None:
+    conexao = conectar(caminho_banco)
+    try:
+        venda = conexao.execute(
+            """
+            SELECT id, total_centavos, registrada_em
+            FROM vendas
+            WHERE id = ?
+            """,
+            (venda_id,),
+        ).fetchone()
+    finally:
+        conexao.close()
+
+    return _montar_resumo_venda(venda) if venda is not None else None
+
+
+def listar_resumos_vendas_no_intervalo(
+    inicio_utc: str,
+    fim_utc: str,
+    caminho_banco: str | Path = CAMINHO_BANCO,
+) -> tuple[VendaResumo, ...]:
+    conexao = conectar(caminho_banco)
+    try:
+        vendas = conexao.execute(
+            """
+            SELECT id, total_centavos, registrada_em
+            FROM vendas
+            WHERE registrada_em >= ? AND registrada_em < ?
+            ORDER BY registrada_em DESC, id DESC
+            """,
+            (inicio_utc, fim_utc),
+        ).fetchall()
+    finally:
+        conexao.close()
+
+    return tuple(_montar_resumo_venda(venda) for venda in vendas)
 
 
 def _inserir_item(
@@ -245,4 +291,18 @@ def _assinatura_item(
         quantidade_decimal,
         item.codigo_barras,
         item.subtotal_centavos,
+    )
+
+
+def _montar_resumo_venda(venda) -> VendaResumo:
+    registrada_em = datetime.fromisoformat(venda["registrada_em"])
+    if registrada_em.tzinfo is None:
+        registrada_em = registrada_em.replace(tzinfo=UTC)
+    else:
+        registrada_em = registrada_em.astimezone(UTC)
+
+    return VendaResumo(
+        venda_id=venda["id"],
+        total_centavos=venda["total_centavos"],
+        registrada_em=registrada_em,
     )

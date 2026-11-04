@@ -32,4 +32,7 @@
 - Uma quantidade derivada do preço é **estimada**, nunca prova de pesagem. Quantidade informada manualmente não equivale a pesagem certificada.
 - Recuperação de acesso: códigos únicos offline gerados na configuração, armazenados por hash e consumidos uma vez.
 - Código `9999` reservado; nenhum produto comum poderá usá-lo.
+- O histórico diário converte o dia civil de São Paulo para intervalo UTC
+  semiaberto e usa índice composto em `vendas(registrada_em, id)`; isso atende
+  filtro e ordenação sem aplicar funções sobre a coluna persistida.
 - A fila de contingência de persistência e eventual fila de documentos fiscais são responsabilidades diferentes e futuras. NFC-e tem regras específicas da SEFAZ, não é mero reenvio livre de totais.

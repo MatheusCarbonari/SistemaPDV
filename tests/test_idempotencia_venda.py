@@ -440,7 +440,9 @@ def test_contrato_t39_permanece_compativel_na_versao_4(
         conexao.close()
 
 
-def test_migra_versao_3_para_4_preservando_venda_legada(tmp_path) -> None:
+def test_migra_versao_3_preservando_venda_legada_e_idempotencia(
+    tmp_path,
+) -> None:
     caminho = tmp_path / "migracao_v3_v4.db"
     venda_id = inserir_venda_legada_versao_3(caminho)
 
@@ -459,7 +461,7 @@ def test_migra_versao_3_para_4_preservando_venda_legada(tmp_path) -> None:
             linha["name"]
             for linha in conexao.execute("PRAGMA index_list(vendas)").fetchall()
         }
-        assert versao == 4
+        assert versao == schema.VERSAO_ESQUEMA
         assert tuple(venda) == (venda_id, 1000, None)
         assert "ux_vendas_identificador_tentativa" in indices
         assert contagens(caminho) == (1, 1, 1)
@@ -468,7 +470,7 @@ def test_migra_versao_3_para_4_preservando_venda_legada(tmp_path) -> None:
 
 
 @pytest.mark.parametrize("versao_inicial", [0, 1, 2, 3])
-def test_bancos_anteriores_evoluem_ate_versao_4(
+def test_bancos_anteriores_evoluem_ate_versao_atual(
     tmp_path,
     versao_inicial,
 ) -> None:
@@ -484,7 +486,7 @@ def test_bancos_anteriores_evoluem_ate_versao_4(
             linha["name"]
             for linha in conexao.execute("PRAGMA table_info(vendas)").fetchall()
         }
-        assert versao == 4
+        assert versao == schema.VERSAO_ESQUEMA
         assert "identificador_tentativa" in colunas
     finally:
         conexao.close()
@@ -504,7 +506,10 @@ def test_reexecucao_da_migracao_e_segura(banco_teste) -> None:
     try:
         vendas = conexao.execute("SELECT id FROM vendas").fetchall()
         assert [venda["id"] for venda in vendas] == [venda_id]
-        assert conexao.execute("PRAGMA user_version").fetchone()[0] == 4
+        assert (
+            conexao.execute("PRAGMA user_version").fetchone()[0]
+            == schema.VERSAO_ESQUEMA
+        )
     finally:
         conexao.close()
 
