@@ -54,7 +54,12 @@ def test_tabela_vendas_existe_com_estrutura_esperada(banco_teste) -> None:
         }
 
         assert tabela is not None
-        assert set(colunas) == {"id", "total_centavos", "registrada_em"}
+        assert set(colunas) == {
+            "id",
+            "total_centavos",
+            "registrada_em",
+            "identificador_tentativa",
+        }
         assert colunas["id"]["type"] == "INTEGER"
         assert colunas["id"]["pk"] == 1
         assert colunas["total_centavos"]["type"] == "INTEGER"

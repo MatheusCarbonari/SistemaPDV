@@ -113,7 +113,9 @@ def _criar_banco_versao_2_com_dados(caminho_banco) -> tuple[int, int, int]:
         conexao.close()
 
 
-def test_banco_novo_cria_tabela_pagamentos_na_versao_3(banco_teste) -> None:
+def test_banco_novo_cria_pagamentos_e_evolui_ate_versao_atual(
+    banco_teste,
+) -> None:
     conexao = conectar(banco_teste)
 
     try:
@@ -143,7 +145,7 @@ def test_banco_novo_cria_tabela_pagamentos_na_versao_3(banco_teste) -> None:
         assert colunas["venda_id"]["notnull"] == 1
         assert colunas["modalidade"]["notnull"] == 1
         assert colunas["valor_centavos"]["notnull"] == 1
-        assert versao == 3
+        assert versao == schema.VERSAO_ESQUEMA
     finally:
         conexao.close()
 
@@ -197,13 +199,13 @@ def test_migracao_da_versao_2_preserva_produto_venda_e_item(tmp_path) -> None:
         assert venda["total_centavos"] == 10000
         assert item["subtotal_centavos"] == 10000
         assert quantidade_pagamentos == 0
-        assert versao == 3
+        assert versao == schema.VERSAO_ESQUEMA
     finally:
         conexao.close()
 
 
 @pytest.mark.parametrize("versao_inicial", [0, 1, 2])
-def test_bancos_antigos_evoluem_sequencialmente_ate_versao_3(
+def test_bancos_antigos_evoluem_sequencialmente_ate_versao_atual(
     tmp_path,
     versao_inicial,
 ) -> None:
@@ -223,7 +225,7 @@ def test_bancos_antigos_evoluem_sequencialmente_ate_versao_3(
         versao_final = conexao.execute("PRAGMA user_version").fetchone()[0]
 
         assert {"produtos", "vendas", "itens_venda", "pagamentos"} <= tabelas
-        assert versao_final == 3
+        assert versao_final == schema.VERSAO_ESQUEMA
     finally:
         conexao.close()
 
