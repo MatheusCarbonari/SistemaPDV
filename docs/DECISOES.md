@@ -39,6 +39,11 @@
   andamento, mas bloqueia edição e ativação/inativação de produtos existentes
   enquanto houver itens lançados. O código fica somente leitura na edição;
   categorias continuam textuais e snapshots já lançados não são alterados.
+- **DEC-030** — O primeiro administrador usa `scrypt` da biblioteca padrão com
+  `N=2^14`, `r=8`, `p=5`, salt aleatório de 16 bytes e chave de 32 bytes; versão
+  e parâmetros ficam no formato armazenado. A configuração é marcada por FK
+  durável e a aplicação permanece fail-closed até o login do T46. Estados
+  ambíguos nunca liberam recriação nem operação comercial.
 
 ## Decisões que exigem cuidado
 - O código de produto existente é protegido contra edição pela interface; a

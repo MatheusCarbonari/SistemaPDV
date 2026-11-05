@@ -301,6 +301,14 @@ contratos de autenticação e autorização dos T45–T47.
 **Origem:** backlog original T34.
 **Entrega verificável:** Criar administrador e hash seguro sem senha universal.
 **Conceito a estudar:** Autenticação.
+**Contrato implementado:** no primeiro acesso, criar exatamente um administrador
+com identificação única e senha de 12 a 128 caracteres, protegida por `scrypt`
+com salt individual e parâmetros versionados. A conclusão fica registrada por
+um marcador singleton que referencia o administrador por FK restritiva. Estado
+ausente, divergente ou adulterado falha de modo seguro e não reabre o cadastro.
+**Decisão fail-closed:** após configurar o administrador — ou quando ele já
+existe — a operação comercial permanece indisponível até o login do T46. Não há
+senha padrão, sessão implícita, identidade fictícia nem bypass operacional.
 
 ### T46 — Conta Caixa
 **Origem:** backlog original T35.

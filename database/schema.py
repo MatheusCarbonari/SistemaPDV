@@ -1,7 +1,7 @@
 from database.conexao import CAMINHO_BANCO, conectar
 
 
-VERSAO_ESQUEMA = 7
+VERSAO_ESQUEMA = 8
 
 _COMANDO_CRIAR_PRODUTOS = """
 CREATE TABLE IF NOT EXISTS produtos (
@@ -252,6 +252,61 @@ CREATE INDEX IF NOT EXISTS ix_historico_precos_produto_data
 ON historico_precos_produtos (produto_id, alterado_em DESC, id DESC);
 """
 
+_COMANDO_CRIAR_USUARIOS = """
+CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    identificacao_acesso TEXT NOT NULL COLLATE NOCASE UNIQUE
+        CHECK (
+            typeof(identificacao_acesso) = 'text'
+            AND length(trim(identificacao_acesso)) BETWEEN 3 AND 64
+        ),
+    perfil TEXT NOT NULL
+        CHECK (perfil IN ('ADMINISTRADOR', 'CAIXA')),
+    senha_hash TEXT NOT NULL
+        CHECK (
+            typeof(senha_hash) = 'text'
+            AND length(trim(senha_hash)) > 0
+        ),
+    ativo INTEGER NOT NULL DEFAULT 1
+        CHECK (ativo IN (0, 1)),
+    criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        CHECK (
+            typeof(criado_em) = 'text'
+            AND length(trim(criado_em)) > 0
+        )
+);
+"""
+
+_COMANDO_CRIAR_ESTADO_IDENTIDADE = """
+CREATE TABLE IF NOT EXISTS estado_identidade (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    administrador_inicial_id INTEGER UNIQUE,
+    configurado_em TEXT,
+    FOREIGN KEY (administrador_inicial_id)
+        REFERENCES usuarios(id) ON DELETE RESTRICT,
+    CHECK (
+        (
+            administrador_inicial_id IS NULL
+            AND configurado_em IS NULL
+        )
+        OR (
+            typeof(administrador_inicial_id) = 'integer'
+            AND typeof(configurado_em) = 'text'
+            AND length(trim(configurado_em)) > 0
+        )
+    )
+);
+"""
+
+_COMANDO_INICIALIZAR_ESTADO_IDENTIDADE = """
+INSERT INTO estado_identidade (
+    id,
+    administrador_inicial_id,
+    configurado_em
+)
+VALUES (1, NULL, NULL);
+"""
+
 
 def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
     """
@@ -307,6 +362,12 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
             conexao.execute(_COMANDO_CRIAR_HISTORICO_PRECOS)
             conexao.execute(_COMANDO_CRIAR_INDICE_HISTORICO_PRECOS)
             versao_atual = 7
+
+        if versao_atual < 8:
+            conexao.execute(_COMANDO_CRIAR_USUARIOS)
+            conexao.execute(_COMANDO_CRIAR_ESTADO_IDENTIDADE)
+            conexao.execute(_COMANDO_INICIALIZAR_ESTADO_IDENTIDADE)
+            versao_atual = 8
 
         conexao.execute(f"PRAGMA user_version = {versao_atual}")
         conexao.commit()

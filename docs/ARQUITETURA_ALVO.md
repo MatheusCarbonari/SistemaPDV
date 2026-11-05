@@ -19,6 +19,9 @@ ou recuperação controlada.
 
 ## Dados e integridade
 - SQLite único local, foreign_keys habilitado, transação atômica ao gravar venda+itens+pagamentos.
+- O esquema versão 8 introduz `usuarios` e o singleton `estado_identidade`. O
+  marcador referencia o administrador inicial por FK `RESTRICT`, impedindo sua
+  remoção normal e distinguindo configuração ausente de estado inconsistente.
 - `id` técnico não é `codigo` operacional. ID de venda persistente e único; usar identificador separado por tentativa para idempotência.
 - Snapshot de cada item para não depender de mudanças no cadastro; `produto_id` opcional para Diversos.
 - Preços monetários em centavos; multiplicação de kg usa Decimal e política explícita de arredondamento.
@@ -30,6 +33,21 @@ ou recuperação controlada.
 
 ## Falhas
 Falha de gravação não prova ausência de commit. Nova tentativa deve reutilizar identificador estável e verificar resultado quando possível. Enquanto o resultado estiver incerto, itens e pagamentos permanecem em memória e a interface bloqueia um novo atendimento. Após sucesso comprovado, o ID definitivo é apresentado e a venda em memória é reiniciada. Se banco indisponível, modo de cálculo pode usar catálogo em memória; em reinício com banco indisponível não há garantia de recuperação. Sem persistência alternativa na V1.
+
+Até o T46, o ponto de entrada prepara/migra o banco e permite configurar o
+primeiro administrador, mas nunca abre a janela comercial. Administrador já
+configurado ou estado inconsistente também mantêm a operação bloqueada.
+
+## Identidade e senha
+
+- `scrypt` com salt criptográfico individual; formato contém algoritmo, versão,
+  parâmetros, salt e derivação, permitindo evolução futura.
+- Política inicial: 12–128 caracteres, Unicode e frases-senha permitidos, sem
+  senha universal ou credencial embutida.
+- Hash inválido falha na verificação; senhas nunca são registradas em mensagens,
+  logs ou documentação.
+- T45 não cria sessão. T46 implementará login/escopo Caixa; T47 produzirá o
+  contexto de autorização pontual exigido pela INT-D2.
 
 ## Distribuição
 Binário Windows empacotado, arquivos de dados fora da instalação; instalador atualiza só programa e executa migrador quando necessário; backup válido e migração segura, sem retrocesso automático de banco em falha. A inicialização operacional recusa versões futuras e, para banco existente desatualizado, só migra depois de criar e verificar uma cópia única em `backups/pre_migracao` ao lado do arquivo SQLite. Compatibilidade/licença PySide6 deve ser avaliada em entrega comercial.
