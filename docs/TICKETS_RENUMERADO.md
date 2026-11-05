@@ -273,13 +273,19 @@ de Produtos e Administração.
 consultar vendas por ID ou dia civil de São Paulo; listar número, data/hora
 local, total e status; apresentar detalhes somente leitura com snapshots,
 quantidades, subtotais, pagamentos e metadados de cancelamento. Navegação não
-pode contornar fechamento com resultado incerto. Produtos e Administração
-permanecem indisponíveis até suas integrações próprias.
+pode contornar fechamento com resultado incerto. Produtos é habilitada pela
+INT-C; Administração permanece indisponível até sua integração própria.
 
 ### INT-C — Interface de administração de produtos
 **Entrega verificável:** cadastrar, listar, editar, ativar e inativar produtos
 em página interna da janela principal, preservando snapshots e mantendo o
 histórico de preços como responsabilidade separada do T44.
+**Proteção operacional:** com itens na venda em andamento, novos cadastros
+continuam permitidos, mas edição e mudança de situação de produtos existentes
+ficam bloqueadas até finalizar ou esvaziar a venda. O código identificador não
+é editável no formulário. Resultado de commit incerto bloqueia toda a área.
+Categorias permanecem textuais conforme o esquema atual, sem lista fixa nem
+antecipação da gestão avançada futura.
 
 ### INT-D — Interface de cancelamento de vendas
 **Entrega verificável:** integrar o cancelamento auditável à GUI com motivo,

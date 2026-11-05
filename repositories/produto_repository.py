@@ -160,6 +160,7 @@ def listar_produtos_repository(
     ativo: bool | None = True,
     categoria: str | None = None,
     nome: str | None = None,
+    termo: str | None = None,
 ) -> list[Produto]:
     conexao = conectar(caminho_banco)
 
@@ -192,6 +193,10 @@ def listar_produtos_repository(
         if nome is not None:
             condicoes.append("nome LIKE ?")
             parametros.append(f"%{nome}%")
+
+        if termo is not None:
+            condicoes.append("(codigo LIKE ? OR nome LIKE ?)")
+            parametros.extend((f"%{termo}%", f"%{termo}%"))
 
         if condicoes:
             consulta += "\nWHERE " + " AND ".join(condicoes)

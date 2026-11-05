@@ -4,6 +4,7 @@ from repositories.produto_repository import (
     alterar_situacao_produto_repository,
     codigo_existe,
     listar_produtos_repository,
+    salvar_produto,
     buscar_produto_banco_pelo_id,
     buscar_produto_por_codigo,
     atualizar_produto_repository
@@ -52,12 +53,38 @@ def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, or
     return produto, []
 
 
+# Valida e persiste um novo produto em uma única operação de serviço.
+def cadastrar_produto(
+    codigo,
+    nome,
+    categoria,
+    forma_venda,
+    preco_venda_centavos,
+    origem,
+    caminho_banco=CAMINHO_BANCO,
+):
+    produto, erros = criar_produto(
+        codigo,
+        nome,
+        categoria,
+        forma_venda,
+        preco_venda_centavos,
+        origem,
+        caminho_banco,
+    )
+    if erros:
+        return None, erros
+
+    return salvar_produto(produto, caminho_banco), []
+
+
 # Prepara os filtros e solicita ao repository a listagem de produtos.
 def listar_produtos(
     ativo: bool | None = True,
     categoria: str | None = None,
     nome: str | None = None,
     caminho_banco=CAMINHO_BANCO,
+    termo: str | None = None,
 ):
     if ativo is not None and not isinstance(ativo, bool):
         return [], ["A situação informada para a listagem é inválida."]
@@ -72,12 +99,14 @@ def listar_produtos(
         if nome is not None
         else None
     )
+    termo_limpo = termo.strip() or None if termo is not None else None
 
     produtos = listar_produtos_repository(
         caminho_banco=caminho_banco,
         ativo=ativo,
         categoria=categoria_limpa,
         nome=nome_limpo,
+        termo=termo_limpo,
     )
 
     return produtos, []

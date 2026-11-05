@@ -12,9 +12,10 @@
 A aplicação mantém uma única janela principal com menu horizontal persistente
 e páginas internas em `QStackedWidget`. A Frente de Caixa conserva venda e
 pagamentos em memória durante a navegação. Histórico consome somente os serviços
-de consulta e não contém SQL. Produtos e Administração são destinos futuros e
-permanecem desabilitados até suas integrações. Resultado de commit incerto fixa
-a operação na Frente de Caixa até verificação ou recuperação controlada.
+de consulta e não contém SQL. Produtos administra o catálogo por serviços, sem
+SQL no widget; Administração permanece desabilitada até sua integração.
+Resultado de commit incerto fixa a operação na Frente de Caixa até verificação
+ou recuperação controlada.
 
 ## Dados e integridade
 - SQLite único local, foreign_keys habilitado, transação atômica ao gravar venda+itens+pagamentos.
@@ -22,7 +23,9 @@ a operação na Frente de Caixa até verificação ou recuperação controlada.
 - Snapshot de cada item para não depender de mudanças no cadastro; `produto_id` opcional para Diversos.
 - Preços monetários em centavos; multiplicação de kg usa Decimal e política explícita de arredondamento.
 - Guardar forma de entrada e procedência da quantidade, especialmente se estimada por valor/preço.
-- Cadastro editável durante venda; alterações só afetam novas inclusões.
+- Durante venda com itens, novos produtos podem ser cadastrados, mas produtos
+  existentes não podem ser editados, ativados ou desativados. O bloqueio é
+  validado na execução da operação, e snapshots já lançados permanecem intactos.
 - No futuro, categorias em tabela editável; não impor enumeração rígida.
 
 ## Falhas

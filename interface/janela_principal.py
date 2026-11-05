@@ -27,6 +27,7 @@ from interface.dialogo_confirmacao_venda import DialogoConfirmacaoVenda
 from interface.dialogo_pagamentos import DialogoPagamentos
 from interface.formatacao import formatar_centavos
 from interface.pagina_historico import PaginaHistorico
+from interface.pagina_produtos import PaginaProdutos
 from models.estado_venda import EstadoVenda
 from models.item_venda import DESCRICAO_DIVERSOS, ItemVenda
 from models.pagamento import PagamentosEmAndamento
@@ -79,9 +80,8 @@ class JanelaPrincipal(QMainWindow):
         self.botao_navegar_caixa.setObjectName("navegar_frente_caixa")
         self.botao_navegar_historico = QPushButton("Histórico")
         self.botao_navegar_historico.setObjectName("navegar_historico")
-        self.botao_navegar_produtos = QPushButton("Produtos (em breve)")
+        self.botao_navegar_produtos = QPushButton("Produtos")
         self.botao_navegar_produtos.setObjectName("navegar_produtos")
-        self.botao_navegar_produtos.setEnabled(False)
         self.botao_navegar_administracao = QPushButton(
             "Administração (em breve)"
         )
@@ -92,12 +92,14 @@ class JanelaPrincipal(QMainWindow):
         for botao in (
             self.botao_navegar_caixa,
             self.botao_navegar_historico,
+            self.botao_navegar_produtos,
         ):
             botao.setCheckable(True)
         self.grupo_navegacao = QButtonGroup(self)
         self.grupo_navegacao.setExclusive(True)
         self.grupo_navegacao.addButton(self.botao_navegar_caixa)
         self.grupo_navegacao.addButton(self.botao_navegar_historico)
+        self.grupo_navegacao.addButton(self.botao_navegar_produtos)
         self.botao_navegar_caixa.setChecked(True)
         layout_menu.addWidget(self.botao_navegar_caixa)
         layout_menu.addWidget(self.botao_navegar_historico)
@@ -192,12 +194,22 @@ class JanelaPrincipal(QMainWindow):
             self.caminho_banco,
             self.paginas,
         )
+        self.pagina_produtos = PaginaProdutos(
+            self.caminho_banco,
+            tem_venda_em_andamento=lambda: bool(
+                self.estado_venda.venda.itens
+            ),
+            operacao_bloqueada=self._fechamento_bloqueia_operacao,
+            parent=self.paginas,
+        )
         self.paginas.addWidget(self.pagina_frente_caixa)
         self.paginas.addWidget(self.pagina_historico)
+        self.paginas.addWidget(self.pagina_produtos)
         self.setCentralWidget(estrutura_principal)
         self.item_criado.connect(self._adicionar_item_a_venda)
         self.botao_navegar_caixa.clicked.connect(self.mostrar_frente_caixa)
         self.botao_navegar_historico.clicked.connect(self.mostrar_historico)
+        self.botao_navegar_produtos.clicked.connect(self.mostrar_produtos)
         self.botao_remover.clicked.connect(self.remover_item_selecionado)
         self.botao_desfazer.clicked.connect(self.desfazer_ultima_remocao)
         self.botao_pagamento.clicked.connect(self.abrir_dialogo_pagamentos)
@@ -234,6 +246,22 @@ class JanelaPrincipal(QMainWindow):
         self.paginas.setCurrentWidget(self.pagina_historico)
         self.botao_navegar_historico.setChecked(True)
         self.pagina_historico.restaurar_foco()
+
+    def mostrar_produtos(self) -> None:
+        if self.dialogo_atual is not None:
+            self.botao_navegar_caixa.setChecked(True)
+            return
+        if self._fechamento_bloqueia_operacao():
+            self.rotulo_status.setText(
+                "Resolva o fechamento pendente antes de sair da Frente de Caixa."
+            )
+            self.botao_navegar_caixa.setChecked(True)
+            self._restaurar_foco_entrada()
+            return
+
+        self.paginas.setCurrentWidget(self.pagina_produtos)
+        self.botao_navegar_produtos.setChecked(True)
+        self.pagina_produtos.ativar()
 
     def processar_entrada(self) -> None:
         if (
@@ -563,6 +591,7 @@ class JanelaPrincipal(QMainWindow):
             self.paginas.setCurrentWidget(self.pagina_frente_caixa)
             self.botao_navegar_caixa.setChecked(True)
         self.botao_navegar_historico.setEnabled(not operacao_bloqueada)
+        self.botao_navegar_produtos.setEnabled(not operacao_bloqueada)
         self.campo_entrada.setEnabled(not operacao_bloqueada)
         self.tabela_itens.setEnabled(not operacao_bloqueada)
         self.botao_remover.setEnabled(bool(itens) and not operacao_bloqueada)

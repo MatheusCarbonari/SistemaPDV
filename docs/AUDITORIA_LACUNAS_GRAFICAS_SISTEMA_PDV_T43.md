@@ -9,6 +9,9 @@
 - **Atualização INT-A/INT-B em 04/11/2026:** suíte completa executada no ambiente de
   desenvolvimento com PySide6, totalizando **822 testes aprovados**. Todos os
   bancos criados pelos novos testes permaneceram sob `tmp_path`.
+- **Atualização INT-C em 05/11/2026:** suíte completa com **836 testes
+  aprovados**; os testes de produtos utilizaram exclusivamente bancos sob
+  `tmp_path`.
 - Inspeção somente leitura do banco SQLite incluído no ZIP: **`PRAGMA user_version = 0`**, com tabela `produtos`; o código atual espera **versão 6** para persistência, histórico e cancelamento. O banco original não foi migrado.
 
 ## Lacunas prioritárias identificadas no código
@@ -52,14 +55,18 @@ a venda aberta e é bloqueada durante commit incerto.
 **Cobertura futura:** registrada como **INT-D**, condicionada à autenticação e
 autorização dos T45–T47. Não expor a operação antes dessa dependência.
 
-### P1 — Administração/cadastro de produtos sem UI
+### Resolvido pela INT-C — Administração de produtos em página interna
 
-`services/produto_service.py` e `repositories/produto_repository.py` expõem criar/listar/atualizar/ativar/desativar; `interface/` só consulta produto por código para vender. Não existe tela para cadastrar ou corrigir produtos. Isso inviabiliza administrar o catálogo pelo PDV novo.
+`interface/pagina_produtos.py` lista e pesquisa por código ou nome, cadastra,
+edita e ativa/inativa produtos reutilizando serviço e repositório. Categorias
+continuam textuais e preços são convertidos exatamente para centavos. A página
+preserva a venda e os pagamentos ao navegar, reflete novos cadastros nas
+consultas seguintes do caixa e trata falhas de banco sem encerrar a aplicação.
 
-**Cobertura futura:** registrada como **INT-C** para cadastro, listagem,
-edição, ativação e inativação. O T44 permanece responsável pelo histórico de
-preços. Categorias customizáveis continuam futuras e sem entrega própria nesta
-sequência.
+Com itens lançados, cadastro novo é permitido, mas edição e mudança de situação
+de produto existente são recusadas no momento da operação. Commit incerto
+mantém o bloqueio integral da INT-A. O T44 permanece responsável pelo histórico
+de preços, e categorias customizáveis continuam futuras.
 
 ### P1 — Histórico de preços: parte da entrega adiada sem ticket claro
 
@@ -80,7 +87,7 @@ T44 prevê alteração de preço auditada e "tela 12 meses depois", mas a visual
 
 1. **INT-A — resolvida:** bootstrap seguro e fechamento idempotente integrado.
 2. **INT-B — resolvida:** navegação por páginas e histórico completo somente leitura.
-3. **INT-C — pendente:** tela de cadastro, edição, listagem e ativação/desativação de produtos; histórico de preços permanece separado.
+3. **INT-C — resolvida:** cadastro, edição, listagem e ativação/desativação em página interna; histórico de preços permanece separado.
 4. **INT-D — pendente:** depois de T45–T47, GUI de cancelamento protegida por autorização pontual.
 5. Registrar ticket/entrega futura para visualização dos últimos 12 meses de preços e, se permanecer no escopo, categorias personalizáveis.
 6. Corrigir documentação operacional desatualizada, quando houver ticket de higiene: `docs/ESTADO_ATUAL.md` descreve um estágio antigo; não confundir com fonte de estado atual. O arquivo `.gitignore` já cobre `.venv`, `.pytest_cache`, `__pycache__`, `.vscode` e `data/*.db` — ignorar não remove arquivos já rastreados.
@@ -88,7 +95,8 @@ T44 prevê alteração de preço auditada e "tela 12 meses depois", mas a visual
 ## Critério de conclusão
 
 O fluxo gráfico entre confirmação e registro definitivo foi conectado pela
-INT-A, e o histórico passou a ser acessível por página interna na INT-B.
-Permanecem ausentes as funcionalidades de administração de produtos e
-cancelamento. Os testes automatizados não substituem a validação operacional no
-Windows, e a homologação de leitor físico permanece pendente.
+INT-A, o histórico passou a ser acessível por página interna na INT-B e a
+administração de produtos foi integrada pela INT-C. Permanece ausente a
+funcionalidade gráfica de cancelamento. Os testes automatizados não substituem
+a validação operacional no Windows, e a homologação de leitor físico permanece
+pendente.

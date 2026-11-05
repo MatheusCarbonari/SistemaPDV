@@ -131,7 +131,7 @@ def test_navegacao_preserva_venda_pagamentos_e_foco(qtbot, banco_historico) -> N
     assert janela.estado_venda is estado
     assert janela.composicao_pagamentos is pagamentos
     assert janela.botao_navegar_produtos.isVisible()
-    assert not janela.botao_navegar_produtos.isEnabled()
+    assert janela.botao_navegar_produtos.isEnabled()
     qtbot.waitUntil(janela.pagina_historico.campo_id.hasFocus)
 
     qtbot.mouseClick(

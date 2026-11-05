@@ -35,9 +35,14 @@
   Caixa mantém seu estado ao navegar; Histórico é somente leitura; páginas de
   Produtos e Administração só são habilitadas quando suas integrações forem
   implementadas. Commit incerto bloqueia a saída da Frente de Caixa.
+- **DEC-027** — A página Produtos permite novos cadastros durante uma venda em
+  andamento, mas bloqueia edição e ativação/inativação de produtos existentes
+  enquanto houver itens lançados. O código fica somente leitura na edição;
+  categorias continuam textuais e snapshots já lançados não são alterados.
 
 ## Decisões que exigem cuidado
-- Produtos existentes podem ter o código ou forma de venda protegidos por regras específicas; essas regras serão validadas antes de alteração em produção.
+- O código de produto existente é protegido contra edição pela interface; a
+  forma de venda pode ser alterada somente sem itens na venda em andamento.
 - Uma quantidade derivada do preço é **estimada**, nunca prova de pesagem. Quantidade informada manualmente não equivale a pesagem certificada.
 - Recuperação de acesso: códigos únicos offline gerados na configuração, armazenados por hash e consumidos uma vez.
 - Código `9999` reservado; nenhum produto comum poderá usá-lo.
