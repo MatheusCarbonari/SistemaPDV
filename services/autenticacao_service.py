@@ -133,6 +133,18 @@ class GerenciadorSessoes:
                     self._sessoes.pop(sessao.identificador_sessao, None)
             sessao.encerrar()
 
+    def invalidar_usuario(self, usuario_id: int) -> None:
+        """Encerra todas as sessões emitidas para uma identidade."""
+        with self._bloqueio:
+            sessoes = tuple(
+                sessao
+                for sessao in self._sessoes.values()
+                if sessao.usuario_id == usuario_id
+            )
+            for sessao in sessoes:
+                self._sessoes.pop(sessao.identificador_sessao, None)
+                sessao.encerrar()
+
 
 GERENCIADOR_SESSOES = GerenciadorSessoes()
 

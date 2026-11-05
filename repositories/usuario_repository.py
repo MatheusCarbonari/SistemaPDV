@@ -25,6 +25,11 @@ def consultar_estado_identidade(caminho_banco=CAMINHO_BANCO) -> str:
         conexao.close()
 
 
+def validar_estado_identidade_conexao(conexao) -> str:
+    """Valida o singleton de identidade dentro de uma transação existente."""
+    return _consultar_estado_identidade_conexao(conexao)
+
+
 def criar_administrador_inicial_repository(
     identificacao_acesso: str,
     senha_hash: str,

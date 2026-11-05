@@ -156,6 +156,18 @@ class GerenciadorAutorizacoesPontuais:
             ) from erro
         return identidade_administrador
 
+    def invalidar_usuario(self, usuario_id: int) -> None:
+        """Revoga capacidades ligadas às sessões de uma identidade."""
+        with self._bloqueio:
+            identificadores = tuple(
+                identificador
+                for identificador, estado in self._autorizacoes.items()
+                if estado.sessao_solicitante.usuario_id == usuario_id
+            )
+            for identificador in identificadores:
+                self._autorizacoes.pop(identificador, None)
+                self._consumidas.add(identificador)
+
 
 def _validar_vinculo(operacao: str, recurso_id: int) -> None:
     if operacao not in OPERACOES_SUPORTADAS:

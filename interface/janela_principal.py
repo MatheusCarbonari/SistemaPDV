@@ -24,6 +24,7 @@ from interface.dialogos_entrada import (
     DialogoUnidade,
 )
 from interface.dialogo_confirmacao_venda import DialogoConfirmacaoVenda
+from interface.dialogo_codigos_recuperacao import DialogoCodigosRecuperacao
 from interface.dialogo_pagamentos import DialogoPagamentos
 from interface.formatacao import formatar_centavos
 from interface.pagina_historico import PaginaHistorico
@@ -129,7 +130,15 @@ class JanelaPrincipal(QMainWindow):
         self.rotulo_usuario.setObjectName("usuario_autenticado")
         self.botao_logout = QPushButton("Sair")
         self.botao_logout.setObjectName("encerrar_sessao")
+        self.botao_codigos_recuperacao = QPushButton("Códigos de recuperação")
+        self.botao_codigos_recuperacao.setObjectName(
+            "abrir_codigos_recuperacao"
+        )
+        self.botao_codigos_recuperacao.setVisible(
+            self.sessao.perfil == "ADMINISTRADOR"
+        )
         layout_menu.addWidget(self.rotulo_usuario)
+        layout_menu.addWidget(self.botao_codigos_recuperacao)
         layout_menu.addWidget(self.botao_logout)
         layout_principal.addWidget(menu_superior)
 
@@ -239,6 +248,9 @@ class JanelaPrincipal(QMainWindow):
         self.botao_navegar_historico.clicked.connect(self.mostrar_historico)
         self.botao_navegar_produtos.clicked.connect(self.mostrar_produtos)
         self.botao_logout.clicked.connect(self.solicitar_logout)
+        self.botao_codigos_recuperacao.clicked.connect(
+            self.abrir_codigos_recuperacao
+        )
         self.botao_remover.clicked.connect(self.remover_item_selecionado)
         self.botao_desfazer.clicked.connect(self.desfazer_ultima_remocao)
         self.botao_pagamento.clicked.connect(self.abrir_dialogo_pagamentos)
@@ -646,6 +658,11 @@ class JanelaPrincipal(QMainWindow):
             and not operacao_bloqueada
         )
         self.botao_logout.setEnabled(sessao_valida and not operacao_bloqueada)
+        self.botao_codigos_recuperacao.setEnabled(
+            sessao_valida
+            and self.sessao.perfil == "ADMINISTRADOR"
+            and not operacao_bloqueada
+        )
         self.campo_entrada.setEnabled(sessao_valida and not operacao_bloqueada)
         self.tabela_itens.setEnabled(sessao_valida and not operacao_bloqueada)
         self.botao_remover.setEnabled(bool(itens) and sessao_valida and not operacao_bloqueada)
@@ -676,6 +693,26 @@ class JanelaPrincipal(QMainWindow):
         self._atualizar_venda_exibida()
         self.logout_realizado.emit()
         self.close()
+
+    def abrir_codigos_recuperacao(self) -> None:
+        if not self._usuario_pode_administrar_produtos():
+            self.rotulo_status.setText(
+                "A emissão de códigos exige perfil Administrador."
+            )
+            return
+        if self.dialogo_atual is not None or self._fechamento_bloqueia_operacao():
+            return
+
+        dialogo = DialogoCodigosRecuperacao(
+            self.sessao,
+            self.caminho_banco,
+            self,
+        )
+        self.dialogo_atual = dialogo
+        dialogo.finished.connect(
+            lambda resultado: self._finalizar_dialogo(dialogo, resultado)
+        )
+        dialogo.open()
 
     def _usuario_pode_operar(self, *, mostrar_mensagem: bool = True) -> bool:
         return self._sessao_permite(

@@ -69,12 +69,21 @@
   comercial, portanto falha posterior não restaura a capacidade. Reinício,
   logout, expiração e conta desativada falham fechados. O T43 não mantém caminho
   alternativo baseado em booleano, perfil textual ou contexto construível.
+- **DEC-033** — Recuperação administrativa offline usa dez códigos independentes
+  de 160 bits, apresentados uma vez e persistidos somente como SHA-256, adequado
+  à entropia aleatória dos segredos. Emissão e rotação exigem sessão
+  Administrador revalidada e confirmação da senha atual. Consumo e nova senha
+  formam uma única transação; rotação revoga o conjunto anterior e recuperação
+  bem-sucedida encerra todas as sessões e capacidades processuais da identidade,
+  sem autenticação automática. Perda da apresentação exige nova rotação.
 
 ## Decisões que exigem cuidado
 - O código de produto existente é protegido contra edição pela interface; a
   forma de venda pode ser alterada somente sem itens na venda em andamento.
 - Uma quantidade derivada do preço é **estimada**, nunca prova de pesagem. Quantidade informada manualmente não equivale a pesagem certificada.
-- Recuperação de acesso: códigos únicos offline gerados na configuração, armazenados por hash e consumidos uma vez.
+- Recuperação de acesso: os códigos são gerados somente após login administrativo
+  e confirmação da senha, devem ser guardados fora do computador e não podem ser
+  consultados novamente. Fechar a apresentação exige rotacionar o conjunto.
 - Código `9999` reservado; nenhum produto comum poderá usá-lo.
 - O histórico diário converte o dia civil de São Paulo para intervalo UTC
   semiaberto e usa índice composto em `vendas(registrada_em, id)`; isso atende

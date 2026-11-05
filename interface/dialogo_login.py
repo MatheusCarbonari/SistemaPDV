@@ -4,10 +4,12 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QVBoxLayout,
 )
 
 from database.conexao import CAMINHO_BANCO
+from interface.dialogo_recuperacao_acesso import DialogoRecuperacaoAcesso
 from repositories.usuario_repository import EstadoIdentidadeInconsistenteError
 from services.autenticacao_service import (
     CredenciaisInvalidasError,
@@ -15,6 +17,7 @@ from services.autenticacao_service import (
     TentativasLoginExcedidasError,
     autenticar_usuario,
 )
+from services.recuperacao_acesso_service import LIMITADOR_RECUPERACAO_PADRAO
 
 
 class DialogoLogin(QDialog):
@@ -24,11 +27,14 @@ class DialogoLogin(QDialog):
         parent=None,
         *,
         limitador=LIMITADOR_LOGIN_PADRAO,
+        limitador_recuperacao=LIMITADOR_RECUPERACAO_PADRAO,
     ) -> None:
         super().__init__(parent)
         self.caminho_banco = caminho_banco
         self.limitador = limitador
+        self.limitador_recuperacao = limitador_recuperacao
         self.sessao = None
+        self.dialogo_recuperacao = None
         self.setModal(True)
         self.setWindowTitle("Entrar no Sistema-PDV")
 
@@ -50,6 +56,11 @@ class DialogoLogin(QDialog):
         self.rotulo_mensagem.setWordWrap(True)
         layout.addWidget(self.rotulo_mensagem)
 
+        self.botao_recuperar = QPushButton("Recuperar acesso")
+        self.botao_recuperar.setObjectName("recuperar_acesso")
+        self.botao_recuperar.clicked.connect(self.abrir_recuperacao)
+        layout.addWidget(self.botao_recuperar)
+
         self.botoes = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
             | QDialogButtonBox.StandardButton.Cancel
@@ -59,6 +70,31 @@ class DialogoLogin(QDialog):
         self.botoes.accepted.connect(self.entrar)
         self.botoes.rejected.connect(self.reject)
         layout.addWidget(self.botoes)
+
+    def abrir_recuperacao(self) -> None:
+        if self.dialogo_recuperacao is not None:
+            return
+        dialogo = DialogoRecuperacaoAcesso(
+            self.caminho_banco,
+            self,
+            limitador=self.limitador_recuperacao,
+        )
+        self.dialogo_recuperacao = dialogo
+        dialogo.finished.connect(
+            lambda resultado: self._finalizar_recuperacao(dialogo, resultado)
+        )
+        dialogo.open()
+
+    def _finalizar_recuperacao(self, dialogo, resultado: int) -> None:
+        if self.dialogo_recuperacao is dialogo:
+            self.dialogo_recuperacao = None
+        dialogo.deleteLater()
+        self.campo_senha.clear()
+        if resultado == QDialog.DialogCode.Accepted:
+            self.rotulo_mensagem.setText(
+                "Senha redefinida. Entre novamente com a nova senha."
+            )
+            self.campo_senha.setFocus()
 
     def entrar(self) -> None:
         try:

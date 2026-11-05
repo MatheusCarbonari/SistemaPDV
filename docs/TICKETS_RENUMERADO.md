@@ -376,6 +376,18 @@ INT-D2.
 **Origem:** backlog original T37.
 **Entrega verificável:** Códigos únicos hash, consumo e rotação testados.
 **Conceito a estudar:** Segredos, recuperação.
+**Contrato implementado:** administrador autenticado e com senha atual confirmada
+pode emitir ou rotacionar dez códigos offline de 160 bits. Somente verificadores
+SHA-256 são persistidos no esquema versão 9; códigos anteriores ainda ativos são
+revogados atomicamente e os originais aparecem apenas no diálogo da emissão.
+Recuperar exige identificação, código ativo e nova senha conforme a política
+vigente; consumo e atualização da senha ocorrem na mesma transação. Sucesso
+revoga sessões e autorizações processuais da identidade e não abre nova sessão.
+Cinco falhas em cinco minutos aplicam espera local de sessenta segundos.
+**Guarda e interrupção:** os códigos devem ser copiados para meio externo seguro.
+Não há consulta posterior. Se a apresentação for fechada ou perdida, confirmar
+novamente a senha e rotacionar o conjunto; não existe senha mestra, código
+universal, recuperação por internet ou reabertura do primeiro acesso.
 
 ### INT-E — Acesso gráfico de operadores e administração mínima
 **Posição:** após T48 e antes do Marco 3.

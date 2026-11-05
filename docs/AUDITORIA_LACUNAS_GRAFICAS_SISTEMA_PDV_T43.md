@@ -33,6 +33,10 @@
   capacidade pontual do T47, preservando a sessão Caixa e atualizando lista e
   detalhe somente após sucesso comprovado. Os testes de integração utilizaram
   exclusivamente bancos temporários.
+- **Atualização T48 em 05/11/2026:** suíte completa com **946 testes aprovados**;
+  emissão, apresentação única, rotação, consumo concorrente, rollback, política
+  de senha, revogação processual e recuperação pelo login foram verificados
+  exclusivamente em bancos temporários.
 - Inspeção somente leitura do banco SQLite incluído no ZIP: **`PRAGMA user_version = 0`**, com tabela `produtos`; após o T45, o código espera **versão 8** para persistência, histórico, cancelamento, auditoria de preços e identidade inicial. O banco original não foi migrado.
 
 ## Lacunas prioritárias identificadas no código
@@ -135,15 +139,17 @@ SQLite. O T43 consome exclusivamente esse contrato e conserva a identidade do
 administrador na auditoria.
 
 A INT-D2 conecta o diálogo auxiliar ao formulário da INT-D1 sem criar um segundo
-mecanismo de autorização. A INT-E permanece registrada para revisar login,
-provisionamento gráfico e troca segura de operador depois do T48.
+mecanismo de autorização. O T48 acrescenta recuperação offline de Administrador
+por códigos de uso único, sem autenticação automática. A INT-E permanece
+registrada para revisar login, provisionamento gráfico e troca segura de
+operador.
 
 ## Itens já cobertos por tickets futuros (não antecipar)
 
 - T44: persistência e auditoria de preços resolvidas; consulta gráfica de 12
   meses permanece posterior.
-- T45–T47 resolvidos; T48 e INT-E: recuperação offline e acesso gráfico
-  administrativo permanecem futuros.
+- T45–T48 resolvidos; INT-E mantém o acesso gráfico administrativo e a revisão
+  operacional como próxima integração antes do Marco 3.
 - T49–T51: logs, versão e diagnóstico.
 - T52–T54: catálogo em memória e contingência/degradação.
 - T55–T57: backup e restauração.
@@ -167,7 +173,7 @@ O fluxo gráfico entre confirmação e registro definitivo foi conectado pela
 INT-A, o histórico passou a ser acessível por página interna na INT-B e a
 administração de produtos foi integrada pela INT-C. O cancelamento gráfico foi
 conectado pela INT-D2 à autorização pontual do T47 e à transação do T43, sem
-elevar a sessão operacional. T48 e INT-E permanecem como próximas etapas antes
-do Marco 3. Os testes automatizados não substituem a
+elevar a sessão operacional. A recuperação offline foi concluída no T48; INT-E
+permanece como próxima integração antes do Marco 3. Os testes automatizados não substituem a
 validação operacional no Windows, e a homologação de leitor físico permanece
 pendente.

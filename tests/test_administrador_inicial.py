@@ -65,7 +65,10 @@ def test_migracao_v7_cria_identidade_e_preserva_dados(tmp_path) -> None:
 
     conexao = conectar(caminho)
     try:
-        assert conexao.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert (
+            conexao.execute("PRAGMA user_version").fetchone()[0]
+            == schema.VERSAO_ESQUEMA
+        )
         assert conexao.execute(
             "SELECT nome FROM produtos WHERE codigo = '101'"
         ).fetchone()[0] == "Picanha"

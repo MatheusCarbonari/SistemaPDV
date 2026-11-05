@@ -1,7 +1,7 @@
 from database.conexao import CAMINHO_BANCO, conectar
 
 
-VERSAO_ESQUEMA = 8
+VERSAO_ESQUEMA = 9
 
 _COMANDO_CRIAR_PRODUTOS = """
 CREATE TABLE IF NOT EXISTS produtos (
@@ -307,6 +307,52 @@ INSERT INTO estado_identidade (
 VALUES (1, NULL, NULL);
 """
 
+_COMANDO_CRIAR_CODIGOS_RECUPERACAO = """
+CREATE TABLE IF NOT EXISTS codigos_recuperacao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER NOT NULL,
+    conjunto_id TEXT NOT NULL
+        CHECK (
+            typeof(conjunto_id) = 'text'
+            AND length(conjunto_id) = 36
+        ),
+    verificador TEXT NOT NULL UNIQUE
+        CHECK (
+            typeof(verificador) = 'text'
+            AND length(verificador) = 64
+            AND verificador NOT GLOB '*[^0-9a-f]*'
+        ),
+    criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        CHECK (
+            typeof(criado_em) = 'text'
+            AND length(trim(criado_em)) > 0
+        ),
+    consumido_em TEXT,
+    revogado_em TEXT,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE RESTRICT,
+    CHECK (
+        consumido_em IS NULL
+        OR (
+            typeof(consumido_em) = 'text'
+            AND length(trim(consumido_em)) > 0
+        )
+    ),
+    CHECK (
+        revogado_em IS NULL
+        OR (
+            typeof(revogado_em) = 'text'
+            AND length(trim(revogado_em)) > 0
+        )
+    ),
+    CHECK (consumido_em IS NULL OR revogado_em IS NULL)
+);
+"""
+
+_COMANDO_CRIAR_INDICE_CODIGOS_RECUPERACAO = """
+CREATE INDEX IF NOT EXISTS ix_codigos_recuperacao_usuario_conjunto
+ON codigos_recuperacao (usuario_id, conjunto_id, id);
+"""
+
 
 def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
     """
@@ -368,6 +414,11 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
             conexao.execute(_COMANDO_CRIAR_ESTADO_IDENTIDADE)
             conexao.execute(_COMANDO_INICIALIZAR_ESTADO_IDENTIDADE)
             versao_atual = 8
+
+        if versao_atual < 9:
+            conexao.execute(_COMANDO_CRIAR_CODIGOS_RECUPERACAO)
+            conexao.execute(_COMANDO_CRIAR_INDICE_CODIGOS_RECUPERACAO)
+            versao_atual = 9
 
         conexao.execute(f"PRAGMA user_version = {versao_atual}")
         conexao.commit()

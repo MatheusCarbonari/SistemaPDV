@@ -33,6 +33,9 @@ SQL e só atualiza lista e detalhe depois do sucesso comprovado.
 - O esquema versão 8 introduz `usuarios` e o singleton `estado_identidade`. O
   marcador referencia o administrador inicial por FK `RESTRICT`, impedindo sua
   remoção normal e distinguindo configuração ausente de estado inconsistente.
+- O esquema versão 9 introduz `codigos_recuperacao`, vinculando verificadores de
+  alta entropia ao administrador e registrando consumo ou revogação sem guardar
+  o código original. Consumo e atualização de senha compartilham a transação.
 - `id` técnico não é `codigo` operacional. ID de venda persistente e único; usar identificador separado por tentativa para idempotência.
 - Snapshot de cada item para não depender de mudanças no cadastro; `produto_id` opcional para Diversos.
 - Preços monetários em centavos; multiplicação de kg usa Decimal e política explícita de arredondamento.
@@ -68,7 +71,9 @@ mantém a operação bloqueada.
   provisiona Caixa pelo serviço protegido. A tela avançada de usuários não foi
   antecipada.
 - O T47 produz a capacidade de autorização pontual exigida pela INT-D2 sem
-  elevar a sessão corrente; T48 continua responsável pela recuperação offline.
+  elevar a sessão corrente. O T48 permite recuperação administrativa offline
+  com código de uso único, invalida sessões e capacidades da identidade após a
+  troca e exige novo login.
 - O gerenciador de sessões registra nonces emitidos somente após login e exige
   correspondência com o mesmo objeto em memória. Construir `SessaoUsuario`
   manualmente não produz uma sessão reconhecida.
@@ -78,6 +83,10 @@ mantém a operação bloqueada.
   revertido por falha posterior. Nenhuma capacidade ou senha é persistida.
 - A INT-E futura revisará login e provisionamento gráfico de Caixa após T48,
   reutilizando estes contratos sem criar um segundo mecanismo de identidade.
+- Códigos de recuperação são mostrados somente no retorno da emissão. Devem ser
+  guardados em meio externo seguro; interrupção ou perda não permite consulta e
+  requer rotação autenticada. O limitador de tentativas é local e em memória,
+  portanto complementa — não substitui — os 160 bits de entropia de cada código.
 
 ## Distribuição
 Binário Windows empacotado, arquivos de dados fora da instalação; instalador atualiza só programa e executa migrador quando necessário; backup válido e migração segura, sem retrocesso automático de banco em falha. A inicialização operacional recusa versões futuras e, para banco existente desatualizado, só migra depois de criar e verificar uma cópia única em `backups/pre_migracao` ao lado do arquivo SQLite. Compatibilidade/licença PySide6 deve ser avaliada em entrega comercial.
