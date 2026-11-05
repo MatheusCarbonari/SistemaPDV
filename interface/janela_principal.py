@@ -218,6 +218,7 @@ class JanelaPrincipal(QMainWindow):
         self.pagina_historico = PaginaHistorico(
             self.caminho_banco,
             self.paginas,
+            operacao_bloqueada=self._fechamento_bloqueia_operacao,
         )
         self.pagina_produtos = PaginaProdutos(
             self.caminho_banco,

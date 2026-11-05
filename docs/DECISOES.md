@@ -39,10 +39,19 @@
   andamento, mas bloqueia edição e ativação/inativação de produtos existentes
   enquanto houver itens lançados. O código fica somente leitura na edição;
   categorias continuam textuais e snapshots já lançados não são alterados.
+- **DEC-028** — O cancelamento gráfico é dividido em INT-D1 e INT-D2. A INT-D1
+  apenas apresenta a venda e valida o motivo, sem persistir, criar identidade ou
+  chamar o serviço de cancelamento. A INT-D2 somente poderá executar o T43 após
+  autenticação e autorização reais dos T45–T47.
+- **DEC-029** — Alterações efetivas do preço de venda são auditadas na mesma
+  transação da atualização do produto, guardando valor anterior, novo e instante
+  UTC. Não há expurgo automático nem responsável fictício; identidade só será
+  adicionada quando houver autenticação real. A consulta gráfica de 12 meses é
+  uma etapa posterior e não limita a retenção dos registros.
 - **DEC-030** — O primeiro administrador usa `scrypt` da biblioteca padrão com
   `N=2^14`, `r=8`, `p=5`, salt aleatório de 16 bytes e chave de 32 bytes; versão
   e parâmetros ficam no formato armazenado. A configuração é marcada por FK
-  durável e a aplicação permanece fail-closed até o login do T46. Estados
+  durável e a aplicação permanece fail-closed sem o login do T46. Estados
   ambíguos nunca liberam recriação nem operação comercial.
 - **DEC-031** — A janela operacional exige `SessaoUsuario` criada exclusivamente
   por login válido. Caixa acessa Frente de Caixa e Histórico; Produtos e
@@ -64,5 +73,6 @@
   filtro e ordenação sem aplicar funções sobre a coluna persistida.
 - O T43 registra a identidade recebida em um contexto de autorização, mas não
   valida credenciais. Somente a autorização pontual do T47 poderá produzir esse
-  contexto para o fluxo operacional; nenhuma ação gráfica é exposta antes disso.
+  contexto para o fluxo operacional; a INT-D1 pode coletar o motivo, mas não
+  produz o contexto nem executa efeitos comerciais.
 - A fila de contingência de persistência e eventual fila de documentos fiscais são responsabilidades diferentes e futuras. NFC-e tem regras específicas da SEFAZ, não é mero reenvio livre de totais.

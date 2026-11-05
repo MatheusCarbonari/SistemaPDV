@@ -280,6 +280,7 @@ INT-C; Administração permanece indisponível até sua integração própria.
 **Entrega verificável:** cadastrar, listar, editar, ativar e inativar produtos
 em página interna da janela principal, preservando snapshots e mantendo o
 histórico de preços como responsabilidade separada do T44.
+**Estado:** aprovada após teste manual do fluxo gráfico.
 **Proteção operacional:** com itens na venda em andamento, novos cadastros
 continuam permitidos, mas edição e mudança de situação de produtos existentes
 ficam bloqueadas até finalizar ou esvaziar a venda. O código identificador não
@@ -287,15 +288,33 @@ ficam bloqueadas até finalizar ou esvaziar a venda. O código identificador nã
 Categorias permanecem textuais conforme o esquema atual, sem lista fixa nem
 antecipação da gestão avançada futura.
 
-### INT-D — Interface de cancelamento de vendas
-**Entrega verificável:** integrar o cancelamento auditável à GUI com motivo,
-confirmação e autorização pontual. A exposição operacional depende dos
-contratos de autenticação e autorização dos T45–T47.
+### INT-D1 — Interface de solicitação de cancelamento
+**Entrega verificável:** apresentar no Histórico o resumo da venda ativa,
+coletar e validar o motivo e informar que a execução depende de autorização.
+Esta etapa é somente visual: não cancela, não persiste solicitação, não cria
+status intermediário e não fabrica identidade de autorizador.
+
+### INT-D2 — Execução autorizada do cancelamento
+**Entrega verificável:** após autenticação e autorização reais dos T45–T47,
+conectar o formulário da INT-D1 ao contexto de autorização e ao serviço
+transacional do T43, sem duplicar o formulário nem elevar permanentemente a
+sessão. A posição deste registro não remove suas dependências de segurança.
 
 ### T44 — Histórico de preços
 **Origem:** backlog original T33.
 **Entrega verificável:** Atualizar preço e registrar mudança em transação única; tela 12 meses depois.
 **Conceito a estudar:** Auditoria de alterações.
+**Contrato implementado:** registrar somente mudança efetiva, com produto,
+preço anterior, preço novo e instante UTC, na mesma transação da atualização do
+cadastro. O histórico é preservado após novas alterações ou inativação, sem
+exclusão automática. Não há responsável registrado enquanto não existir
+identidade autenticada; nenhuma identidade provisória deve ser criada.
+**Pendência posterior:** consulta gráfica com janela inicial dos últimos 12
+meses. A expressão “tela 12 meses depois” adia essa interface e não determina
+expurgo de registros mais antigos.
+**Dependência de segurança:** o ticket permanece no planejamento e pode evoluir
+seus contratos de domínio/persistência, mas nenhuma exposição gráfica de ação
+crítica pode contornar a autenticação e a autorização previstas nos T45–T47.
 
 ### T45 — Primeiro acesso
 **Origem:** backlog original T34.
@@ -307,8 +326,9 @@ com salt individual e parâmetros versionados. A conclusão fica registrada por
 um marcador singleton que referencia o administrador por FK restritiva. Estado
 ausente, divergente ou adulterado falha de modo seguro e não reabre o cadastro.
 **Decisão fail-closed:** após configurar o administrador — ou quando ele já
-existe — a operação comercial permanece indisponível até o login do T46. Não há
-senha padrão, sessão implícita, identidade fictícia nem bypass operacional.
+existe — a operação comercial somente fica disponível mediante o login do T46.
+Não há senha padrão, sessão implícita, identidade fictícia nem bypass
+operacional.
 
 ### T46 — Conta Caixa
 **Origem:** backlog original T35.

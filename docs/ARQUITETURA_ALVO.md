@@ -19,8 +19,16 @@ sua integração.
 Resultado de commit incerto fixa a operação na Frente de Caixa até verificação
 ou recuperação controlada.
 
+O Histórico pode preparar visualmente uma solicitação de cancelamento de venda
+ativa, exibindo o resumo e validando o motivo. Essa preparação não é estado de
+domínio nem registro persistente. A futura execução deverá receber da camada de
+segurança um `ContextoAutorizacaoCancelamento` real antes de chamar o serviço
+transacional do T43; a interface não pode sintetizar essa autorização.
+
 ## Dados e integridade
 - SQLite único local, foreign_keys habilitado, transação atômica ao gravar venda+itens+pagamentos.
+- O esquema versão 7 introduziu `historico_precos_produtos`, com produto, preço
+  anterior, novo preço e instante UTC na mesma transação da atualização.
 - O esquema versão 8 introduz `usuarios` e o singleton `estado_identidade`. O
   marcador referencia o administrador inicial por FK `RESTRICT`, impedindo sua
   remoção normal e distinguindo configuração ausente de estado inconsistente.

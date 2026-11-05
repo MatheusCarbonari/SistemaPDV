@@ -11,8 +11,20 @@
   bancos criados pelos novos testes permaneceram sob `tmp_path`.
 - **Atualização INT-C em 05/11/2026:** suíte completa com **836 testes
   aprovados**; os testes de produtos utilizaram exclusivamente bancos sob
-  `tmp_path`.
-- Inspeção somente leitura do banco SQLite incluído no ZIP: **`PRAGMA user_version = 0`**, com tabela `produtos`; o código atual espera **versão 6** para persistência, histórico e cancelamento. O banco original não foi migrado.
+  `tmp_path`. A interface da INT-C foi posteriormente aprovada em teste manual.
+- **Atualização INT-D1 em 05/11/2026:** suíte completa com **845 testes
+  aprovados**; os cenários de solicitação visual utilizaram exclusivamente
+  bancos temporários e confirmaram ausência de alteração comercial.
+- **Atualização T44 em 05/11/2026:** suíte completa com **854 testes
+  aprovados**; migração e auditoria transacional de preços foram verificadas
+  somente em bancos temporários.
+- **Atualização T45 em 05/11/2026:** suíte completa com **879 testes
+  aprovados**; criação concorrente, hash, migração, estados inconsistentes e
+  bloqueio operacional foram verificados somente em bancos temporários.
+- **Atualização T46 em 05/11/2026:** suíte completa com **893 testes
+  aprovados**; autenticação, perfis, limitação temporária, logout e revalidação
+  de sessão foram verificados exclusivamente em bancos temporários.
+- Inspeção somente leitura do banco SQLite incluído no ZIP: **`PRAGMA user_version = 0`**, com tabela `produtos`; após o T45, o código espera **versão 8** para persistência, histórico, cancelamento, auditoria de preços e identidade inicial. O banco original não foi migrado.
 
 ## Lacunas prioritárias identificadas no código
 
@@ -48,12 +60,16 @@ a venda aberta e é bloqueada durante commit incerto.
 
 **Cobertura:** registrada como **INT-B** no backlog oficial.
 
-### P1 — Cancelamento sem interface, e autorização ainda não implementada
+### Parcialmente resolvido pela INT-D1 — Solicitação visual de cancelamento
 
-`services/cancelamento_venda_service.py` existe, mas não está acessível pela janela. A autorização aceita identidade no contexto, não autentica credenciais. T45–T47 cobrem segurança, mas **não há ticket explícito de UI de cancelamento após conectar a autorização**.
+O Histórico oferece “Solicitar cancelamento” somente para vendas ativas. O
+diálogo apresenta ID, data, valor, status e contagens comerciais, exige motivo
+e informa que nenhum cancelamento é executado. Vendas canceladas continuam
+consultáveis e não reabrem o fluxo.
 
-**Cobertura futura:** registrada como **INT-D**, condicionada à autenticação e
-autorização dos T45–T47. Não expor a operação antes dessa dependência.
+O código não chama `cancelar_venda()`, não cria autorizador fictício e não grava
+solicitação ou status intermediário. A execução permanece na **INT-D2**,
+condicionada à autenticação e autorização reais dos T45–T47.
 
 ### Resolvido pela INT-C — Administração de produtos em página interna
 
@@ -68,14 +84,42 @@ de produto existente são recusadas no momento da operação. Commit incerto
 mantém o bloqueio integral da INT-A. O T44 permanece responsável pelo histórico
 de preços, e categorias customizáveis continuam futuras.
 
-### P1 — Histórico de preços: parte da entrega adiada sem ticket claro
+### Parcialmente resolvido pelo T44 — Histórico de preços persistente
 
-T44 prevê alteração de preço auditada e "tela 12 meses depois", mas a visualização futura não aparece com ticket inequívoco. Registrar essa segunda etapa antes de considerar o fluxo administrativo concluído.
+O esquema versão 7 registra alterações efetivas de preço na mesma transação da
+edição do produto, com valores anterior/novo e instante UTC. O histórico é
+preservado após novas alterações e inativação; snapshots comerciais continuam
+independentes. Não há responsável fictício nem expurgo automático.
+
+A consulta gráfica dos últimos 12 meses permanece explicitamente adiada no
+backlog oficial. Ela não foi antecipada e ainda precisa de entrega própria antes
+de o fluxo administrativo ser considerado completo.
+
+### Resolvido pelo T45 — Primeiro administrador em modo fail-closed
+
+O esquema versão 8 armazena usuários e um marcador durável da configuração
+inicial. O administrador é criado uma única vez sob transação concorrente, com
+senha derivada por `scrypt` e salt individual. Ausência inesperada, marcador
+divergente ou usuário órfão bloqueiam o fluxo sem oferecer recriação.
+
+### Resolvido pelo T46 — Login, sessão e escopo Caixa
+
+O ponto de entrada agora apresenta login após o primeiro acesso e somente cria a
+janela principal com uma sessão autenticada. Caixa pode operar vendas e consultar
+o Histórico, mas não acessa Produtos; Administrador conserva esse acesso e pode
+provisionar Caixa pelo serviço protegido. Logout encerra a sessão e fecha a
+interface, e conta desativada perde acesso na próxima operação revalidada.
+
+A indisponibilidade temporária entre T45 e T46 foi eliminada sem criar bypass.
+INT-D2 ainda depende da autorização pontual real do T47; o formulário da INT-D1
+continua sem qualquer efeito comercial.
 
 ## Itens já cobertos por tickets futuros (não antecipar)
 
-- T44: atualização/histórico de preços (persistência e auditoria), não necessariamente a tela posterior.
-- T45–T48: primeiro acesso, conta Caixa, autorização pontual e recuperação offline.
+- T44: persistência e auditoria de preços resolvidas; consulta gráfica de 12
+  meses permanece posterior.
+- T45–T46 resolvidos; T47–T48: autorização pontual e recuperação offline
+  permanecem futuros.
 - T49–T51: logs, versão e diagnóstico.
 - T52–T54: catálogo em memória e contingência/degradação.
 - T55–T57: backup e restauração.
@@ -88,15 +132,18 @@ T44 prevê alteração de preço auditada e "tela 12 meses depois", mas a visual
 1. **INT-A — resolvida:** bootstrap seguro e fechamento idempotente integrado.
 2. **INT-B — resolvida:** navegação por páginas e histórico completo somente leitura.
 3. **INT-C — resolvida:** cadastro, edição, listagem e ativação/desativação em página interna; histórico de preços permanece separado.
-4. **INT-D — pendente:** depois de T45–T47, GUI de cancelamento protegida por autorização pontual.
-5. Registrar ticket/entrega futura para visualização dos últimos 12 meses de preços e, se permanecer no escopo, categorias personalizáveis.
-6. Corrigir documentação operacional desatualizada, quando houver ticket de higiene: `docs/ESTADO_ATUAL.md` descreve um estágio antigo; não confundir com fonte de estado atual. O arquivo `.gitignore` já cobre `.venv`, `.pytest_cache`, `__pycache__`, `.vscode` e `data/*.db` — ignorar não remove arquivos já rastreados.
+4. **INT-D1 — resolvida:** formulário e confirmação visual sem efeito comercial.
+5. **INT-D2 — pendente:** depois de T45–T47, execução do cancelamento protegida por autorização pontual.
+6. Registrar ticket/entrega futura para visualização dos últimos 12 meses de preços e, se permanecer no escopo, categorias personalizáveis.
+7. Corrigir documentação operacional desatualizada, quando houver ticket de higiene: `docs/ESTADO_ATUAL.md` descreve um estágio antigo; não confundir com fonte de estado atual. O arquivo `.gitignore` já cobre `.venv`, `.pytest_cache`, `__pycache__`, `.vscode` e `data/*.db` — ignorar não remove arquivos já rastreados.
 
 ## Critério de conclusão
 
 O fluxo gráfico entre confirmação e registro definitivo foi conectado pela
 INT-A, o histórico passou a ser acessível por página interna na INT-B e a
 administração de produtos foi integrada pela INT-C. Permanece ausente a
-funcionalidade gráfica de cancelamento. Os testes automatizados não substituem
-a validação operacional no Windows, e a homologação de leitor físico permanece
+execução autorizada do cancelamento: a INT-D1 cobre somente a preparação visual
+e a INT-D2 depende do T47 sobre a base autenticada dos T45–T46. Os testes
+automatizados não substituem a
+validação operacional no Windows, e a homologação de leitor físico permanece
 pendente.

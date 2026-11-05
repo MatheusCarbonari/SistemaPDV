@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import datetime
 
 from PySide6.QtCore import QDate, Qt, QTimer
@@ -17,6 +18,9 @@ from PySide6.QtWidgets import (
 
 from database.conexao import CAMINHO_BANCO
 from interface.formatacao import formatar_centavos
+from interface.dialogo_solicitacao_cancelamento import (
+    DialogoSolicitacaoCancelamento,
+)
 from models.item_venda import DESCRICAO_DIVERSOS
 from models.venda_detalhada import VendaDetalhada
 from models.venda_resumo import VendaResumo
@@ -31,9 +35,18 @@ from services.historico_venda_service import (
 class PaginaHistorico(QWidget):
     """Página interna somente leitura para consulta de vendas persistidas."""
 
-    def __init__(self, caminho_banco=CAMINHO_BANCO, parent=None) -> None:
+    def __init__(
+        self,
+        caminho_banco=CAMINHO_BANCO,
+        parent=None,
+        *,
+        operacao_bloqueada: Callable[[], bool] | None = None,
+    ) -> None:
         super().__init__(parent)
         self.caminho_banco = caminho_banco
+        self._operacao_bloqueada = operacao_bloqueada or (lambda: False)
+        self.detalhe_selecionado: VendaDetalhada | None = None
+        self.dialogo_cancelamento: DialogoSolicitacaoCancelamento | None = None
         self.setObjectName("pagina_historico")
 
         layout = QVBoxLayout(self)
@@ -137,11 +150,23 @@ class PaginaHistorico(QWidget):
         )
         layout.addLayout(cancelamento)
 
+        self.botao_solicitar_cancelamento = QPushButton(
+            "Solicitar cancelamento"
+        )
+        self.botao_solicitar_cancelamento.setObjectName(
+            "solicitar_cancelamento"
+        )
+        self.botao_solicitar_cancelamento.setEnabled(False)
+        layout.addWidget(self.botao_solicitar_cancelamento)
+
         self.botao_pesquisar_data.clicked.connect(self.pesquisar_por_data)
         self.botao_pesquisar_id.clicked.connect(self.pesquisar_por_id)
         self.campo_id.returnPressed.connect(self.pesquisar_por_id)
         self.tabela_vendas.itemSelectionChanged.connect(
             self._carregar_venda_selecionada
+        )
+        self.botao_solicitar_cancelamento.clicked.connect(
+            self.abrir_solicitacao_cancelamento
         )
 
     def restaurar_foco(self) -> None:
@@ -236,6 +261,7 @@ class PaginaHistorico(QWidget):
         self._preencher_detalhe(detalhe)
 
     def _preencher_detalhe(self, detalhe: VendaDetalhada) -> None:
+        self.detalhe_selecionado = detalhe
         resumo = detalhe.resumo
         self.rotulo_detalhe.setText(
             f"Venda #{resumo.venda_id:06d} — "
@@ -303,8 +329,55 @@ class PaginaHistorico(QWidget):
         self.rotulo_autorizador_cancelamento.setText(
             resumo.autorizador_identidade or "—"
         )
+        self.botao_solicitar_cancelamento.setEnabled(
+            resumo.status == "ATIVA" and not self._operacao_bloqueada()
+        )
+
+    def abrir_solicitacao_cancelamento(self) -> None:
+        if self._operacao_bloqueada():
+            self.rotulo_mensagem.setText(
+                "Resolva o fechamento pendente antes de solicitar cancelamento."
+            )
+            return
+        detalhe = self.detalhe_selecionado
+        if detalhe is None:
+            self.rotulo_mensagem.setText(
+                "Selecione uma venda ativa para solicitar cancelamento."
+            )
+            return
+        if detalhe.status != "ATIVA":
+            self.rotulo_mensagem.setText(
+                "A venda selecionada já está cancelada."
+            )
+            return
+
+        dialogo = DialogoSolicitacaoCancelamento(detalhe, self)
+        self.dialogo_cancelamento = dialogo
+        dialogo.autorizacao_requerida.connect(
+            self._registrar_preparacao_visual
+        )
+        dialogo.finished.connect(
+            lambda: self._finalizar_dialogo_cancelamento(dialogo)
+        )
+        dialogo.open()
+
+    def _registrar_preparacao_visual(self, venda_id: int, motivo: str) -> None:
+        self.rotulo_mensagem.setText(
+            f"Solicitação da venda #{venda_id:06d} preparada visualmente; "
+            "nenhum cancelamento foi executado."
+        )
+
+    def _finalizar_dialogo_cancelamento(
+        self,
+        dialogo: DialogoSolicitacaoCancelamento,
+    ) -> None:
+        if self.dialogo_cancelamento is dialogo:
+            self.dialogo_cancelamento = None
+        dialogo.deleteLater()
+        self.restaurar_foco()
 
     def _limpar_detalhe(self) -> None:
+        self.detalhe_selecionado = None
         self.rotulo_detalhe.setText(
             "Selecione uma venda para ver os detalhes."
         )
@@ -313,6 +386,7 @@ class PaginaHistorico(QWidget):
         self.rotulo_motivo_cancelamento.setText("—")
         self.rotulo_data_cancelamento.setText("—")
         self.rotulo_autorizador_cancelamento.setText("—")
+        self.botao_solicitar_cancelamento.setEnabled(False)
 
     def _mostrar_erro(
         self,
