@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
 from database.schema import criar_tabelas
-from interface.janela_principal import JanelaPrincipal
+from tests.helpers_identidade import criar_janela_autenticada
 from interface.pagina_produtos import PaginaProdutos
 import interface.pagina_produtos as pagina_produtos_module
 from models.item_venda import ItemVenda
@@ -249,7 +249,7 @@ def test_navegacao_preserva_venda_pagamentos_e_restaura_foco(
     qtbot,
     banco_produtos,
 ) -> None:
-    janela = JanelaPrincipal(banco_produtos)
+    janela = criar_janela_autenticada(banco_produtos)
     qtbot.addWidget(janela)
     janela.show()
     item = ItemVenda(
@@ -281,7 +281,7 @@ def test_commit_incerto_impede_navegacao_para_produtos(
     qtbot,
     banco_produtos,
 ) -> None:
-    janela = JanelaPrincipal(banco_produtos)
+    janela = criar_janela_autenticada(banco_produtos)
     qtbot.addWidget(janela)
     janela.show()
     janela._fechamento_incerto = True
@@ -298,7 +298,7 @@ def test_produto_novo_fica_disponivel_no_caixa_sem_reiniciar(
     qtbot,
     banco_produtos,
 ) -> None:
-    janela = JanelaPrincipal(banco_produtos)
+    janela = criar_janela_autenticada(banco_produtos)
     qtbot.addWidget(janela)
     janela.show()
     cadastrar(banco_produtos, "303", "Hambúrguer", "UNIDADE", 1500)

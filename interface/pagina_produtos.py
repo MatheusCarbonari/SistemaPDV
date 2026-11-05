@@ -131,12 +131,14 @@ class PaginaProdutos(QWidget):
         *,
         tem_venda_em_andamento: Callable[[], bool] | None = None,
         operacao_bloqueada: Callable[[], bool] | None = None,
+        alteracao_permitida: Callable[[], bool] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.caminho_banco = caminho_banco
         self._tem_venda_em_andamento = tem_venda_em_andamento or (lambda: False)
         self._operacao_bloqueada = operacao_bloqueada or (lambda: False)
+        self._alteracao_permitida = alteracao_permitida or (lambda: True)
         self.dialogo_atual: DialogoProduto | None = None
         self.setObjectName("pagina_produtos")
 
@@ -257,7 +259,7 @@ class PaginaProdutos(QWidget):
         self._atualizar_acoes_selecao()
 
     def abrir_cadastro(self) -> None:
-        if self._bloqueado_por_fechamento():
+        if not self._pode_administrar() or self._bloqueado_por_fechamento():
             return
         dialogo = DialogoProduto(parent=self)
         dialogo.dados_confirmados.connect(
@@ -323,6 +325,9 @@ class PaginaProdutos(QWidget):
         )
 
     def _cadastrar(self, dialogo: DialogoProduto, dados: dict) -> None:
+        if not self._pode_administrar():
+            dialogo.mostrar_erros((self.rotulo_mensagem.text(),))
+            return
         if self._bloqueado_por_fechamento():
             dialogo.mostrar_erros((MENSAGEM_FECHAMENTO_PENDENTE,))
             return
@@ -383,12 +388,22 @@ class PaginaProdutos(QWidget):
         self.restaurar_foco()
 
     def _pode_alterar_produto_existente(self) -> bool:
+        if not self._pode_administrar():
+            return False
         if self._bloqueado_por_fechamento():
             return False
         if self._tem_venda_em_andamento():
             self.rotulo_mensagem.setText(MENSAGEM_RESTRICAO_ATENDIMENTO)
             return False
         return True
+
+    def _pode_administrar(self) -> bool:
+        if self._alteracao_permitida():
+            return True
+        self.rotulo_mensagem.setText(
+            "A administração de produtos exige perfil Administrador ativo."
+        )
+        return False
 
     def _bloqueado_por_fechamento(self) -> bool:
         if not self._operacao_bloqueada():
@@ -403,5 +418,7 @@ class PaginaProdutos(QWidget):
 
     def _atualizar_acoes_selecao(self) -> None:
         selecionado = self.produto_selecionado() is not None
-        self.botao_editar.setEnabled(selecionado)
-        self.botao_alterar_situacao.setEnabled(selecionado)
+        permitido = self._alteracao_permitida()
+        self.botao_cadastrar.setEnabled(permitido)
+        self.botao_editar.setEnabled(selecionado and permitido)
+        self.botao_alterar_situacao.setEnabled(selecionado and permitido)

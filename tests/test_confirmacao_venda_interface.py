@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QDialog
 from database.schema import criar_tabelas
 from interface.dialogo_confirmacao_venda import DialogoConfirmacaoVenda
 from interface.dialogo_pagamentos import DialogoPagamentos
-from interface.janela_principal import JanelaPrincipal
+from tests.helpers_identidade import criar_janela_autenticada
 from models.item_venda import ItemVenda
 from models.pagamento import Pagamento, PagamentosEmAndamento
 from models.venda_em_andamento import VendaEmAndamento
@@ -34,7 +34,7 @@ def venda_e_pagamentos():
 
 @pytest.fixture
 def janela(qtbot, tmp_path):
-    janela_principal = JanelaPrincipal(tmp_path / "t38.db")
+    janela_principal = criar_janela_autenticada(tmp_path / "t38.db")
     qtbot.addWidget(janela_principal)
     janela_principal.show()
     qtbot.waitUntil(janela_principal.isVisible)

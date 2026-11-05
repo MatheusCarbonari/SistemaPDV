@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
-from interface.janela_principal import JanelaPrincipal
+from tests.helpers_identidade import criar_janela_autenticada
 from models.item_venda import ItemVenda
 from models.pagamento import Pagamento, PagamentosEmAndamento
 from models.produto_snapshot import ProdutoSnapshot
@@ -38,7 +38,7 @@ def registrar_composicao(janela, total=1000) -> PagamentosEmAndamento:
 def janela(qtbot, tmp_path):
     caminho = tmp_path / "fechamento.db"
     criar_tabelas(caminho)
-    widget = JanelaPrincipal(caminho)
+    widget = criar_janela_autenticada(caminho)
     qtbot.addWidget(widget)
     widget.show()
     qtbot.waitUntil(widget.isVisible)

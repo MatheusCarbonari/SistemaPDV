@@ -4,9 +4,13 @@ from collections.abc import Sequence
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from database.conexao import CAMINHO_BANCO
+from interface.dialogo_login import DialogoLogin
 from interface.dialogo_primeiro_acesso import DialogoPrimeiroAcesso
+from interface.janela_principal import JanelaPrincipal
+from models.sessao_usuario import SessaoUsuario
 from repositories.usuario_repository import EstadoIdentidadeInconsistenteError
 from services.administrador_inicial_service import obter_estado_primeiro_acesso
+from services.autenticacao_service import autorizar_sessao
 from services.inicializacao_banco_service import (
     InicializacaoBancoError,
     preparar_banco_para_operacao,
@@ -14,10 +18,6 @@ from services.inicializacao_banco_service import (
 
 
 class PrimeiroAcessoNecessarioError(RuntimeError):
-    pass
-
-
-class LoginPendenteError(RuntimeError):
     pass
 
 
@@ -34,17 +34,17 @@ def obter_aplicacao(argumentos: Sequence[str] | None = None) -> QApplication:
 
 def criar_janela_principal(
     caminho_banco=CAMINHO_BANCO,
-) -> None:
-    """Mantém a operação fechada enquanto o T46 não autenticar uma sessão."""
+    sessao: SessaoUsuario | None = None,
+) -> JanelaPrincipal:
+    """Cria a janela somente para uma sessão autenticada e ainda válida."""
     preparar_banco_para_operacao(caminho_banco)
     estado = obter_estado_primeiro_acesso(caminho_banco)
     if estado == "NAO_CONFIGURADO":
         raise PrimeiroAcessoNecessarioError(
             "O administrador inicial ainda precisa ser configurado."
         )
-    raise LoginPendenteError(
-        "A operação comercial exige o login que será implementado no T46."
-    )
+    autorizar_sessao(sessao, ("ADMINISTRADOR", "CAIXA"), caminho_banco)
+    return JanelaPrincipal(caminho_banco, sessao)
 
 
 def executar_aplicacao(
@@ -102,16 +102,31 @@ def executar_aplicacao(
         QMessageBox.information(
             None,
             "Administrador inicial criado",
-            "A configuração foi concluída. A operação comercial permanecerá "
-            "bloqueada até a implementação do login no T46.",
+            "A configuração foi concluída. Entre com a conta criada para "
+            "iniciar uma sessão autenticada.",
         )
+
+    dialogo_login = DialogoLogin(caminho_banco)
+    if dialogo_login.exec() != QDialog.DialogCode.Accepted:
         return 0
+    if dialogo_login.sessao is None:
+        QMessageBox.critical(
+            None,
+            "Falha ao iniciar sessão",
+            "O login foi concluído sem uma sessão válida. A operação foi bloqueada.",
+        )
+        return 1
 
-    QMessageBox.information(
-        None,
-        "Login ainda não disponível",
-        "O administrador inicial já está configurado. A operação comercial "
-        "permanecerá bloqueada até a implementação do login no T46.",
-    )
+    try:
+        janela = criar_janela_principal(caminho_banco, dialogo_login.sessao)
+    except Exception:
+        dialogo_login.sessao.encerrar()
+        QMessageBox.critical(
+            None,
+            "Falha ao abrir a operação",
+            "Não foi possível validar a sessão. A operação foi bloqueada.",
+        )
+        return 1
 
-    return 0
+    janela.show()
+    return aplicacao.exec()

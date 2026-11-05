@@ -314,11 +314,25 @@ senha padrão, sessão implícita, identidade fictícia nem bypass operacional.
 **Origem:** backlog original T35.
 **Entrega verificável:** Login e escopo operacional do Caixa.
 **Conceito a estudar:** Sessão, perfis.
+**Contrato implementado:** banco configurado sempre apresenta login e somente
+uma credencial válida de conta ativa cria `SessaoUsuario` e permite construir a
+janela comercial. Falhas de usuário, senha, conta inativa ou hash usam mensagem
+indistinguível; cinco falhas em sessenta segundos impõem espera temporária de
+trinta segundos em memória, sem bloqueio permanente. Logout invalida a sessão
+e fecha a janela; reiniciar exige novo login. A conta é revalidada nas entradas
+protegidas, de modo que desativação ou divergência posterior falha fechada.
+**Perfis:** Caixa opera Frente de Caixa, pagamentos, confirmação e consulta do
+Histórico, mas não acessa Produtos. Administrador também administra Produtos e
+pode provisionar Caixa pelo serviço protegido. Não há cadastro público nem tela
+antecipada de gestão de usuários. Cancelamento efetivo permanece bloqueado até
+T47/INT-D2.
 
 ### T47 — Autorização pontual
 **Origem:** backlog original T36.
 **Entrega verificável:** Senha de admin só para ação crítica; não elevar sessão.
 **Conceito a estudar:** Autorização.
+**Dependência atual:** reutilizar a autenticação do T46 sem elevar nem trocar a
+sessão operacional; somente então conectar a INT-D2.
 
 ### T48 — Recuperação offline
 **Origem:** backlog original T37.

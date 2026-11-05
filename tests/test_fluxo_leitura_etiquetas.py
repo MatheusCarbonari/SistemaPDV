@@ -4,7 +4,7 @@ import pytest
 from PySide6.QtCore import Qt
 
 from database.schema import criar_tabelas
-from interface.janela_principal import JanelaPrincipal
+from tests.helpers_identidade import criar_janela_autenticada
 from models.produto import Produto
 from repositories.produto_repository import salvar_produto
 
@@ -46,7 +46,7 @@ def caminho_banco(tmp_path):
 
 @pytest.fixture
 def janela(qtbot, caminho_banco):
-    janela_principal = JanelaPrincipal(caminho_banco)
+    janela_principal = criar_janela_autenticada(caminho_banco)
     qtbot.addWidget(janela_principal)
     janela_principal.show()
     qtbot.waitUntil(janela_principal.isVisible)

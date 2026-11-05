@@ -31,12 +31,18 @@ from interface.pagina_produtos import PaginaProdutos
 from models.estado_venda import EstadoVenda
 from models.item_venda import DESCRICAO_DIVERSOS, ItemVenda
 from models.pagamento import PagamentosEmAndamento
+from models.sessao_usuario import SessaoUsuario
 from models.venda_confirmada import VendaConfirmada
 from models.venda_em_andamento import VendaEmAndamento
 from services.estado_venda_service import (
     adicionar_no_estado,
     desfazer_ultima_remocao,
     remover_com_desfazer,
+)
+from services.autenticacao_service import (
+    PermissaoNegadaError,
+    autorizar_sessao,
+    encerrar_sessao,
 )
 from services.item_venda_service import criar_item_de_etiqueta_com_estimativa
 from services.produto_etiqueta import associar_etiqueta_ao_produto
@@ -51,10 +57,21 @@ class JanelaPrincipal(QMainWindow):
     pagamentos_confirmados = Signal(object)
     venda_confirmada = Signal(object)
     venda_persistida = Signal(int)
+    logout_realizado = Signal()
 
-    def __init__(self, caminho_banco=CAMINHO_BANCO) -> None:
+    def __init__(
+        self,
+        caminho_banco=CAMINHO_BANCO,
+        sessao: SessaoUsuario | None = None,
+    ) -> None:
         super().__init__()
         self.caminho_banco = caminho_banco
+        autorizar_sessao(
+            sessao,
+            ("ADMINISTRADOR", "CAIXA"),
+            self.caminho_banco,
+        )
+        self.sessao = sessao
         self.dialogo_atual: QDialog | None = None
         self.estado_venda = EstadoVenda(venda=VendaEmAndamento())
         self.composicao_pagamentos: PagamentosEmAndamento | None = None
@@ -106,6 +123,14 @@ class JanelaPrincipal(QMainWindow):
         layout_menu.addWidget(self.botao_navegar_produtos)
         layout_menu.addWidget(self.botao_navegar_administracao)
         layout_menu.addStretch()
+        self.rotulo_usuario = QLabel(
+            f"{self.sessao.identificacao_acesso} ({self.sessao.perfil})"
+        )
+        self.rotulo_usuario.setObjectName("usuario_autenticado")
+        self.botao_logout = QPushButton("Sair")
+        self.botao_logout.setObjectName("encerrar_sessao")
+        layout_menu.addWidget(self.rotulo_usuario)
+        layout_menu.addWidget(self.botao_logout)
         layout_principal.addWidget(menu_superior)
 
         self.paginas = QStackedWidget(estrutura_principal)
@@ -200,6 +225,7 @@ class JanelaPrincipal(QMainWindow):
                 self.estado_venda.venda.itens
             ),
             operacao_bloqueada=self._fechamento_bloqueia_operacao,
+            alteracao_permitida=self._usuario_pode_administrar_produtos,
             parent=self.paginas,
         )
         self.paginas.addWidget(self.pagina_frente_caixa)
@@ -210,6 +236,7 @@ class JanelaPrincipal(QMainWindow):
         self.botao_navegar_caixa.clicked.connect(self.mostrar_frente_caixa)
         self.botao_navegar_historico.clicked.connect(self.mostrar_historico)
         self.botao_navegar_produtos.clicked.connect(self.mostrar_produtos)
+        self.botao_logout.clicked.connect(self.solicitar_logout)
         self.botao_remover.clicked.connect(self.remover_item_selecionado)
         self.botao_desfazer.clicked.connect(self.desfazer_ultima_remocao)
         self.botao_pagamento.clicked.connect(self.abrir_dialogo_pagamentos)
@@ -227,11 +254,15 @@ class JanelaPrincipal(QMainWindow):
             self._restaurar_foco_entrada()
 
     def mostrar_frente_caixa(self) -> None:
+        if not self._usuario_pode_operar():
+            return
         self.paginas.setCurrentWidget(self.pagina_frente_caixa)
         self.botao_navegar_caixa.setChecked(True)
         self._restaurar_foco_entrada()
 
     def mostrar_historico(self) -> None:
+        if not self._usuario_pode_operar():
+            return
         if self.dialogo_atual is not None:
             self.botao_navegar_caixa.setChecked(True)
             return
@@ -248,6 +279,12 @@ class JanelaPrincipal(QMainWindow):
         self.pagina_historico.restaurar_foco()
 
     def mostrar_produtos(self) -> None:
+        if not self._usuario_pode_administrar_produtos():
+            self.rotulo_status.setText(
+                "A página Produtos exige perfil Administrador."
+            )
+            self.botao_navegar_caixa.setChecked(True)
+            return
         if self.dialogo_atual is not None:
             self.botao_navegar_caixa.setChecked(True)
             return
@@ -264,6 +301,8 @@ class JanelaPrincipal(QMainWindow):
         self.pagina_produtos.ativar()
 
     def processar_entrada(self) -> None:
+        if not self._usuario_pode_operar():
+            return
         if (
             self.dialogo_atual is not None
             or self._processando_entrada
@@ -365,7 +404,7 @@ class JanelaPrincipal(QMainWindow):
         self.item_criado.emit(item)
 
     def _adicionar_item_a_venda(self, item: ItemVenda) -> None:
-        if self._fechamento_bloqueia_operacao():
+        if not self._usuario_pode_operar() or self._fechamento_bloqueia_operacao():
             return
         havia_pagamentos = self.composicao_pagamentos is not None
         self.estado_venda = adicionar_no_estado(self.estado_venda, item)
@@ -373,7 +412,7 @@ class JanelaPrincipal(QMainWindow):
         self._atualizar_venda_exibida()
 
     def remover_item_selecionado(self) -> None:
-        if self._fechamento_bloqueia_operacao():
+        if not self._usuario_pode_operar() or self._fechamento_bloqueia_operacao():
             return
         if not self.estado_venda.venda.itens:
             self._restaurar_foco_entrada()
@@ -392,7 +431,7 @@ class JanelaPrincipal(QMainWindow):
         self._restaurar_foco_entrada()
 
     def desfazer_ultima_remocao(self) -> None:
-        if self._fechamento_bloqueia_operacao():
+        if not self._usuario_pode_operar() or self._fechamento_bloqueia_operacao():
             return
         estado_anterior = self.estado_venda
         havia_pagamentos = self.composicao_pagamentos is not None
@@ -403,6 +442,8 @@ class JanelaPrincipal(QMainWindow):
         self._restaurar_foco_entrada()
 
     def abrir_dialogo_pagamentos(self) -> None:
+        if not self._usuario_pode_operar():
+            return
         if (
             self.dialogo_atual is not None
             or self._fechamento_bloqueia_operacao()
@@ -432,7 +473,7 @@ class JanelaPrincipal(QMainWindow):
         dialogo.open()
 
     def _emitir_pagamentos_confirmados(self, pagamentos) -> None:
-        if self._fechamento_bloqueia_operacao():
+        if not self._usuario_pode_operar() or self._fechamento_bloqueia_operacao():
             return
         composicao_alterada = pagamentos != self.composicao_pagamentos
         self.composicao_pagamentos = pagamentos
@@ -444,6 +485,8 @@ class JanelaPrincipal(QMainWindow):
         self._atualizar_venda_exibida()
 
     def abrir_dialogo_confirmacao(self) -> None:
+        if not self._usuario_pode_operar():
+            return
         if (
             self.dialogo_atual is not None
             or self._fechamento_bloqueia_operacao()
@@ -476,7 +519,7 @@ class JanelaPrincipal(QMainWindow):
         dialogo.open()
 
     def _receber_venda_confirmada(self, resultado: VendaConfirmada) -> None:
-        if self._fechamento_bloqueia_operacao():
+        if not self._usuario_pode_operar() or self._fechamento_bloqueia_operacao():
             return
         self.resultado_confirmacao = resultado
         self.confirmacao_pendente = resultado
@@ -484,6 +527,8 @@ class JanelaPrincipal(QMainWindow):
         self._persistir_fechamento_pendente()
 
     def verificar_fechamento_pendente(self) -> None:
+        if not self._usuario_pode_operar():
+            return
         if (
             not self._fechamento_incerto
             or self.confirmacao_pendente is None
@@ -583,6 +628,7 @@ class JanelaPrincipal(QMainWindow):
         self.tabela_itens.clearSelection()
         total = calcular_total(self.estado_venda.venda)
         self.rotulo_total.setText(f"Total: {formatar_centavos(total)}")
+        sessao_valida = self._usuario_pode_operar(mostrar_mensagem=False)
         operacao_bloqueada = self._fechamento_bloqueia_operacao()
         if (
             operacao_bloqueada
@@ -590,23 +636,75 @@ class JanelaPrincipal(QMainWindow):
         ):
             self.paginas.setCurrentWidget(self.pagina_frente_caixa)
             self.botao_navegar_caixa.setChecked(True)
-        self.botao_navegar_historico.setEnabled(not operacao_bloqueada)
-        self.botao_navegar_produtos.setEnabled(not operacao_bloqueada)
-        self.campo_entrada.setEnabled(not operacao_bloqueada)
-        self.tabela_itens.setEnabled(not operacao_bloqueada)
-        self.botao_remover.setEnabled(bool(itens) and not operacao_bloqueada)
-        self.botao_desfazer.setEnabled(
-            self.estado_venda.ultima_remocao is not None
+        self.botao_navegar_caixa.setEnabled(sessao_valida)
+        self.botao_navegar_historico.setEnabled(sessao_valida and not operacao_bloqueada)
+        self.botao_navegar_produtos.setEnabled(
+            sessao_valida
+            and self.sessao.perfil == "ADMINISTRADOR"
             and not operacao_bloqueada
         )
-        self.botao_pagamento.setEnabled(total > 0 and not operacao_bloqueada)
+        self.botao_logout.setEnabled(sessao_valida and not operacao_bloqueada)
+        self.campo_entrada.setEnabled(sessao_valida and not operacao_bloqueada)
+        self.tabela_itens.setEnabled(sessao_valida and not operacao_bloqueada)
+        self.botao_remover.setEnabled(bool(itens) and sessao_valida and not operacao_bloqueada)
+        self.botao_desfazer.setEnabled(
+            self.estado_venda.ultima_remocao is not None
+            and sessao_valida
+            and not operacao_bloqueada
+        )
+        self.botao_pagamento.setEnabled(total > 0 and sessao_valida and not operacao_bloqueada)
         self.botao_confirmar_venda.setEnabled(
             self.composicao_pagamentos is not None
+            and sessao_valida
             and not operacao_bloqueada
         )
         self.botao_verificar_fechamento.setEnabled(
-            self._fechamento_incerto and not self._fechamento_em_processamento
+            sessao_valida
+            and self._fechamento_incerto
+            and not self._fechamento_em_processamento
         )
+
+    def solicitar_logout(self) -> None:
+        if self._fechamento_bloqueia_operacao():
+            self.rotulo_status.setText(
+                "Resolva o fechamento pendente antes de encerrar a sessão."
+            )
+            return
+        encerrar_sessao(self.sessao)
+        self._atualizar_venda_exibida()
+        self.logout_realizado.emit()
+        self.close()
+
+    def _usuario_pode_operar(self, *, mostrar_mensagem: bool = True) -> bool:
+        return self._sessao_permite(
+            ("ADMINISTRADOR", "CAIXA"),
+            mostrar_mensagem=mostrar_mensagem,
+        )
+
+    def _usuario_pode_administrar_produtos(self) -> bool:
+        return self._sessao_permite(("ADMINISTRADOR",))
+
+    def _sessao_permite(
+        self,
+        perfis: tuple[str, ...],
+        *,
+        mostrar_mensagem: bool = True,
+    ) -> bool:
+        try:
+            autorizar_sessao(self.sessao, perfis, self.caminho_banco)
+        except PermissaoNegadaError:
+            if mostrar_mensagem:
+                self.rotulo_status.setText(
+                    "O perfil autenticado não possui permissão para esta operação."
+                )
+            return False
+        except Exception:
+            if mostrar_mensagem:
+                self.rotulo_status.setText(
+                    "A sessão não é mais válida. Reinicie e autentique-se novamente."
+                )
+            return False
+        return True
 
     def _reiniciar_tentativa_fechamento(self) -> None:
         self.identificador_tentativa_fechamento = None

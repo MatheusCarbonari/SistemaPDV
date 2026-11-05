@@ -28,7 +28,7 @@ class DialogoPrimeiroAcesso(QDialog):
         layout = QVBoxLayout(self)
         explicacao = QLabel(
             "Crie o administrador inicial. Não existe senha padrão. Após esta "
-            "configuração, o PDV permanecerá bloqueado até o login do T46."
+            "configuração, será necessário autenticar a conta para abrir o PDV."
         )
         explicacao.setWordWrap(True)
         explicacao.setObjectName("aviso_primeiro_acesso")

@@ -2,7 +2,7 @@ import pytest
 from PySide6.QtCore import Qt
 
 from interface.dialogo_pagamentos import DialogoPagamentos
-from interface.janela_principal import JanelaPrincipal
+from tests.helpers_identidade import criar_janela_autenticada
 from models.item_venda import ItemVenda
 
 
@@ -16,7 +16,7 @@ def criar_item(subtotal_centavos: int) -> ItemVenda:
 
 @pytest.fixture
 def janela(qtbot, tmp_path):
-    janela_principal = JanelaPrincipal(tmp_path / "nao_utilizado.db")
+    janela_principal = criar_janela_autenticada(tmp_path / "nao_utilizado.db")
     qtbot.addWidget(janela_principal)
     janela_principal.show()
     qtbot.waitUntil(janela_principal.isVisible)

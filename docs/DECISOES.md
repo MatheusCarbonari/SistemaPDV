@@ -44,6 +44,14 @@
   e parâmetros ficam no formato armazenado. A configuração é marcada por FK
   durável e a aplicação permanece fail-closed até o login do T46. Estados
   ambíguos nunca liberam recriação nem operação comercial.
+- **DEC-031** — A janela operacional exige `SessaoUsuario` criada exclusivamente
+  por login válido. Caixa acessa Frente de Caixa e Histórico; Produtos e
+  provisionamento de Caixa exigem Administrador revalidado no banco. Logout
+  invalida a sessão e fecha a janela. Cinco falhas por identificação em sessenta
+  segundos geram espera de trinta segundos somente em memória, evitando bloqueio
+  durável explorável. Conta desativada perde permissão na próxima operação
+  protegida. T47 continua responsável por autorização pontual, sem elevação da
+  sessão.
 
 ## Decisões que exigem cuidado
 - O código de produto existente é protegido contra edição pela interface; a

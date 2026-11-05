@@ -13,7 +13,9 @@ A aplicação mantém uma única janela principal com menu horizontal persistent
 e páginas internas em `QStackedWidget`. A Frente de Caixa conserva venda e
 pagamentos em memória durante a navegação. Histórico consome somente os serviços
 de consulta e não contém SQL. Produtos administra o catálogo por serviços, sem
-SQL no widget; Administração permanece desabilitada até sua integração.
+SQL no widget. Caixa não acessa Produtos; a página somente é habilitada para
+Administrador com sessão revalidada. Administração permanece desabilitada até
+sua integração.
 Resultado de commit incerto fixa a operação na Frente de Caixa até verificação
 ou recuperação controlada.
 
@@ -34,9 +36,10 @@ ou recuperação controlada.
 ## Falhas
 Falha de gravação não prova ausência de commit. Nova tentativa deve reutilizar identificador estável e verificar resultado quando possível. Enquanto o resultado estiver incerto, itens e pagamentos permanecem em memória e a interface bloqueia um novo atendimento. Após sucesso comprovado, o ID definitivo é apresentado e a venda em memória é reiniciada. Se banco indisponível, modo de cálculo pode usar catálogo em memória; em reinício com banco indisponível não há garantia de recuperação. Sem persistência alternativa na V1.
 
-Até o T46, o ponto de entrada prepara/migra o banco e permite configurar o
-primeiro administrador, mas nunca abre a janela comercial. Administrador já
-configurado ou estado inconsistente também mantêm a operação bloqueada.
+O ponto de entrada prepara/migra o banco, conclui o primeiro acesso quando
+necessário e sempre exige login antes de construir a janela principal. Cancelar
+o login, apresentar credenciais inválidas ou detectar estado inconsistente
+mantém a operação bloqueada.
 
 ## Identidade e senha
 
@@ -46,8 +49,17 @@ configurado ou estado inconsistente também mantêm a operação bloqueada.
   senha universal ou credencial embutida.
 - Hash inválido falha na verificação; senhas nunca são registradas em mensagens,
   logs ou documentação.
-- T45 não cria sessão. T46 implementará login/escopo Caixa; T47 produzirá o
-  contexto de autorização pontual exigido pela INT-D2.
+- T45 não cria sessão. O T46 cria `SessaoUsuario` somente após autenticação,
+  nunca armazena senha na sessão e a encerra explicitamente no logout.
+- Credenciais incorretas, contas inativas e hashes inválidos compartilham a
+  mesma resposta. O limitador local aplica espera de 30 segundos depois de cinco
+  falhas em 60 segundos; reiniciar não autentica nem bloqueia permanentemente.
+- Autorização reconsulta ID, identificação, perfil e situação da conta. Caixa
+  opera vendas e consulta Histórico; Administrador também administra Produtos e
+  provisiona Caixa pelo serviço protegido. A tela avançada de usuários não foi
+  antecipada.
+- T47 produzirá o contexto de autorização pontual exigido pela INT-D2 sem
+  elevar a sessão corrente; T48 continua responsável pela recuperação offline.
 
 ## Distribuição
 Binário Windows empacotado, arquivos de dados fora da instalação; instalador atualiza só programa e executa migrador quando necessário; backup válido e migração segura, sem retrocesso automático de banco em falha. A inicialização operacional recusa versões futuras e, para banco existente desatualizado, só migra depois de criar e verificar uma cópia única em `backups/pre_migracao` ao lado do arquivo SQLite. Compatibilidade/licença PySide6 deve ser avaliada em entrega comercial.

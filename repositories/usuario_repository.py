@@ -1,4 +1,5 @@
 from datetime import datetime
+import sqlite3
 
 from database.conexao import CAMINHO_BANCO, conectar
 from models.usuario import Usuario
@@ -9,6 +10,10 @@ class AdministradorJaConfiguradoError(RuntimeError):
 
 
 class EstadoIdentidadeInconsistenteError(RuntimeError):
+    pass
+
+
+class IdentificacaoUsuarioEmUsoError(RuntimeError):
     pass
 
 
@@ -93,6 +98,92 @@ def buscar_hash_administrador_inicial(caminho_banco=CAMINHO_BANCO) -> str:
             """
         ).fetchone()
         return linha["senha_hash"]
+    finally:
+        conexao.close()
+
+
+def buscar_usuario_para_autenticacao(
+    identificacao_acesso: str,
+    caminho_banco=CAMINHO_BANCO,
+):
+    conexao = conectar(caminho_banco)
+    try:
+        _consultar_estado_identidade_conexao(conexao)
+        return conexao.execute(
+            """
+            SELECT
+                id,
+                identificacao_acesso,
+                perfil,
+                senha_hash,
+                ativo,
+                criado_em
+            FROM usuarios
+            WHERE identificacao_acesso = ? COLLATE NOCASE
+            """,
+            (identificacao_acesso,),
+        ).fetchone()
+    finally:
+        conexao.close()
+
+
+def buscar_usuario_por_id(usuario_id: int, caminho_banco=CAMINHO_BANCO):
+    conexao = conectar(caminho_banco)
+    try:
+        _consultar_estado_identidade_conexao(conexao)
+        linha = conexao.execute(
+            """
+            SELECT id, identificacao_acesso, perfil, ativo, criado_em
+            FROM usuarios
+            WHERE id = ?
+            """,
+            (usuario_id,),
+        ).fetchone()
+        return _montar_usuario(linha) if linha is not None else None
+    finally:
+        conexao.close()
+
+
+def criar_usuario_caixa_repository(
+    identificacao_acesso: str,
+    senha_hash: str,
+    caminho_banco=CAMINHO_BANCO,
+) -> Usuario:
+    conexao = conectar(caminho_banco)
+    try:
+        conexao.execute("BEGIN IMMEDIATE")
+        _consultar_estado_identidade_conexao(conexao)
+        try:
+            cursor = conexao.execute(
+                """
+                INSERT INTO usuarios (
+                    identificacao_acesso,
+                    perfil,
+                    senha_hash
+                )
+                VALUES (?, 'CAIXA', ?)
+                """,
+                (identificacao_acesso, senha_hash),
+            )
+        except sqlite3.IntegrityError as erro:
+            if "usuarios.identificacao_acesso" in str(erro):
+                raise IdentificacaoUsuarioEmUsoError(
+                    "A identificação de acesso já está em uso."
+                ) from erro
+            raise
+        linha = conexao.execute(
+            """
+            SELECT id, identificacao_acesso, perfil, ativo, criado_em
+            FROM usuarios
+            WHERE id = ?
+            """,
+            (cursor.lastrowid,),
+        ).fetchone()
+        conexao.commit()
+        return _montar_usuario(linha)
+    except Exception:
+        conexao.rollback()
+        raise
     finally:
         conexao.close()
 

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QAbstractItemView
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
-from interface.janela_principal import JanelaPrincipal
+from tests.helpers_identidade import criar_janela_autenticada
 from interface.pagina_historico import PaginaHistorico
 import interface.pagina_historico as pagina_historico_module
 from models.cancelamento_venda import ContextoAutorizacaoCancelamento
@@ -109,7 +109,7 @@ def pagina(qtbot, banco_historico):
 
 
 def test_navegacao_preserva_venda_pagamentos_e_foco(qtbot, banco_historico) -> None:
-    janela = JanelaPrincipal(banco_historico)
+    janela = criar_janela_autenticada(banco_historico)
     qtbot.addWidget(janela)
     janela.show()
     qtbot.waitUntil(janela.campo_entrada.hasFocus)
@@ -149,7 +149,7 @@ def test_commit_incerto_impede_navegacao_para_historico(
     qtbot,
     banco_historico,
 ) -> None:
-    janela = JanelaPrincipal(banco_historico)
+    janela = criar_janela_autenticada(banco_historico)
     qtbot.addWidget(janela)
     janela.show()
     janela.item_criado.emit(criar_diversos(1000))

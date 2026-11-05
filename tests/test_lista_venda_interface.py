@@ -2,14 +2,14 @@ from decimal import Decimal
 
 import pytest
 
-from interface.janela_principal import JanelaPrincipal
+from tests.helpers_identidade import criar_janela_autenticada
 from models.item_venda import ItemVenda
 from models.produto_snapshot import ProdutoSnapshot
 
 
 @pytest.fixture
 def janela(qtbot, tmp_path):
-    janela_principal = JanelaPrincipal(tmp_path / "venda_interface.db")
+    janela_principal = criar_janela_autenticada(tmp_path / "venda_interface.db")
     qtbot.addWidget(janela_principal)
     janela_principal.show()
     qtbot.waitUntil(janela_principal.isVisible)
