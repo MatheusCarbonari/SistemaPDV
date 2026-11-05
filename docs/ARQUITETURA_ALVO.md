@@ -14,10 +14,17 @@ e páginas internas em `QStackedWidget`. A Frente de Caixa conserva venda e
 pagamentos em memória durante a navegação. Histórico consome somente os serviços
 de consulta e não contém SQL. Produtos administra o catálogo por serviços, sem
 SQL no widget. Caixa não acessa Produtos; a página somente é habilitada para
-Administrador com sessão revalidada. Administração permanece desabilitada até
-sua integração.
+Administrador com sessão revalidada. Administração lista e gerencia somente
+contas Caixa por serviços protegidos; visibilidade de botão nunca substitui a
+autorização na camada de aplicação.
 Resultado de commit incerto fixa a operação na Frente de Caixa até verificação
 ou recuperação controlada.
+
+“Trocar operador” invalida a sessão atual, fecha a janela e retorna ao diálogo
+único de login. A operação é recusada enquanto itens, pagamentos, confirmação
+ou fechamento estiverem pendentes. Fechar a janela pelo sistema invalida a
+sessão sem iniciar outra automaticamente e respeita o mesmo bloqueio para não
+descartar um atendimento em memória.
 
 O Histórico solicita o cancelamento de venda ativa exibindo os dados comerciais
 originais e validando o motivo, sem criar estado intermediário persistente. A
@@ -81,8 +88,9 @@ mantém a operação bloqueada.
   recurso, administrador e expiração. O chamador recebe somente um nonce; o
   consumo atômico em memória ocorre antes da transação comercial e nunca é
   revertido por falha posterior. Nenhuma capacidade ou senha é persistida.
-- A INT-E futura revisará login e provisionamento gráfico de Caixa após T48,
-  reutilizando estes contratos sem criar um segundo mecanismo de identidade.
+- A INT-E reutiliza o login e os registros processuais existentes para criar,
+  listar, ativar e desativar contas Caixa. Não cria Administradores adicionais,
+  sessão elevada nem um segundo mecanismo de identidade.
 - Códigos de recuperação são mostrados somente no retorno da emissão. Devem ser
   guardados em meio externo seguro; interrupção ou perda não permite consulta e
   requer rotação autenticada. O limitador de tentativas é local e em memória,

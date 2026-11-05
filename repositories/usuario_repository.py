@@ -193,6 +193,62 @@ def criar_usuario_caixa_repository(
         conexao.close()
 
 
+def listar_usuarios_caixa_repository(
+    caminho_banco=CAMINHO_BANCO,
+) -> tuple[Usuario, ...]:
+    conexao = conectar(caminho_banco)
+    try:
+        _consultar_estado_identidade_conexao(conexao)
+        linhas = conexao.execute(
+            """
+            SELECT id, identificacao_acesso, perfil, ativo, criado_em
+            FROM usuarios
+            WHERE perfil = 'CAIXA'
+            ORDER BY identificacao_acesso COLLATE NOCASE, id
+            """
+        ).fetchall()
+        return tuple(_montar_usuario(linha) for linha in linhas)
+    finally:
+        conexao.close()
+
+
+def alterar_situacao_usuario_caixa_repository(
+    usuario_id: int,
+    ativo: bool,
+    caminho_banco=CAMINHO_BANCO,
+) -> Usuario | None:
+    conexao = conectar(caminho_banco)
+    try:
+        conexao.execute("BEGIN IMMEDIATE")
+        _consultar_estado_identidade_conexao(conexao)
+        atualizado = conexao.execute(
+            """
+            UPDATE usuarios
+            SET ativo = ?
+            WHERE id = ? AND perfil = 'CAIXA'
+            """,
+            (int(ativo), usuario_id),
+        )
+        if atualizado.rowcount != 1:
+            conexao.rollback()
+            return None
+        linha = conexao.execute(
+            """
+            SELECT id, identificacao_acesso, perfil, ativo, criado_em
+            FROM usuarios
+            WHERE id = ?
+            """,
+            (usuario_id,),
+        ).fetchone()
+        conexao.commit()
+        return _montar_usuario(linha)
+    except Exception:
+        conexao.rollback()
+        raise
+    finally:
+        conexao.close()
+
+
 def _consultar_estado_identidade_conexao(conexao) -> str:
     estado = conexao.execute(
         """

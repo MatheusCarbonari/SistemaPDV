@@ -76,6 +76,13 @@
   formam uma única transação; rotação revoga o conjunto anterior e recuperação
   bem-sucedida encerra todas as sessões e capacidades processuais da identidade,
   sem autenticação automática. Perda da apresentação exige nova rotação.
+- **DEC-034** — A Administração básica é uma página interna restrita a sessão
+  Administrador revalidada e gerencia somente contas Caixa. Criar conta exige
+  senha inicial individual; ativação e desativação não alteram credenciais, e a
+  desativação revoga sessões e capacidades processuais do operador. Troca de
+  operador encerra a sessão e reutiliza o diálogo único de login, sendo recusada
+  quando itens, pagamentos ou fechamento poderiam ser descartados. Fechar a
+  janela também invalida a sessão e respeita o mesmo bloqueio comercial.
 
 ## Decisões que exigem cuidado
 - O código de produto existente é protegido contra edição pela interface; a

@@ -28,6 +28,7 @@ from interface.dialogo_codigos_recuperacao import DialogoCodigosRecuperacao
 from interface.dialogo_pagamentos import DialogoPagamentos
 from interface.formatacao import formatar_centavos
 from interface.pagina_historico import PaginaHistorico
+from interface.pagina_administracao import PaginaAdministracao
 from interface.pagina_produtos import PaginaProdutos
 from models.estado_venda import EstadoVenda
 from models.item_venda import DESCRICAO_DIVERSOS, ItemVenda
@@ -84,6 +85,7 @@ class JanelaPrincipal(QMainWindow):
         self._fechamento_incerto = False
         self._processando_entrada = False
         self._ignorar_proximo_enter = False
+        self._encerramento_autorizado = False
         self.setWindowTitle("Sistema-PDV")
         self.resize(1024, 720)
 
@@ -100,17 +102,15 @@ class JanelaPrincipal(QMainWindow):
         self.botao_navegar_historico.setObjectName("navegar_historico")
         self.botao_navegar_produtos = QPushButton("Produtos")
         self.botao_navegar_produtos.setObjectName("navegar_produtos")
-        self.botao_navegar_administracao = QPushButton(
-            "Administração (em breve)"
-        )
+        self.botao_navegar_administracao = QPushButton("Administração")
         self.botao_navegar_administracao.setObjectName(
             "navegar_administracao"
         )
-        self.botao_navegar_administracao.setEnabled(False)
         for botao in (
             self.botao_navegar_caixa,
             self.botao_navegar_historico,
             self.botao_navegar_produtos,
+            self.botao_navegar_administracao,
         ):
             botao.setCheckable(True)
         self.grupo_navegacao = QButtonGroup(self)
@@ -118,6 +118,7 @@ class JanelaPrincipal(QMainWindow):
         self.grupo_navegacao.addButton(self.botao_navegar_caixa)
         self.grupo_navegacao.addButton(self.botao_navegar_historico)
         self.grupo_navegacao.addButton(self.botao_navegar_produtos)
+        self.grupo_navegacao.addButton(self.botao_navegar_administracao)
         self.botao_navegar_caixa.setChecked(True)
         layout_menu.addWidget(self.botao_navegar_caixa)
         layout_menu.addWidget(self.botao_navegar_historico)
@@ -128,7 +129,7 @@ class JanelaPrincipal(QMainWindow):
             f"{self.sessao.identificacao_acesso} ({self.sessao.perfil})"
         )
         self.rotulo_usuario.setObjectName("usuario_autenticado")
-        self.botao_logout = QPushButton("Sair")
+        self.botao_logout = QPushButton("Trocar operador")
         self.botao_logout.setObjectName("encerrar_sessao")
         self.botao_codigos_recuperacao = QPushButton("Códigos de recuperação")
         self.botao_codigos_recuperacao.setObjectName(
@@ -239,14 +240,23 @@ class JanelaPrincipal(QMainWindow):
             alteracao_permitida=self._usuario_pode_administrar_produtos,
             parent=self.paginas,
         )
+        self.pagina_administracao = PaginaAdministracao(
+            self.sessao,
+            self.caminho_banco,
+            self.paginas,
+        )
         self.paginas.addWidget(self.pagina_frente_caixa)
         self.paginas.addWidget(self.pagina_historico)
         self.paginas.addWidget(self.pagina_produtos)
+        self.paginas.addWidget(self.pagina_administracao)
         self.setCentralWidget(estrutura_principal)
         self.item_criado.connect(self._adicionar_item_a_venda)
         self.botao_navegar_caixa.clicked.connect(self.mostrar_frente_caixa)
         self.botao_navegar_historico.clicked.connect(self.mostrar_historico)
         self.botao_navegar_produtos.clicked.connect(self.mostrar_produtos)
+        self.botao_navegar_administracao.clicked.connect(
+            self.mostrar_administracao
+        )
         self.botao_logout.clicked.connect(self.solicitar_logout)
         self.botao_codigos_recuperacao.clicked.connect(
             self.abrir_codigos_recuperacao
@@ -313,6 +323,28 @@ class JanelaPrincipal(QMainWindow):
         self.paginas.setCurrentWidget(self.pagina_produtos)
         self.botao_navegar_produtos.setChecked(True)
         self.pagina_produtos.ativar()
+
+    def mostrar_administracao(self) -> None:
+        if not self._usuario_pode_administrar_produtos():
+            self.rotulo_status.setText(
+                "A página Administração exige perfil Administrador."
+            )
+            self.botao_navegar_caixa.setChecked(True)
+            return
+        if self.dialogo_atual is not None:
+            self.botao_navegar_caixa.setChecked(True)
+            return
+        if self._fechamento_bloqueia_operacao():
+            self.rotulo_status.setText(
+                "Resolva o fechamento pendente antes de sair da Frente de Caixa."
+            )
+            self.botao_navegar_caixa.setChecked(True)
+            self._restaurar_foco_entrada()
+            return
+
+        self.paginas.setCurrentWidget(self.pagina_administracao)
+        self.botao_navegar_administracao.setChecked(True)
+        self.pagina_administracao.ativar()
 
     def processar_entrada(self) -> None:
         if not self._usuario_pode_operar():
@@ -657,6 +689,11 @@ class JanelaPrincipal(QMainWindow):
             and self.sessao.perfil == "ADMINISTRADOR"
             and not operacao_bloqueada
         )
+        self.botao_navegar_administracao.setEnabled(
+            sessao_valida
+            and self.sessao.perfil == "ADMINISTRADOR"
+            and not operacao_bloqueada
+        )
         self.botao_logout.setEnabled(sessao_valida and not operacao_bloqueada)
         self.botao_codigos_recuperacao.setEnabled(
             sessao_valida
@@ -689,10 +726,28 @@ class JanelaPrincipal(QMainWindow):
                 "Resolva o fechamento pendente antes de encerrar a sessão."
             )
             return
+        if self._atendimento_impede_logout():
+            self.rotulo_status.setText(
+                "Finalize ou esvazie o atendimento antes de trocar o operador."
+            )
+            return
+        self._encerramento_autorizado = True
         encerrar_sessao(self.sessao)
-        self._atualizar_venda_exibida()
         self.logout_realizado.emit()
         self.close()
+
+    def closeEvent(self, evento) -> None:
+        if self._encerramento_autorizado:
+            evento.accept()
+            return
+        if self._fechamento_bloqueia_operacao() or self._atendimento_impede_logout():
+            self.rotulo_status.setText(
+                "Finalize ou esvazie o atendimento antes de encerrar o sistema."
+            )
+            evento.ignore()
+            return
+        encerrar_sessao(self.sessao)
+        evento.accept()
 
     def abrir_codigos_recuperacao(self) -> None:
         if not self._usuario_pode_administrar_produtos():
@@ -752,6 +807,14 @@ class JanelaPrincipal(QMainWindow):
 
     def _fechamento_bloqueia_operacao(self) -> bool:
         return self._fechamento_em_processamento or self._fechamento_incerto
+
+    def _atendimento_impede_logout(self) -> bool:
+        return bool(
+            self.estado_venda.venda.itens
+            or self.composicao_pagamentos is not None
+            or self.confirmacao_pendente is not None
+            or self.dialogo_atual is not None
+        )
 
     @staticmethod
     def _descricao_item(item: ItemVenda) -> str:

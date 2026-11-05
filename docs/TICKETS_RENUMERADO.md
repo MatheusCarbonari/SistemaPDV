@@ -396,6 +396,16 @@ Caixa; oferecer acesso gráfico administrativo para provisionar contas Caixa;
 avaliar gerenciamento mínimo de contas e troca segura de operador. Deve
 reutilizar autenticação, sessões e permissões dos T46–T47, sem duplicar login,
 criar bypass ou substituir a autorização pontual de operações críticas.
+**Contrato implementado:** Administração é uma página interna disponível somente
+para Administrador revalidado e permite listar, cadastrar, ativar e desativar
+exclusivamente contas Caixa. Senha inicial individual segue a política vigente,
+é ocultada na interface e persistida somente como hash. Desativação revoga
+sessões e capacidades processuais do operador. “Trocar operador” invalida a
+sessão atual e retorna ao mesmo diálogo de login, mas é bloqueado quando houver
+itens, pagamentos, confirmação ou fechamento pendente; commit incerto também
+bloqueia navegação e encerramento. Fechar a janela invalida a sessão e não pode
+descartar atendimento aberto. INT-E encerra as integrações funcionais previstas
+antes da homologação manual do Marco 2.
 
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 

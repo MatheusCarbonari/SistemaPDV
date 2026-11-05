@@ -106,27 +106,38 @@ def executar_aplicacao(
             "iniciar uma sessão autenticada.",
         )
 
-    dialogo_login = DialogoLogin(caminho_banco)
-    if dialogo_login.exec() != QDialog.DialogCode.Accepted:
-        return 0
-    if dialogo_login.sessao is None:
-        QMessageBox.critical(
-            None,
-            "Falha ao iniciar sessão",
-            "O login foi concluído sem uma sessão válida. A operação foi bloqueada.",
-        )
-        return 1
+    while True:
+        dialogo_login = DialogoLogin(caminho_banco)
+        if dialogo_login.exec() != QDialog.DialogCode.Accepted:
+            return 0
+        if dialogo_login.sessao is None:
+            QMessageBox.critical(
+                None,
+                "Falha ao iniciar sessão",
+                "O login foi concluído sem uma sessão válida. "
+                "A operação foi bloqueada.",
+            )
+            return 1
 
-    try:
-        janela = criar_janela_principal(caminho_banco, dialogo_login.sessao)
-    except Exception:
-        dialogo_login.sessao.encerrar()
-        QMessageBox.critical(
-            None,
-            "Falha ao abrir a operação",
-            "Não foi possível validar a sessão. A operação foi bloqueada.",
-        )
-        return 1
+        try:
+            janela = criar_janela_principal(
+                caminho_banco,
+                dialogo_login.sessao,
+            )
+        except Exception:
+            dialogo_login.sessao.encerrar()
+            QMessageBox.critical(
+                None,
+                "Falha ao abrir a operação",
+                "Não foi possível validar a sessão. A operação foi bloqueada.",
+            )
+            return 1
 
-    janela.show()
-    return aplicacao.exec()
+        troca_operador = {"solicitada": False}
+        janela.logout_realizado.connect(
+            lambda: troca_operador.__setitem__("solicitada", True)
+        )
+        janela.show()
+        resultado = aplicacao.exec()
+        if not troca_operador["solicitada"]:
+            return resultado

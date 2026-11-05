@@ -37,7 +37,12 @@
   emissão, apresentação única, rotação, consumo concorrente, rollback, política
   de senha, revogação processual e recuperação pelo login foram verificados
   exclusivamente em bancos temporários.
-- Inspeção somente leitura do banco SQLite incluído no ZIP: **`PRAGMA user_version = 0`**, com tabela `produtos`; após o T45, o código espera **versão 8** para persistência, histórico, cancelamento, auditoria de preços e identidade inicial. O banco original não foi migrado.
+- **Atualização INT-E em 05/11/2026:** suíte completa com **961 testes
+  aprovados**; gestão gráfica de contas Caixa, permissões administrativas,
+  ativação/desativação, revogação processual, troca de operador e bloqueios por
+  atendimento ou commit incerto foram verificados exclusivamente em bancos
+  temporários.
+- Inspeção somente leitura do banco SQLite incluído no ZIP: **`PRAGMA user_version = 0`**, com tabela `produtos`; após o T48, o código espera **versão 9** para persistência, histórico, cancelamento, auditoria, identidade e recuperação offline. O banco original não foi migrado.
 
 ## Lacunas prioritárias identificadas no código
 
@@ -140,16 +145,27 @@ administrador na auditoria.
 
 A INT-D2 conecta o diálogo auxiliar ao formulário da INT-D1 sem criar um segundo
 mecanismo de autorização. O T48 acrescenta recuperação offline de Administrador
-por códigos de uso único, sem autenticação automática. A INT-E permanece
-registrada para revisar login, provisionamento gráfico e troca segura de
-operador.
+por códigos de uso único, sem autenticação automática. A INT-E conclui o
+provisionamento gráfico e a situação das contas Caixa, além da troca segura de
+operador pelo mesmo login.
+
+### Resolvido pela INT-E — Administração mínima e troca de operador
+
+A página Administração lista, cadastra, ativa e desativa somente contas Caixa.
+Os serviços revalidam sessão e perfil Administrador independentemente da
+visibilidade dos controles. Senhas iniciais seguem a política existente e nunca
+entram na sessão; desativação revoga sessões e capacidades do operador.
+
+Trocar operador invalida a sessão atual e reabre o diálogo único de login.
+Itens, pagamentos, confirmação pendente ou commit incerto bloqueiam troca e
+fechamento da janela para impedir perda silenciosa do atendimento.
 
 ## Itens já cobertos por tickets futuros (não antecipar)
 
 - T44: persistência e auditoria de preços resolvidas; consulta gráfica de 12
   meses permanece posterior.
-- T45–T48 resolvidos; INT-E mantém o acesso gráfico administrativo e a revisão
-  operacional como próxima integração antes do Marco 3.
+- T45–T48 e INT-E resolvidos; a homologação manual do Marco 2 precede o avanço
+  para as entregas de produção e confiabilidade do Marco 3.
 - T49–T51: logs, versão e diagnóstico.
 - T52–T54: catálogo em memória e contingência/degradação.
 - T55–T57: backup e restauração.
@@ -164,8 +180,9 @@ operador.
 3. **INT-C — resolvida:** cadastro, edição, listagem e ativação/desativação em página interna; histórico de preços permanece separado.
 4. **INT-D1 — resolvida:** formulário e confirmação visual sem efeito comercial.
 5. **INT-D2 — resolvida:** execução do cancelamento protegida por autorização pontual dos T45–T47.
-6. Registrar ticket/entrega futura para visualização dos últimos 12 meses de preços e, se permanecer no escopo, categorias personalizáveis.
-7. Corrigir documentação operacional desatualizada, quando houver ticket de higiene: `docs/ESTADO_ATUAL.md` descreve um estágio antigo; não confundir com fonte de estado atual. O arquivo `.gitignore` já cobre `.venv`, `.pytest_cache`, `__pycache__`, `.vscode` e `data/*.db` — ignorar não remove arquivos já rastreados.
+6. **INT-E — resolvida:** gestão básica de Caixa e troca segura pelo login único.
+7. Registrar ticket/entrega futura para visualização dos últimos 12 meses de preços e, se permanecer no escopo, categorias personalizáveis.
+8. Corrigir documentação operacional desatualizada, quando houver ticket de higiene: `docs/ESTADO_ATUAL.md` descreve um estágio antigo; não confundir com fonte de estado atual. O arquivo `.gitignore` já cobre `.venv`, `.pytest_cache`, `__pycache__`, `.vscode` e `data/*.db` — ignorar não remove arquivos já rastreados.
 
 ## Critério de conclusão
 
@@ -173,7 +190,7 @@ O fluxo gráfico entre confirmação e registro definitivo foi conectado pela
 INT-A, o histórico passou a ser acessível por página interna na INT-B e a
 administração de produtos foi integrada pela INT-C. O cancelamento gráfico foi
 conectado pela INT-D2 à autorização pontual do T47 e à transação do T43, sem
-elevar a sessão operacional. A recuperação offline foi concluída no T48; INT-E
-permanece como próxima integração antes do Marco 3. Os testes automatizados não substituem a
+elevar a sessão operacional. A recuperação offline foi concluída no T48 e a
+gestão básica de operadores na INT-E. Os testes automatizados não substituem a
 validação operacional no Windows, e a homologação de leitor físico permanece
 pendente.
