@@ -130,7 +130,10 @@ def test_migra_versao_5_para_6_preservando_venda_como_ativa(
             FROM vendas
             """
         ).fetchone()
-        assert conexao.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert (
+            conexao.execute("PRAGMA user_version").fetchone()[0]
+            == schema.VERSAO_ESQUEMA
+        )
         assert tuple(venda) == (venda_id, 1000, "ATIVA", None, None, None)
     finally:
         conexao.close()

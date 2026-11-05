@@ -249,6 +249,20 @@ def atualizar_produto_repository(
     conexao = conectar(caminho_banco)
 
     try:
+        conexao.execute("BEGIN IMMEDIATE")
+        produto_atual = conexao.execute(
+            """
+            SELECT preco_venda_centavos
+            FROM produtos
+            WHERE id = ?
+            """,
+            (produto.id,),
+        ).fetchone()
+        if produto_atual is None:
+            conexao.rollback()
+            return None
+
+        preco_anterior = produto_atual["preco_venda_centavos"]
         cursor = conexao.execute(
             """
             UPDATE produtos
@@ -273,10 +287,31 @@ def atualizar_produto_repository(
             ),
         )
 
-        conexao.commit()
-
         if cursor.rowcount == 0:
+            conexao.rollback()
             return None
+
+        if preco_anterior != produto.preco_venda_centavos:
+            conexao.execute(
+                """
+                INSERT INTO historico_precos_produtos (
+                    produto_id,
+                    preco_anterior_centavos,
+                    preco_novo_centavos
+                )
+                VALUES (?, ?, ?)
+                """,
+                (
+                    produto.id,
+                    preco_anterior,
+                    produto.preco_venda_centavos,
+                ),
+            )
+
+        conexao.commit()
+    except Exception:
+        conexao.rollback()
+        raise
 
     finally:
         conexao.close()

@@ -1,7 +1,7 @@
 from database.conexao import CAMINHO_BANCO, conectar
 
 
-VERSAO_ESQUEMA = 6
+VERSAO_ESQUEMA = 7
 
 _COMANDO_CRIAR_PRODUTOS = """
 CREATE TABLE IF NOT EXISTS produtos (
@@ -223,6 +223,35 @@ ADD COLUMN status TEXT NOT NULL DEFAULT 'ATIVA'
     );
 """
 
+_COMANDO_CRIAR_HISTORICO_PRECOS = """
+CREATE TABLE IF NOT EXISTS historico_precos_produtos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    produto_id INTEGER NOT NULL,
+    preco_anterior_centavos INTEGER NOT NULL
+        CHECK (
+            typeof(preco_anterior_centavos) = 'integer'
+            AND preco_anterior_centavos > 0
+        ),
+    preco_novo_centavos INTEGER NOT NULL
+        CHECK (
+            typeof(preco_novo_centavos) = 'integer'
+            AND preco_novo_centavos > 0
+        ),
+    alterado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        CHECK (
+            typeof(alterado_em) = 'text'
+            AND length(trim(alterado_em)) > 0
+        ),
+    FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE RESTRICT,
+    CHECK (preco_anterior_centavos <> preco_novo_centavos)
+);
+"""
+
+_COMANDO_CRIAR_INDICE_HISTORICO_PRECOS = """
+CREATE INDEX IF NOT EXISTS ix_historico_precos_produto_data
+ON historico_precos_produtos (produto_id, alterado_em DESC, id DESC);
+"""
+
 
 def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
     """
@@ -273,6 +302,11 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
             conexao.execute(_COMANDO_ADICIONAR_AUTORIZADOR_CANCELAMENTO)
             conexao.execute(_COMANDO_ADICIONAR_STATUS_VENDA)
             versao_atual = 6
+
+        if versao_atual < 7:
+            conexao.execute(_COMANDO_CRIAR_HISTORICO_PRECOS)
+            conexao.execute(_COMANDO_CRIAR_INDICE_HISTORICO_PRECOS)
+            versao_atual = 7
 
         conexao.execute(f"PRAGMA user_version = {versao_atual}")
         conexao.commit()
