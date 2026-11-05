@@ -10,10 +10,7 @@ import pytest
 from database.conexao import conectar
 import database.schema as schema
 from database.schema import criar_tabelas
-from models.cancelamento_venda import (
-    CancelamentoVenda,
-    ContextoAutorizacaoCancelamento,
-)
+from models.cancelamento_venda import CancelamentoVenda
 from models.item_venda import ItemVenda
 from models.pagamento import Pagamento, PagamentosEmAndamento
 from models.produto_snapshot import ProdutoSnapshot
@@ -34,6 +31,10 @@ from services.historico_venda_service import (
 from services.persistencia_venda_service import (
     gerar_identificador_tentativa,
     persistir_venda_confirmada_idempotente,
+)
+from tests.helpers_identidade import (
+    criar_ambiente_autorizacao_teste,
+    emitir_cancelamento_teste,
 )
 
 
@@ -86,6 +87,36 @@ def venda_cancelavel(banco_teste):
         banco_teste,
     )
     return venda_id, identificador_tentativa
+
+
+@pytest.fixture
+def ambiente_autorizacao(banco_teste):
+    return criar_ambiente_autorizacao_teste(banco_teste)
+
+
+def cancelar_com_autorizacao(
+    venda_id,
+    motivo,
+    banco_teste,
+    ambiente_autorizacao,
+    *,
+    capacidade=None,
+):
+    sessao, gerenciador = ambiente_autorizacao
+    capacidade = capacidade or emitir_cancelamento_teste(
+        banco_teste,
+        venda_id,
+        sessao,
+        gerenciador,
+    )
+    return cancelar_venda(
+        venda_id,
+        motivo,
+        capacidade,
+        sessao,
+        banco_teste,
+        gerenciador_autorizacoes=gerenciador,
+    )
 
 
 def preparar_banco_versao_5(caminho_banco) -> int:
@@ -171,30 +202,29 @@ def test_cancelamento_valido_registra_motivo_data_e_responsavel(
     banco_teste,
     venda_cancelavel,
     monkeypatch,
+    ambiente_autorizacao,
 ) -> None:
     venda_id, _ = venda_cancelavel
     instante = datetime(2026, 11, 4, 18, 30, 45, tzinfo=UTC)
     monkeypatch.setattr(cancelamento_service, "_agora_utc", lambda: instante)
-    autorizacao = ContextoAutorizacaoCancelamento("  operador-123  ")
-
-    resultado = cancelar_venda(
+    resultado = cancelar_com_autorizacao(
         venda_id,
         "  lançamento incorreto  ",
-        autorizacao,
         banco_teste,
+        ambiente_autorizacao,
     )
 
     assert resultado == CancelamentoVenda(
         venda_id=venda_id,
         motivo="lançamento incorreto",
         cancelada_em=instante,
-        identidade_autorizador="operador-123",
+        identidade_autorizador="administrador",
     )
     resumo = buscar_venda_resumida_por_id(venda_id, banco_teste)
     assert resumo.status == "CANCELADA"
     assert resumo.motivo_cancelamento == "lançamento incorreto"
     assert resumo.cancelada_em == instante
-    assert resumo.autorizador_identidade == "operador-123"
+    assert resumo.autorizador_identidade == "administrador"
 
 
 @pytest.mark.parametrize("motivo", [None, "", "   ", 123, True])
@@ -202,41 +232,55 @@ def test_rejeita_motivo_ausente_ou_invalido(
     banco_teste,
     venda_cancelavel,
     motivo,
+    ambiente_autorizacao,
 ) -> None:
     venda_id, _ = venda_cancelavel
     erro = TypeError if not isinstance(motivo, str) else ValueError
 
     with pytest.raises(erro):
-        cancelar_venda(
+        cancelar_com_autorizacao(
             venda_id,
             motivo,
-            ContextoAutorizacaoCancelamento("operador"),
             banco_teste,
+            ambiente_autorizacao,
         )
 
     assert buscar_venda_resumida_por_id(venda_id, banco_teste).status == "ATIVA"
 
 
-def test_venda_inexistente_e_rejeitada(banco_teste) -> None:
+def test_venda_inexistente_e_rejeitada(
+    banco_teste,
+    ambiente_autorizacao,
+) -> None:
     with pytest.raises(VendaNaoEncontradaError):
-        cancelar_venda(
+        cancelar_com_autorizacao(
             999999,
             "motivo válido",
-            ContextoAutorizacaoCancelamento("operador"),
             banco_teste,
+            ambiente_autorizacao,
         )
 
 
 def test_segundo_cancelamento_e_rejeitado(
     banco_teste,
     venda_cancelavel,
+    ambiente_autorizacao,
 ) -> None:
     venda_id, _ = venda_cancelavel
-    autorizacao = ContextoAutorizacaoCancelamento("operador")
-    cancelar_venda(venda_id, "primeiro motivo", autorizacao, banco_teste)
+    cancelar_com_autorizacao(
+        venda_id,
+        "primeiro motivo",
+        banco_teste,
+        ambiente_autorizacao,
+    )
 
     with pytest.raises(VendaJaCanceladaError):
-        cancelar_venda(venda_id, "segundo motivo", autorizacao, banco_teste)
+        cancelar_com_autorizacao(
+            venda_id,
+            "segundo motivo",
+            banco_teste,
+            ambiente_autorizacao,
+        )
 
     resumo = buscar_venda_resumida_por_id(venda_id, banco_teste)
     assert resumo.motivo_cancelamento == "primeiro motivo"
@@ -245,22 +289,39 @@ def test_segundo_cancelamento_e_rejeitado(
 def test_exige_contexto_tipado_sem_aceitar_booleano(
     banco_teste,
     venda_cancelavel,
+    ambiente_autorizacao,
 ) -> None:
     venda_id, _ = venda_cancelavel
 
-    with pytest.raises(TypeError):
-        cancelar_venda(venda_id, "motivo", True, banco_teste)
-    with pytest.raises(ValueError):
-        ContextoAutorizacaoCancelamento("   ")
+    sessao, gerenciador = ambiente_autorizacao
+    with pytest.raises(PermissionError):
+        cancelar_venda(
+            venda_id,
+            "motivo",
+            True,
+            sessao,
+            banco_teste,
+            gerenciador_autorizacoes=gerenciador,
+        )
 
 
 def test_cancelamentos_concorrentes_produzem_um_unico_sucesso(
     banco_teste,
     venda_cancelavel,
+    ambiente_autorizacao,
 ) -> None:
     venda_id, _ = venda_cancelavel
     barreira = Barrier(2)
-    autorizacao = ContextoAutorizacaoCancelamento("operador-concorrente")
+    sessao, gerenciador = ambiente_autorizacao
+    capacidades = tuple(
+        emitir_cancelamento_teste(
+            banco_teste,
+            venda_id,
+            sessao,
+            gerenciador,
+        )
+        for _ in range(2)
+    )
 
     def tentar_cancelar(indice):
         barreira.wait()
@@ -268,8 +329,10 @@ def test_cancelamentos_concorrentes_produzem_um_unico_sucesso(
             resultado = cancelar_venda(
                 venda_id,
                 f"motivo {indice}",
-                autorizacao,
+                capacidades[indice - 1],
+                sessao,
                 banco_teste,
+                gerenciador_autorizacoes=gerenciador,
             )
             return "SUCESSO", resultado.motivo
         except VendaJaCanceladaError:
@@ -290,14 +353,15 @@ def test_cancelamentos_concorrentes_produzem_um_unico_sucesso(
 def test_cancelamento_preserva_venda_itens_pagamentos_e_uuid(
     banco_teste,
     venda_cancelavel,
+    ambiente_autorizacao,
 ) -> None:
     venda_id, identificador_tentativa = venda_cancelavel
     detalhe_antes = buscar_venda_detalhada_por_id(venda_id, banco_teste)
-    cancelar_venda(
+    cancelar_com_autorizacao(
         venda_id,
         "cancelamento preservador",
-        ContextoAutorizacaoCancelamento("operador"),
         banco_teste,
+        ambiente_autorizacao,
     )
     detalhe_depois = buscar_venda_detalhada_por_id(venda_id, banco_teste)
 
@@ -322,13 +386,14 @@ def test_cancelamento_preserva_venda_itens_pagamentos_e_uuid(
 def test_venda_cancelada_permanece_no_historico_por_id_e_data(
     banco_teste,
     venda_cancelavel,
+    ambiente_autorizacao,
 ) -> None:
     venda_id, _ = venda_cancelavel
-    cancelar_venda(
+    cancelar_com_autorizacao(
         venda_id,
         "permanece no histórico",
-        ContextoAutorizacaoCancelamento("operador"),
         banco_teste,
+        ambiente_autorizacao,
     )
     detalhe = buscar_venda_detalhada_por_id(venda_id, banco_teste)
     data_local = detalhe.registrada_em.astimezone(FUSO_SAO_PAULO).date()
@@ -343,6 +408,7 @@ def test_venda_cancelada_permanece_no_historico_por_id_e_data(
 def test_falha_durante_update_executa_rollback_integral(
     banco_teste,
     venda_cancelavel,
+    ambiente_autorizacao,
 ) -> None:
     venda_id, _ = venda_cancelavel
     detalhe_antes = buscar_venda_detalhada_por_id(venda_id, banco_teste)
@@ -362,28 +428,31 @@ def test_falha_durante_update_executa_rollback_integral(
         conexao.close()
 
     with pytest.raises(sqlite3.IntegrityError, match="falha no cancelamento"):
-        cancelar_venda(
+        cancelar_com_autorizacao(
             venda_id,
             "não deve persistir",
-            ContextoAutorizacaoCancelamento("operador"),
             banco_teste,
+            ambiente_autorizacao,
         )
 
     detalhe_depois = buscar_venda_detalhada_por_id(venda_id, banco_teste)
     assert detalhe_depois == detalhe_antes
 
 
-def test_reexecucao_da_migracao_preserva_cancelamento(banco_teste) -> None:
+def test_reexecucao_da_migracao_preserva_cancelamento(
+    banco_teste,
+    ambiente_autorizacao,
+) -> None:
     venda_id = persistir_venda_confirmada_idempotente(
         criar_confirmacao(),
         gerar_identificador_tentativa(),
         banco_teste,
     )
-    cancelar_venda(
+    cancelar_com_autorizacao(
         venda_id,
         "preservar",
-        ContextoAutorizacaoCancelamento("operador"),
         banco_teste,
+        ambiente_autorizacao,
     )
 
     criar_tabelas(banco_teste)
@@ -437,6 +506,6 @@ def test_falha_na_migracao_6_reverte_colunas_e_preserva_versao_5(
 def test_limitacao_de_autorizacao_esta_documentada() -> None:
     texto = Path("docs/DECISOES.md").read_text(encoding="utf-8")
 
-    assert "T43 registra a identidade" in texto
-    assert "mas não\n  valida credenciais" in texto
-    assert "T47" in texto
+    assert "T43 registra a identidade devolvida" in texto
+    assert "consumo da capacidade do T47" in texto
+    assert "INT-D2" in texto

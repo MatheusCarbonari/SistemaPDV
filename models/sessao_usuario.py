@@ -10,6 +10,7 @@ class SessaoUsuario:
     usuario_id: int
     identificacao_acesso: str
     perfil: PerfilUsuario
+    identificador_sessao: str
     _autenticada: bool = field(default=True, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -26,6 +27,11 @@ class SessaoUsuario:
             raise ValueError("A identificação da sessão é obrigatória.")
         if self.perfil not in ("ADMINISTRADOR", "CAIXA"):
             raise ValueError("O perfil da sessão é inválido.")
+        if (
+            not isinstance(self.identificador_sessao, str)
+            or len(self.identificador_sessao) < 32
+        ):
+            raise ValueError("O identificador da sessão é inválido.")
 
     @property
     def autenticada(self) -> bool:

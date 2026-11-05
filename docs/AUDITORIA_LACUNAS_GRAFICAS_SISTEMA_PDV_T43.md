@@ -24,6 +24,10 @@
 - **Atualização T46 em 05/11/2026:** suíte completa com **893 testes
   aprovados**; autenticação, perfis, limitação temporária, logout e revalidação
   de sessão foram verificados exclusivamente em bancos temporários.
+- **Atualização T47 em 05/11/2026:** suíte completa com **909 testes
+  aprovados**; capacidades fabricadas, vínculo, expiração, logout, desativação,
+  concorrência e falha comercial após consumo foram verificados somente em
+  bancos temporários.
 - Inspeção somente leitura do banco SQLite incluído no ZIP: **`PRAGMA user_version = 0`**, com tabela `produtos`; após o T45, o código espera **versão 8** para persistência, histórico, cancelamento, auditoria de preços e identidade inicial. O banco original não foi migrado.
 
 ## Lacunas prioritárias identificadas no código
@@ -114,12 +118,25 @@ A indisponibilidade temporária entre T45 e T46 foi eliminada sem criar bypass.
 INT-D2 ainda depende da autorização pontual real do T47; o formulário da INT-D1
 continua sem qualquer efeito comercial.
 
+### Resolvido pelo T47 — Autorização pontual não forjável
+
+Sessões autenticadas e autorizações pontuais agora dependem de registros
+processuais emissores e nonces criptográficos. Objetos construídos manualmente
+não são reconhecidos. A capacidade se vincula à sessão Caixa, operação e venda,
+expira em 60 segundos e é removida sob bloqueio antes de qualquer efeito no
+SQLite. O T43 consome exclusivamente esse contrato e conserva a identidade do
+administrador na auditoria.
+
+A INT-D2 ainda deve conectar o diálogo auxiliar ao formulário da INT-D1. A INT-E
+foi registrada para revisar login, provisionamento gráfico e troca segura de
+operador depois do T48.
+
 ## Itens já cobertos por tickets futuros (não antecipar)
 
 - T44: persistência e auditoria de preços resolvidas; consulta gráfica de 12
   meses permanece posterior.
-- T45–T46 resolvidos; T47–T48: autorização pontual e recuperação offline
-  permanecem futuros.
+- T45–T47 resolvidos; T48 e INT-E: recuperação offline e acesso gráfico
+  administrativo permanecem futuros.
 - T49–T51: logs, versão e diagnóstico.
 - T52–T54: catálogo em memória e contingência/degradação.
 - T55–T57: backup e restauração.

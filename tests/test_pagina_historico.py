@@ -8,10 +8,13 @@ from PySide6.QtWidgets import QAbstractItemView
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
-from tests.helpers_identidade import criar_janela_autenticada
+from tests.helpers_identidade import (
+    criar_ambiente_autorizacao_teste,
+    criar_janela_autenticada,
+    emitir_cancelamento_teste,
+)
 from interface.pagina_historico import PaginaHistorico
 import interface.pagina_historico as pagina_historico_module
-from models.cancelamento_venda import ContextoAutorizacaoCancelamento
 from models.item_venda import ItemVenda
 from models.pagamento import Pagamento, PagamentosEmAndamento
 from models.produto_snapshot import ProdutoSnapshot
@@ -228,11 +231,20 @@ def test_venda_cancelada_exibe_metadados(
     banco_historico,
 ) -> None:
     venda_id = persistir_venda_rica(banco_historico)
+    sessao, gerenciador = criar_ambiente_autorizacao_teste(banco_historico)
+    capacidade = emitir_cancelamento_teste(
+        banco_historico,
+        venda_id,
+        sessao,
+        gerenciador,
+    )
     cancelar_venda(
         venda_id,
         "Erro operacional",
-        ContextoAutorizacaoCancelamento("administrador-1"),
+        capacidade,
+        sessao,
         banco_historico,
+        gerenciador_autorizacoes=gerenciador,
     )
     pagina.campo_id.setText(str(venda_id))
 
@@ -244,7 +256,7 @@ def test_venda_cancelada_exibe_metadados(
     assert pagina.tabela_vendas.item(0, 3).text() == "CANCELADA"
     assert pagina.rotulo_motivo_cancelamento.text() == "Erro operacional"
     assert pagina.rotulo_data_cancelamento.text() != "—"
-    assert pagina.rotulo_autorizador_cancelamento.text() == "administrador-1"
+    assert pagina.rotulo_autorizador_cancelamento.text() == "administrador"
 
 
 @pytest.mark.parametrize("texto", ["", "abc", "0", "-1", "1.5"])

@@ -353,11 +353,30 @@ T47/INT-D2.
 **Conceito a estudar:** Autorização.
 **Dependência atual:** reutilizar a autenticação do T46 sem elevar nem trocar a
 sessão operacional; somente então conectar a INT-D2.
+**Contrato implementado:** sessões autenticadas recebem nonce criptográfico e
+só são aceitas enquanto o mesmo objeto estiver no registro processual emissor.
+Autorização administrativa emite uma capacidade opaca, válida por 60 segundos,
+vinculada à sessão solicitante, operação e venda. O consumo remove a capacidade
+sob bloqueio antes do efeito comercial; erro de vínculo, expiração, logout,
+concorrência ou falha posterior não permitem reutilização. Credenciais e
+capacidades não são persistidas, e a sessão Caixa nunca é elevada.
+**Integração T43:** `cancelar_venda()` não aceita mais contexto construível;
+exige capacidade emitida e consome-a no gerenciador confiável, preservando a
+identidade administrativa na auditoria. A interface permanece desconectada até
+INT-D2.
 
 ### T48 — Recuperação offline
 **Origem:** backlog original T37.
 **Entrega verificável:** Códigos únicos hash, consumo e rotação testados.
 **Conceito a estudar:** Segredos, recuperação.
+
+### INT-E — Acesso gráfico de operadores e administração mínima
+**Posição:** após T48 e antes do Marco 3.
+**Entrega verificável:** revisar a tela e o fluxo inicial de login dos operadores
+Caixa; oferecer acesso gráfico administrativo para provisionar contas Caixa;
+avaliar gerenciamento mínimo de contas e troca segura de operador. Deve
+reutilizar autenticação, sessões e permissões dos T46–T47, sem duplicar login,
+criar bypass ou substituir a autorização pontual de operações críticas.
 
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 

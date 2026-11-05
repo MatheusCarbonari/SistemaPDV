@@ -61,6 +61,13 @@
   durável explorável. Conta desativada perde permissão na próxima operação
   protegida. T47 continua responsável por autorização pontual, sem elevação da
   sessão.
+- **DEC-032** — Sessões e autorizações pontuais são capacidades opacas mantidas
+  somente em memória. A sessão usa nonce criptográfico e identidade de objeto
+  registrada; a autorização expira em 60 segundos e se vincula ao solicitante,
+  operação e recurso. O consumo é único sob bloqueio e precede o efeito
+  comercial, portanto falha posterior não restaura a capacidade. Reinício,
+  logout, expiração e conta desativada falham fechados. O T43 não mantém caminho
+  alternativo baseado em booleano, perfil textual ou contexto construível.
 
 ## Decisões que exigem cuidado
 - O código de produto existente é protegido contra edição pela interface; a
@@ -71,8 +78,7 @@
 - O histórico diário converte o dia civil de São Paulo para intervalo UTC
   semiaberto e usa índice composto em `vendas(registrada_em, id)`; isso atende
   filtro e ordenação sem aplicar funções sobre a coluna persistida.
-- O T43 registra a identidade recebida em um contexto de autorização, mas não
-  valida credenciais. Somente a autorização pontual do T47 poderá produzir esse
-  contexto para o fluxo operacional; a INT-D1 pode coletar o motivo, mas não
-  produz o contexto nem executa efeitos comerciais.
+- O T43 registra a identidade devolvida pelo consumo da capacidade do T47. A
+  INT-D1 pode coletar o motivo, mas não emite capacidade nem executa efeitos
+  comerciais; essa conexão permanece exclusiva da INT-D2.
 - A fila de contingência de persistência e eventual fila de documentos fiscais são responsabilidades diferentes e futuras. NFC-e tem regras específicas da SEFAZ, não é mero reenvio livre de totais.

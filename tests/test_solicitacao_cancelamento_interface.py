@@ -6,9 +6,12 @@ from PySide6.QtTest import QSignalSpy
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
-from tests.helpers_identidade import criar_janela_autenticada
+from tests.helpers_identidade import (
+    criar_ambiente_autorizacao_teste,
+    criar_janela_autenticada,
+    emitir_cancelamento_teste,
+)
 from interface.pagina_historico import PaginaHistorico
-from models.cancelamento_venda import ContextoAutorizacaoCancelamento
 from models.item_venda import ItemVenda
 from models.pagamento import Pagamento, PagamentosEmAndamento
 from models.produto_snapshot import ProdutoSnapshot
@@ -134,11 +137,22 @@ def test_venda_cancelada_permanece_consultavel_sem_nova_solicitacao(
     banco_cancelamento_visual,
 ) -> None:
     venda_id = persistir_venda(banco_cancelamento_visual)
+    sessao, gerenciador = criar_ambiente_autorizacao_teste(
+        banco_cancelamento_visual
+    )
+    capacidade = emitir_cancelamento_teste(
+        banco_cancelamento_visual,
+        venda_id,
+        sessao,
+        gerenciador,
+    )
     cancelar_venda(
         venda_id,
         "Erro operacional",
-        ContextoAutorizacaoCancelamento("admin-real-do-teste"),
+        capacidade,
+        sessao,
         banco_cancelamento_visual,
+        gerenciador_autorizacoes=gerenciador,
     )
     selecionar_venda(pagina, venda_id)
 

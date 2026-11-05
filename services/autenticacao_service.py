@@ -1,6 +1,8 @@
 from collections import defaultdict, deque
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+import secrets
+from threading import Lock
 import time
 
 from database.conexao import CAMINHO_BANCO
@@ -94,13 +96,71 @@ class LimitadorTentativasLogin:
 LIMITADOR_LOGIN_PADRAO = LimitadorTentativasLogin()
 
 
+class GerenciadorSessoes:
+    """Registro processual que distingue sessões emitidas de objetos fabricados."""
+
+    def __init__(self) -> None:
+        self._sessoes: dict[str, SessaoUsuario] = {}
+        self._bloqueio = Lock()
+
+    def emitir(self, usuario) -> SessaoUsuario:
+        identificador = secrets.token_urlsafe(32)
+        sessao = SessaoUsuario(
+            usuario_id=usuario.id,
+            identificacao_acesso=usuario.identificacao_acesso,
+            perfil=usuario.perfil,
+            identificador_sessao=identificador,
+        )
+        with self._bloqueio:
+            self._sessoes[identificador] = sessao
+        return sessao
+
+    def validar(self, sessao: SessaoUsuario) -> None:
+        if not isinstance(sessao, SessaoUsuario) or not sessao.autenticada:
+            raise SessaoInvalidaError("A sessão não está autenticada.")
+        with self._bloqueio:
+            registrada = self._sessoes.get(sessao.identificador_sessao)
+            if registrada is not sessao:
+                raise SessaoInvalidaError(
+                    "A sessão não foi emitida pelo gerenciador confiável."
+                )
+
+    def invalidar(self, sessao: SessaoUsuario) -> None:
+        if isinstance(sessao, SessaoUsuario):
+            with self._bloqueio:
+                registrada = self._sessoes.get(sessao.identificador_sessao)
+                if registrada is sessao:
+                    self._sessoes.pop(sessao.identificador_sessao, None)
+            sessao.encerrar()
+
+
+GERENCIADOR_SESSOES = GerenciadorSessoes()
+
+
 def autenticar_usuario(
     identificacao_acesso,
     senha,
     caminho_banco=CAMINHO_BANCO,
     *,
     limitador: LimitadorTentativasLogin | None = None,
+    gerenciador_sessoes: GerenciadorSessoes = GERENCIADOR_SESSOES,
 ) -> SessaoUsuario:
+    usuario = validar_credenciais_usuario(
+        identificacao_acesso,
+        senha,
+        caminho_banco,
+        limitador=limitador,
+    )
+    return gerenciador_sessoes.emitir(usuario)
+
+
+def validar_credenciais_usuario(
+    identificacao_acesso,
+    senha,
+    caminho_banco=CAMINHO_BANCO,
+    *,
+    limitador: LimitadorTentativasLogin | None = None,
+):
     limitador = limitador or LIMITADOR_LOGIN_PADRAO
     identificacao = normalizar_identificacao(identificacao_acesso)
     chave = identificacao or "<invalida>"
@@ -120,20 +180,20 @@ def autenticar_usuario(
         raise CredenciaisInvalidasError(MENSAGEM_CREDENCIAIS_INVALIDAS)
 
     limitador.registrar_sucesso(chave)
-    return SessaoUsuario(
-        usuario_id=linha["id"],
-        identificacao_acesso=linha["identificacao_acesso"],
-        perfil=linha["perfil"],
-    )
+    usuario = buscar_usuario_por_id(linha["id"], caminho_banco)
+    if usuario is None:
+        raise CredenciaisInvalidasError(MENSAGEM_CREDENCIAIS_INVALIDAS)
+    return usuario
 
 
 def autorizar_sessao(
     sessao: SessaoUsuario,
     perfis_permitidos: Iterable[str],
     caminho_banco=CAMINHO_BANCO,
+    *,
+    gerenciador_sessoes: GerenciadorSessoes = GERENCIADOR_SESSOES,
 ):
-    if not isinstance(sessao, SessaoUsuario) or not sessao.autenticada:
-        raise SessaoInvalidaError("A sessão não está autenticada.")
+    gerenciador_sessoes.validar(sessao)
 
     usuario = buscar_usuario_por_id(sessao.usuario_id, caminho_banco)
     if (
@@ -142,7 +202,7 @@ def autorizar_sessao(
         or usuario.identificacao_acesso != sessao.identificacao_acesso
         or usuario.perfil != sessao.perfil
     ):
-        sessao.encerrar()
+        gerenciador_sessoes.invalidar(sessao)
         raise SessaoInvalidaError(
             "A conta não está mais habilitada para esta sessão."
         )
@@ -151,5 +211,9 @@ def autorizar_sessao(
     return usuario
 
 
-def encerrar_sessao(sessao: SessaoUsuario) -> None:
-    sessao.encerrar()
+def encerrar_sessao(
+    sessao: SessaoUsuario,
+    *,
+    gerenciador_sessoes: GerenciadorSessoes = GERENCIADOR_SESSOES,
+) -> None:
+    gerenciador_sessoes.invalidar(sessao)

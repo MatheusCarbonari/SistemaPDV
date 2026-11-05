@@ -3,21 +3,6 @@ from datetime import UTC, datetime
 
 
 @dataclass(frozen=True)
-class ContextoAutorizacaoCancelamento:
-    """Identidade fornecida por um mecanismo externo de autorização."""
-
-    identidade_autorizador: str
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.identidade_autorizador, str):
-            raise ValueError("A identidade do autorizador deve ser textual.")
-        identidade = self.identidade_autorizador.strip()
-        if not identidade:
-            raise ValueError("A identidade do autorizador não pode estar vazia.")
-        object.__setattr__(self, "identidade_autorizador", identidade)
-
-
-@dataclass(frozen=True)
 class CancelamentoVenda:
     venda_id: int
     motivo: str

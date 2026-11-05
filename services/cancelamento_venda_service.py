@@ -3,13 +3,17 @@ from pathlib import Path
 
 from database.conexao import CAMINHO_BANCO, conectar
 from database.schema import VERSAO_ESQUEMA
-from models.cancelamento_venda import (
-    CancelamentoVenda,
-    ContextoAutorizacaoCancelamento,
-)
+from models.autorizacao_pontual import CapacidadeAutorizacao
+from models.cancelamento_venda import CancelamentoVenda
+from models.sessao_usuario import SessaoUsuario
 from repositories.venda_repository import (
     buscar_status_venda,
     cancelar_venda_ativa,
+)
+from services.autorizacao_pontual_service import (
+    GERENCIADOR_AUTORIZACOES,
+    OPERACAO_CANCELAR_VENDA,
+    GerenciadorAutorizacoesPontuais,
 )
 
 
@@ -27,16 +31,28 @@ class VendaJaCanceladaError(RuntimeError):
 def cancelar_venda(
     venda_id: int,
     motivo: str,
-    autorizacao: ContextoAutorizacaoCancelamento,
+    capacidade: CapacidadeAutorizacao,
+    sessao_solicitante: SessaoUsuario,
     caminho_banco: str | Path = CAMINHO_BANCO,
+    *,
+    gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
+        GERENCIADOR_AUTORIZACOES
+    ),
 ) -> CancelamentoVenda:
     """Cancela uma venda ativa sem alterar seus dados comerciais."""
     _validar_venda_id(venda_id)
     motivo_normalizado = _normalizar_motivo(motivo)
-    if not isinstance(autorizacao, ContextoAutorizacaoCancelamento):
+    if type(gerenciador_autorizacoes) is not GerenciadorAutorizacoesPontuais:
         raise TypeError(
-            "O cancelamento exige um ContextoAutorizacaoCancelamento."
+            "O cancelamento exige um gerenciador de autorizações confiável."
         )
+    identidade_autorizador = gerenciador_autorizacoes.consumir(
+        capacidade,
+        sessao_solicitante,
+        OPERACAO_CANCELAR_VENDA,
+        venda_id,
+        caminho_banco,
+    )
 
     cancelada_em = _agora_utc()
     cancelada_em_sqlite = cancelada_em.strftime(FORMATO_DATA_SQLITE)
@@ -55,7 +71,7 @@ def cancelar_venda(
             venda_id,
             motivo_normalizado,
             cancelada_em_sqlite,
-            autorizacao.identidade_autorizador,
+            identidade_autorizador,
         )
         if not cancelou:
             status = buscar_status_venda(conexao, venda_id)
@@ -72,7 +88,7 @@ def cancelar_venda(
             venda_id=venda_id,
             motivo=motivo_normalizado,
             cancelada_em=cancelada_em,
-            identidade_autorizador=autorizacao.identidade_autorizador,
+            identidade_autorizador=identidade_autorizador,
         )
     except Exception:
         conexao.rollback()

@@ -22,8 +22,8 @@ ou recuperação controlada.
 O Histórico pode preparar visualmente uma solicitação de cancelamento de venda
 ativa, exibindo o resumo e validando o motivo. Essa preparação não é estado de
 domínio nem registro persistente. A futura execução deverá receber da camada de
-segurança um `ContextoAutorizacaoCancelamento` real antes de chamar o serviço
-transacional do T43; a interface não pode sintetizar essa autorização.
+segurança uma capacidade opaca do T47 antes de chamar o serviço transacional do
+T43; a interface não pode sintetizar essa autorização.
 
 ## Dados e integridade
 - SQLite único local, foreign_keys habilitado, transação atômica ao gravar venda+itens+pagamentos.
@@ -66,8 +66,17 @@ mantém a operação bloqueada.
   opera vendas e consulta Histórico; Administrador também administra Produtos e
   provisiona Caixa pelo serviço protegido. A tela avançada de usuários não foi
   antecipada.
-- T47 produzirá o contexto de autorização pontual exigido pela INT-D2 sem
+- O T47 produz a capacidade de autorização pontual exigida pela INT-D2 sem
   elevar a sessão corrente; T48 continua responsável pela recuperação offline.
+- O gerenciador de sessões registra nonces emitidos somente após login e exige
+  correspondência com o mesmo objeto em memória. Construir `SessaoUsuario`
+  manualmente não produz uma sessão reconhecida.
+- O gerenciador de autorizações conserva privadamente solicitante, operação,
+  recurso, administrador e expiração. O chamador recebe somente um nonce; o
+  consumo atômico em memória ocorre antes da transação comercial e nunca é
+  revertido por falha posterior. Nenhuma capacidade ou senha é persistida.
+- A INT-E futura revisará login e provisionamento gráfico de Caixa após T48,
+  reutilizando estes contratos sem criar um segundo mecanismo de identidade.
 
 ## Distribuição
 Binário Windows empacotado, arquivos de dados fora da instalação; instalador atualiza só programa e executa migrador quando necessário; backup válido e migração segura, sem retrocesso automático de banco em falha. A inicialização operacional recusa versões futuras e, para banco existente desatualizado, só migra depois de criar e verificar uma cópia única em `backups/pre_migracao` ao lado do arquivo SQLite. Compatibilidade/licença PySide6 deve ser avaliada em entrega comercial.

@@ -5,6 +5,7 @@ from database.conexao import conectar
 from database.schema import criar_tabelas
 from interface.dialogo_login import DialogoLogin
 from interface.janela_principal import JanelaPrincipal
+from models.sessao_usuario import SessaoUsuario
 from repositories.usuario_repository import IdentificacaoUsuarioEmUsoError
 from services.administrador_inicial_service import criar_administrador_inicial
 from services.autenticacao_service import (
@@ -260,6 +261,23 @@ def test_caixa_nao_acessa_produtos_e_admin_acessa(
 def test_janela_rejeita_ausencia_de_sessao(banco_autenticacao) -> None:
     with pytest.raises(SessaoInvalidaError):
         JanelaPrincipal(banco_autenticacao, None)
+
+
+def test_sessao_fabricada_e_rejeitada(banco_autenticacao) -> None:
+    legitima = autenticar_admin(banco_autenticacao)
+    fabricada = SessaoUsuario(
+        usuario_id=legitima.usuario_id,
+        identificacao_acesso=legitima.identificacao_acesso,
+        perfil=legitima.perfil,
+        identificador_sessao=legitima.identificador_sessao,
+    )
+
+    with pytest.raises(SessaoInvalidaError, match="gerenciador confiável"):
+        autorizar_sessao(
+            fabricada,
+            ("ADMINISTRADOR",),
+            banco_autenticacao,
+        )
 
 
 def test_logout_grafico_fecha_janela_e_preserva_banco(
