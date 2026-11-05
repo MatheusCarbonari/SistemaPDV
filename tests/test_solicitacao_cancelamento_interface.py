@@ -106,7 +106,14 @@ def selecionar_venda(pagina, venda_id) -> None:
 
 @pytest.fixture
 def pagina(qtbot, banco_cancelamento_visual):
-    widget = PaginaHistorico(banco_cancelamento_visual)
+    sessao, gerenciador = criar_ambiente_autorizacao_teste(
+        banco_cancelamento_visual
+    )
+    widget = PaginaHistorico(
+        banco_cancelamento_visual,
+        sessao_solicitante=sessao,
+        gerenciador_autorizacoes=gerenciador,
+    )
     qtbot.addWidget(widget)
     widget.show()
     qtbot.waitUntil(widget.isVisible)
@@ -137,9 +144,8 @@ def test_venda_cancelada_permanece_consultavel_sem_nova_solicitacao(
     banco_cancelamento_visual,
 ) -> None:
     venda_id = persistir_venda(banco_cancelamento_visual)
-    sessao, gerenciador = criar_ambiente_autorizacao_teste(
-        banco_cancelamento_visual
-    )
+    sessao = pagina.sessao_solicitante
+    gerenciador = pagina.gerenciador_autorizacoes
     capacidade = emitir_cancelamento_teste(
         banco_cancelamento_visual,
         venda_id,
@@ -204,7 +210,7 @@ def test_desistencia_fecha_dialogo_sem_efeito(
     assert estado_persistido(banco_cancelamento_visual, venda_id) == antes
 
 
-def test_preparacao_visual_nao_cancela_nem_cria_identidade(
+def test_preparacao_abre_autorizacao_sem_cancelar_nem_criar_identidade(
     pagina,
     banco_cancelamento_visual,
     monkeypatch,
@@ -230,7 +236,8 @@ def test_preparacao_visual_nao_cancela_nem_cria_identidade(
     assert chamadas == []
     assert estado_persistido(banco_cancelamento_visual, venda_id) == antes
     assert not hasattr(dialogo, "identidade_autorizador")
-    assert "não foi cancelada" in dialogo.rotulo_mensagem.text()
+    assert pagina.dialogo_autorizacao is not None
+    assert "Aguardando autorização" in dialogo.rotulo_mensagem.text()
     assert not dialogo.botao_prosseguir.isEnabled()
 
 

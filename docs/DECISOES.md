@@ -41,8 +41,9 @@
   categorias continuam textuais e snapshots já lançados não são alterados.
 - **DEC-028** — O cancelamento gráfico é dividido em INT-D1 e INT-D2. A INT-D1
   apenas apresenta a venda e valida o motivo, sem persistir, criar identidade ou
-  chamar o serviço de cancelamento. A INT-D2 somente poderá executar o T43 após
-  autenticação e autorização reais dos T45–T47.
+  chamar o serviço de cancelamento. A INT-D2 conecta esse pedido à autorização
+  pontual dos T45–T47 e ao T43: a capacidade é vinculada à sessão, operação e
+  venda, consumida uma vez, e a interface só anuncia sucesso após a transação.
 - **DEC-029** — Alterações efetivas do preço de venda são auditadas na mesma
   transação da atualização do produto, guardando valor anterior, novo e instante
   UTC. Não há expurgo automático nem responsável fictício; identidade só será
@@ -79,6 +80,6 @@
   semiaberto e usa índice composto em `vendas(registrada_em, id)`; isso atende
   filtro e ordenação sem aplicar funções sobre a coluna persistida.
 - O T43 registra a identidade devolvida pelo consumo da capacidade do T47. A
-  INT-D1 pode coletar o motivo, mas não emite capacidade nem executa efeitos
-  comerciais; essa conexão permanece exclusiva da INT-D2.
+  INT-D1 coleta o motivo sem fabricar autorização; a INT-D2 abre o diálogo do
+  T47 e entrega exclusivamente a capacidade emitida ao serviço transacional.
 - A fila de contingência de persistência e eventual fila de documentos fiscais são responsabilidades diferentes e futuras. NFC-e tem regras específicas da SEFAZ, não é mero reenvio livre de totais.

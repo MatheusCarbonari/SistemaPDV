@@ -219,6 +219,7 @@ class JanelaPrincipal(QMainWindow):
             self.caminho_banco,
             self.paginas,
             operacao_bloqueada=self._fechamento_bloqueia_operacao,
+            sessao_solicitante=self.sessao,
         )
         self.pagina_produtos = PaginaProdutos(
             self.caminho_banco,

@@ -299,6 +299,13 @@ status intermediário e não fabrica identidade de autorizador.
 conectar o formulário da INT-D1 ao contexto de autorização e ao serviço
 transacional do T43, sem duplicar o formulário nem elevar permanentemente a
 sessão. A posição deste registro não remove suas dependências de segurança.
+**Contrato implementado:** o Histórico recebe a sessão autenticada da janela,
+exige confirmação expressa e abre a autorização administrativa do T47 vinculada
+à operação e ao ID exato da venda. Somente a capacidade aceita é entregue ao
+T43; sucesso comprovado atualiza lista e detalhe, enquanto desistência,
+credencial inválida, capacidade expirada/inválida, repetição e falha SQLite
+preservam a venda. Cada nova tentativa exige nova autorização, a sessão Caixa
+não é elevada e fechamento incerto mantém o fluxo bloqueado.
 
 ### T44 — Histórico de preços
 **Origem:** backlog original T33.

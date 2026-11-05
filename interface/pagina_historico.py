@@ -1,10 +1,12 @@
 from collections.abc import Callable
 from datetime import datetime
+import sqlite3
 
 from PySide6.QtCore import QDate, Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDateEdit,
+    QDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -17,13 +19,25 @@ from PySide6.QtWidgets import (
 )
 
 from database.conexao import CAMINHO_BANCO
+from interface.dialogo_autorizacao_administrativa import (
+    DialogoAutorizacaoAdministrativa,
+)
 from interface.formatacao import formatar_centavos
 from interface.dialogo_solicitacao_cancelamento import (
     DialogoSolicitacaoCancelamento,
 )
 from models.item_venda import DESCRICAO_DIVERSOS
+from models.sessao_usuario import SessaoUsuario
 from models.venda_detalhada import VendaDetalhada
 from models.venda_resumo import VendaResumo
+import services.cancelamento_venda_service as cancelamento_venda_service
+from services.autorizacao_pontual_service import (
+    GERENCIADOR_AUTORIZACOES,
+    OPERACAO_CANCELAR_VENDA,
+    AutorizacaoPontualExpiradaError,
+    AutorizacaoPontualInvalidaError,
+    GerenciadorAutorizacoesPontuais,
+)
 from services.historico_venda_service import (
     FUSO_SAO_PAULO,
     buscar_venda_detalhada_por_id,
@@ -41,12 +55,20 @@ class PaginaHistorico(QWidget):
         parent=None,
         *,
         operacao_bloqueada: Callable[[], bool] | None = None,
+        sessao_solicitante: SessaoUsuario | None = None,
+        gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
+            GERENCIADOR_AUTORIZACOES
+        ),
     ) -> None:
         super().__init__(parent)
         self.caminho_banco = caminho_banco
         self._operacao_bloqueada = operacao_bloqueada or (lambda: False)
+        self.sessao_solicitante = sessao_solicitante
+        self.gerenciador_autorizacoes = gerenciador_autorizacoes
         self.detalhe_selecionado: VendaDetalhada | None = None
         self.dialogo_cancelamento: DialogoSolicitacaoCancelamento | None = None
+        self.dialogo_autorizacao: DialogoAutorizacaoAdministrativa | None = None
+        self._cancelamento_em_processamento = False
         self.setObjectName("pagina_historico")
 
         layout = QVBoxLayout(self)
@@ -330,7 +352,10 @@ class PaginaHistorico(QWidget):
             resumo.autorizador_identidade or "—"
         )
         self.botao_solicitar_cancelamento.setEnabled(
-            resumo.status == "ATIVA" and not self._operacao_bloqueada()
+            resumo.status == "ATIVA"
+            and self.sessao_solicitante is not None
+            and not self._operacao_bloqueada()
+            and not self._cancelamento_em_processamento
         )
 
     def abrir_solicitacao_cancelamento(self) -> None:
@@ -354,18 +379,194 @@ class PaginaHistorico(QWidget):
         dialogo = DialogoSolicitacaoCancelamento(detalhe, self)
         self.dialogo_cancelamento = dialogo
         dialogo.autorizacao_requerida.connect(
-            self._registrar_preparacao_visual
+            lambda venda_id, motivo: self._iniciar_autorizacao(
+                dialogo,
+                venda_id,
+                motivo,
+            )
         )
         dialogo.finished.connect(
             lambda: self._finalizar_dialogo_cancelamento(dialogo)
         )
         dialogo.open()
 
-    def _registrar_preparacao_visual(self, venda_id: int, motivo: str) -> None:
-        self.rotulo_mensagem.setText(
-            f"Solicitação da venda #{venda_id:06d} preparada visualmente; "
-            "nenhum cancelamento foi executado."
+    def _iniciar_autorizacao(
+        self,
+        dialogo_solicitacao: DialogoSolicitacaoCancelamento,
+        venda_id: int,
+        motivo: str,
+    ) -> None:
+        if self._cancelamento_em_processamento:
+            return
+        if self._operacao_bloqueada():
+            dialogo_solicitacao.permitir_nova_tentativa(
+                "O cancelamento foi bloqueado por um fechamento pendente."
+            )
+            return
+        if self.sessao_solicitante is None:
+            dialogo_solicitacao.permitir_nova_tentativa(
+                "A sessão solicitante não está autenticada."
+            )
+            return
+
+        self._cancelamento_em_processamento = True
+        dialogo = DialogoAutorizacaoAdministrativa(
+            self.sessao_solicitante,
+            OPERACAO_CANCELAR_VENDA,
+            venda_id,
+            f"Autorizar cancelamento da venda #{venda_id:06d}",
+            self.caminho_banco,
+            dialogo_solicitacao,
+            gerenciador=self.gerenciador_autorizacoes,
         )
+        self.dialogo_autorizacao = dialogo
+        dialogo.finished.connect(
+            lambda resultado: self._finalizar_autorizacao(
+                dialogo_solicitacao,
+                dialogo,
+                venda_id,
+                motivo,
+                resultado,
+            )
+        )
+        dialogo.open()
+
+    def _finalizar_autorizacao(
+        self,
+        dialogo_solicitacao: DialogoSolicitacaoCancelamento,
+        dialogo_autorizacao: DialogoAutorizacaoAdministrativa,
+        venda_id: int,
+        motivo: str,
+        resultado: int,
+    ) -> None:
+        if self.dialogo_autorizacao is dialogo_autorizacao:
+            self.dialogo_autorizacao = None
+        dialogo_autorizacao.deleteLater()
+
+        if resultado != QDialog.DialogCode.Accepted:
+            self._cancelamento_em_processamento = False
+            dialogo_solicitacao.permitir_nova_tentativa(
+                "Autorização cancelada. A venda permanece ativa."
+            )
+            return
+        if dialogo_autorizacao.capacidade is None:
+            self._cancelamento_em_processamento = False
+            dialogo_solicitacao.permitir_nova_tentativa(
+                "A autorização não produziu uma capacidade válida."
+            )
+            return
+        if self._operacao_bloqueada():
+            self._invalidar_capacidade_nao_utilizada(
+                dialogo_autorizacao.capacidade,
+                venda_id,
+            )
+            self._cancelamento_em_processamento = False
+            dialogo_solicitacao.permitir_nova_tentativa(
+                "O cancelamento foi bloqueado por um fechamento pendente. "
+                "Solicite uma nova autorização após resolvê-lo."
+            )
+            return
+
+        try:
+            cancelamento_venda_service.cancelar_venda(
+                venda_id,
+                motivo,
+                dialogo_autorizacao.capacidade,
+                self.sessao_solicitante,
+                self.caminho_banco,
+                gerenciador_autorizacoes=self.gerenciador_autorizacoes,
+            )
+        except AutorizacaoPontualExpiradaError:
+            self._permitir_nova_autorizacao(
+                dialogo_solicitacao,
+                "A autorização expirou. Solicite uma nova autorização.",
+            )
+            return
+        except AutorizacaoPontualInvalidaError:
+            self._permitir_nova_autorizacao(
+                dialogo_solicitacao,
+                "A autorização não é mais válida. Solicite uma nova autorização.",
+            )
+            return
+        except cancelamento_venda_service.VendaNaoEncontradaError:
+            self._cancelamento_em_processamento = False
+            dialogo_solicitacao.reject()
+            self.rotulo_mensagem.setText(
+                "A venda não foi encontrada e não pôde ser cancelada."
+            )
+            return
+        except cancelamento_venda_service.VendaJaCanceladaError:
+            self._cancelamento_em_processamento = False
+            dialogo_solicitacao.reject()
+            self._atualizar_venda_apos_cancelamento(venda_id)
+            self.rotulo_mensagem.setText("A venda já estava cancelada.")
+            return
+        except sqlite3.Error:
+            self._permitir_nova_autorizacao(
+                dialogo_solicitacao,
+                "Falha no banco de dados. A venda não foi confirmada como "
+                "cancelada; solicite nova autorização para tentar novamente.",
+            )
+            return
+        except Exception:
+            self._permitir_nova_autorizacao(
+                dialogo_solicitacao,
+                "Não foi possível confirmar o cancelamento. A venda foi "
+                "preservada; solicite nova autorização para tentar novamente.",
+            )
+            return
+
+        self._cancelamento_em_processamento = False
+        dialogo_solicitacao.accept()
+        self._atualizar_venda_apos_cancelamento(venda_id)
+        self.rotulo_mensagem.setText(
+            f"Venda #{venda_id:06d} cancelada com sucesso."
+        )
+
+    def _permitir_nova_autorizacao(
+        self,
+        dialogo: DialogoSolicitacaoCancelamento,
+        mensagem: str,
+    ) -> None:
+        self._cancelamento_em_processamento = False
+        dialogo.permitir_nova_tentativa(mensagem)
+
+    def _invalidar_capacidade_nao_utilizada(
+        self,
+        capacidade,
+        venda_id: int,
+    ) -> None:
+        try:
+            self.gerenciador_autorizacoes.consumir(
+                capacidade,
+                self.sessao_solicitante,
+                OPERACAO_CANCELAR_VENDA,
+                venda_id,
+                self.caminho_banco,
+            )
+        except Exception:
+            # O gerenciador remove a capacidade antes das demais validações.
+            pass
+
+    def _atualizar_venda_apos_cancelamento(self, venda_id: int) -> None:
+        resumo = buscar_venda_resumida_por_id(venda_id, self.caminho_banco)
+        if resumo is None:
+            self._limpar_detalhe()
+            return
+
+        for linha in range(self.tabela_vendas.rowCount()):
+            item_id = self.tabela_vendas.item(linha, 0)
+            if item_id.data(Qt.ItemDataRole.UserRole) == venda_id:
+                self.tabela_vendas.setItem(
+                    linha,
+                    3,
+                    QTableWidgetItem(resumo.status),
+                )
+                break
+
+        detalhe = buscar_venda_detalhada_por_id(venda_id, self.caminho_banco)
+        if detalhe is not None:
+            self._preencher_detalhe(detalhe)
 
     def _finalizar_dialogo_cancelamento(
         self,
@@ -373,6 +574,8 @@ class PaginaHistorico(QWidget):
     ) -> None:
         if self.dialogo_cancelamento is dialogo:
             self.dialogo_cancelamento = None
+        if self.dialogo_autorizacao is not None:
+            self.dialogo_autorizacao.reject()
         dialogo.deleteLater()
         self.restaurar_foco()
 

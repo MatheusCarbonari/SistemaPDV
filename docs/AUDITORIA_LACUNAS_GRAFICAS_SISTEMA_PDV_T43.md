@@ -28,6 +28,11 @@
   aprovados**; capacidades fabricadas, vínculo, expiração, logout, desativação,
   concorrência e falha comercial após consumo foram verificados somente em
   bancos temporários.
+- **Atualização INT-D2 em 05/11/2026:** suíte completa com **926 testes
+  aprovados**; o Histórico passou a executar o T43 exclusivamente com a
+  capacidade pontual do T47, preservando a sessão Caixa e atualizando lista e
+  detalhe somente após sucesso comprovado. Os testes de integração utilizaram
+  exclusivamente bancos temporários.
 - Inspeção somente leitura do banco SQLite incluído no ZIP: **`PRAGMA user_version = 0`**, com tabela `produtos`; após o T45, o código espera **versão 8** para persistência, histórico, cancelamento, auditoria de preços e identidade inicial. O banco original não foi migrado.
 
 ## Lacunas prioritárias identificadas no código
@@ -64,16 +69,18 @@ a venda aberta e é bloqueada durante commit incerto.
 
 **Cobertura:** registrada como **INT-B** no backlog oficial.
 
-### Parcialmente resolvido pela INT-D1 — Solicitação visual de cancelamento
+### Resolvido pela INT-D2 — Cancelamento gráfico autorizado
 
-O Histórico oferece “Solicitar cancelamento” somente para vendas ativas. O
-diálogo apresenta ID, data, valor, status e contagens comerciais, exige motivo
-e informa que nenhum cancelamento é executado. Vendas canceladas continuam
-consultáveis e não reabrem o fluxo.
+O Histórico oferece “Solicitar cancelamento” somente para vendas ativas e
+sessões autenticadas. O diálogo apresenta ID, data, valor, itens e pagamentos,
+exige motivo e confirmação expressa, então abre a autorização administrativa do
+T47 para a venda exata. A capacidade é consumida pelo T43 e a consulta só muda
+para CANCELADA após sucesso transacional comprovado.
 
-O código não chama `cancelar_venda()`, não cria autorizador fictício e não grava
-solicitação ou status intermediário. A execução permanece na **INT-D2**,
-condicionada à autenticação e autorização reais dos T45–T47.
+Desistência, credencial inválida, administrador inativo, capacidade expirada,
+fabricada, reutilizada ou vinculada a outro ID, repetição e falha SQLite não
+produzem sucesso falso. Nova tentativa exige nova autorização; a sessão Caixa
+permanece Caixa e o bloqueio por fechamento incerto impede a execução.
 
 ### Resolvido pela INT-C — Administração de produtos em página interna
 
@@ -127,9 +134,9 @@ expira em 60 segundos e é removida sob bloqueio antes de qualquer efeito no
 SQLite. O T43 consome exclusivamente esse contrato e conserva a identidade do
 administrador na auditoria.
 
-A INT-D2 ainda deve conectar o diálogo auxiliar ao formulário da INT-D1. A INT-E
-foi registrada para revisar login, provisionamento gráfico e troca segura de
-operador depois do T48.
+A INT-D2 conecta o diálogo auxiliar ao formulário da INT-D1 sem criar um segundo
+mecanismo de autorização. A INT-E permanece registrada para revisar login,
+provisionamento gráfico e troca segura de operador depois do T48.
 
 ## Itens já cobertos por tickets futuros (não antecipar)
 
@@ -150,7 +157,7 @@ operador depois do T48.
 2. **INT-B — resolvida:** navegação por páginas e histórico completo somente leitura.
 3. **INT-C — resolvida:** cadastro, edição, listagem e ativação/desativação em página interna; histórico de preços permanece separado.
 4. **INT-D1 — resolvida:** formulário e confirmação visual sem efeito comercial.
-5. **INT-D2 — pendente:** depois de T45–T47, execução do cancelamento protegida por autorização pontual.
+5. **INT-D2 — resolvida:** execução do cancelamento protegida por autorização pontual dos T45–T47.
 6. Registrar ticket/entrega futura para visualização dos últimos 12 meses de preços e, se permanecer no escopo, categorias personalizáveis.
 7. Corrigir documentação operacional desatualizada, quando houver ticket de higiene: `docs/ESTADO_ATUAL.md` descreve um estágio antigo; não confundir com fonte de estado atual. O arquivo `.gitignore` já cobre `.venv`, `.pytest_cache`, `__pycache__`, `.vscode` e `data/*.db` — ignorar não remove arquivos já rastreados.
 
@@ -158,9 +165,9 @@ operador depois do T48.
 
 O fluxo gráfico entre confirmação e registro definitivo foi conectado pela
 INT-A, o histórico passou a ser acessível por página interna na INT-B e a
-administração de produtos foi integrada pela INT-C. Permanece ausente a
-execução autorizada do cancelamento: a INT-D1 cobre somente a preparação visual
-e a INT-D2 depende do T47 sobre a base autenticada dos T45–T46. Os testes
-automatizados não substituem a
+administração de produtos foi integrada pela INT-C. O cancelamento gráfico foi
+conectado pela INT-D2 à autorização pontual do T47 e à transação do T43, sem
+elevar a sessão operacional. T48 e INT-E permanecem como próximas etapas antes
+do Marco 3. Os testes automatizados não substituem a
 validação operacional no Windows, e a homologação de leitor físico permanece
 pendente.

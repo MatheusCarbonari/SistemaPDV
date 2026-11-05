@@ -19,11 +19,12 @@ sua integração.
 Resultado de commit incerto fixa a operação na Frente de Caixa até verificação
 ou recuperação controlada.
 
-O Histórico pode preparar visualmente uma solicitação de cancelamento de venda
-ativa, exibindo o resumo e validando o motivo. Essa preparação não é estado de
-domínio nem registro persistente. A futura execução deverá receber da camada de
-segurança uma capacidade opaca do T47 antes de chamar o serviço transacional do
-T43; a interface não pode sintetizar essa autorização.
+O Histórico solicita o cancelamento de venda ativa exibindo os dados comerciais
+originais e validando o motivo, sem criar estado intermediário persistente. A
+execução abre a autorização administrativa do T47, vinculada à sessão
+solicitante, operação e venda, e entrega sua capacidade opaca de uso único ao
+serviço transacional do T43. A interface não sintetiza autorização, não acessa
+SQL e só atualiza lista e detalhe depois do sucesso comprovado.
 
 ## Dados e integridade
 - SQLite único local, foreign_keys habilitado, transação atômica ao gravar venda+itens+pagamentos.

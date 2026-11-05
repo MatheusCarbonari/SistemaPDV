@@ -1,10 +1,13 @@
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QDialog,
     QFormLayout,
     QLabel,
     QPlainTextEdit,
     QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
 )
 
@@ -21,13 +24,14 @@ class DialogoSolicitacaoCancelamento(QDialog):
     def __init__(self, venda: VendaDetalhada, parent=None) -> None:
         super().__init__(parent)
         self.venda = venda
+        self._processando = False
         self.setModal(True)
         self.setWindowTitle("Solicitar cancelamento")
 
         layout = QVBoxLayout(self)
         aviso = QLabel(
-            "Esta etapa apenas prepara a solicitação. O cancelamento depende "
-            "de autorização real, ainda não implementada na INT-D2."
+            "Confirme o motivo para solicitar uma autorização administrativa "
+            "de uso único. A venda só será cancelada após a autorização."
         )
         aviso.setObjectName("aviso_autorizacao_cancelamento")
         aviso.setWordWrap(True)
@@ -57,6 +61,53 @@ class DialogoSolicitacaoCancelamento(QDialog):
         formulario.addRow("Pagamentos:", self.rotulo_pagamentos)
         layout.addLayout(formulario)
 
+        layout.addWidget(QLabel("Itens originais:"))
+        self.tabela_itens = QTableWidget(len(venda.itens), 3)
+        self.tabela_itens.setObjectName("itens_solicitacao_cancelamento")
+        self.tabela_itens.setHorizontalHeaderLabels(
+            ["Posição", "Descrição", "Subtotal"]
+        )
+        self._configurar_tabela_somente_leitura(self.tabela_itens)
+        for linha, item_detalhado in enumerate(venda.itens):
+            item = item_detalhado.item
+            descricao = (
+                item.produto.nome
+                if item.produto is not None
+                else "Diversos" if item.tipo_item == "DIVERSOS" else "Item legado"
+            )
+            valores = (
+                str(item_detalhado.posicao + 1),
+                descricao,
+                formatar_centavos(item.subtotal_centavos),
+            )
+            for coluna, valor in enumerate(valores):
+                self.tabela_itens.setItem(linha, coluna, QTableWidgetItem(valor))
+        self.tabela_itens.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.tabela_itens)
+
+        layout.addWidget(QLabel("Pagamentos originais:"))
+        self.tabela_pagamentos = QTableWidget(len(venda.pagamentos), 2)
+        self.tabela_pagamentos.setObjectName(
+            "pagamentos_solicitacao_cancelamento"
+        )
+        self.tabela_pagamentos.setHorizontalHeaderLabels(
+            ["Modalidade", "Valor"]
+        )
+        self._configurar_tabela_somente_leitura(self.tabela_pagamentos)
+        for linha, pagamento in enumerate(venda.pagamentos):
+            self.tabela_pagamentos.setItem(
+                linha,
+                0,
+                QTableWidgetItem(pagamento.modalidade),
+            )
+            self.tabela_pagamentos.setItem(
+                linha,
+                1,
+                QTableWidgetItem(formatar_centavos(pagamento.valor_centavos)),
+            )
+        self.tabela_pagamentos.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.tabela_pagamentos)
+
         layout.addWidget(QLabel("Motivo:"))
         self.campo_motivo = QPlainTextEdit()
         self.campo_motivo.setObjectName("motivo_solicitacao_cancelamento")
@@ -70,7 +121,9 @@ class DialogoSolicitacaoCancelamento(QDialog):
         self.rotulo_mensagem.setWordWrap(True)
         layout.addWidget(self.rotulo_mensagem)
 
-        self.botao_prosseguir = QPushButton("Prosseguir para autorização")
+        self.botao_prosseguir = QPushButton(
+            "Confirmar e solicitar autorização"
+        )
         self.botao_prosseguir.setObjectName("prosseguir_autorizacao_cancelamento")
         self.botao_fechar = QPushButton("Desistir")
         self.botao_fechar.setObjectName("fechar_solicitacao_cancelamento")
@@ -81,6 +134,8 @@ class DialogoSolicitacaoCancelamento(QDialog):
         self.botao_fechar.clicked.connect(self.reject)
 
     def preparar_solicitacao(self) -> None:
+        if self._processando:
+            return
         motivo = self.campo_motivo.toPlainText().strip()
         if not motivo:
             self.rotulo_mensagem.setText(
@@ -89,11 +144,24 @@ class DialogoSolicitacaoCancelamento(QDialog):
             self.campo_motivo.setFocus()
             return
 
+        self._definir_processamento(True)
         self.autorizacao_requerida.emit(self.venda.venda_id, motivo)
-        self.rotulo_mensagem.setText(
-            "Motivo validado. A venda não foi cancelada. A execução permanece "
-            "bloqueada até a autorização real da INT-D2."
-        )
-        self.campo_motivo.setReadOnly(True)
-        self.botao_prosseguir.setEnabled(False)
-        self.botao_fechar.setText("Fechar")
+        if self._processando:
+            self.rotulo_mensagem.setText(
+                "Aguardando autorização administrativa."
+            )
+
+    def permitir_nova_tentativa(self, mensagem: str) -> None:
+        self._definir_processamento(False)
+        self.rotulo_mensagem.setText(mensagem)
+
+    def _definir_processamento(self, processando: bool) -> None:
+        self._processando = processando
+        self.campo_motivo.setReadOnly(processando)
+        self.botao_prosseguir.setEnabled(not processando)
+        self.botao_fechar.setEnabled(not processando)
+
+    @staticmethod
+    def _configurar_tabela_somente_leitura(tabela: QTableWidget) -> None:
+        tabela.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tabela.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
