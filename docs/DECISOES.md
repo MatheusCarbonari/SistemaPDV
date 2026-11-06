@@ -65,9 +65,12 @@
 - **DEC-032** — Sessões e autorizações pontuais são capacidades opacas mantidas
   somente em memória. A sessão usa nonce criptográfico e identidade de objeto
   registrada; a autorização expira em 60 segundos e se vincula ao solicitante,
-  operação e recurso. O consumo é único sob bloqueio e precede o efeito
-  comercial, portanto falha posterior não restaura a capacidade. Reinício,
-  logout, expiração e conta desativada falham fechados. O T43 não mantém caminho
+  operação, recurso e ID estável do Administrador autorizador, preservando sua
+  identificação textual para auditoria. Emissão, consumo e revogação são
+  serializados pelo mesmo bloqueio; invalidar uma identidade revoga capacidades
+  que ela solicitou ou concedeu. O consumo é único e precede o efeito comercial,
+  portanto falha posterior não restaura a capacidade. Reinício, logout,
+  expiração e conta desativada falham fechados. O T43 não mantém caminho
   alternativo baseado em booleano, perfil textual ou contexto construível.
 - **DEC-033** — Recuperação administrativa offline usa dez códigos independentes
   de 160 bits, apresentados uma vez e persistidos somente como SHA-256, adequado
@@ -83,6 +86,22 @@
   operador encerra a sessão e reutiliza o diálogo único de login, sendo recusada
   quando itens, pagamentos ou fechamento poderiam ser descartados. Fechar a
   janela também invalida a sessão e respeita o mesmo bloqueio comercial.
+- **DEC-035** — Após INT-E e antes do T49 existe a fase Consolidação do Marco 2.
+  A ordem aprovada é COR-M2-01 (revogação de autorizações), COR-M2-02
+  (reconciliação de cancelamento incerto), detalhamento e execução de COMP-M2,
+  homologação e auditoria final. A recuperação de UUID de fechamento incerto
+  após encerramento será avaliada com o protocolo de contingência do T54. Essa
+  sequência não autoriza antecipar o Marco 3 nem agrupar as correções em uma
+  refatoração ampla.
+- **DEC-036** — Falha anterior ao commit do cancelamento é falha confirmada;
+  exceção durante o commit exige reconciliação em nova conexão. Venda ainda
+  `ATIVA` confirma que a tentativa não persistiu. Venda `CANCELADA`, metadados
+  coincidentes ou não, não prova a autoria da tentativa sem identificador
+  persistente e permanece resultado incerto. Consulta indisponível também
+  preserva a incerteza. A autorização já consumida nunca é reutilizada, a
+  interface apenas atualiza o Histórico e uma nova tentativa depende de
+  consulta expressa. Não será criada migração somente para converter incerteza
+  em sucesso aparente.
 
 ## Decisões que exigem cuidado
 - O código de produto existente é protegido contra edição pela interface; a

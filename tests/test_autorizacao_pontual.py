@@ -1,10 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
 import sqlite3
-from threading import Barrier
+from threading import Barrier, Event
 
 import pytest
 from PySide6.QtWidgets import QDialog, QLineEdit
 
+import services.autorizacao_pontual_service as autorizacao_pontual_service
 from database.conexao import conectar
 from database.schema import criar_tabelas
 from interface.dialogo_autorizacao_administrativa import (
@@ -232,6 +233,143 @@ def test_consumo_concorrente_tem_um_unico_sucesso(ambiente) -> None:
         resultados = tuple(executor.map(lambda _: consumir(), range(2)))
 
     assert sorted(resultados) == ["CONSUMIDA", "administrador"]
+
+
+def test_invalidacao_revoga_capacidade_solicitada_pelo_administrador(
+    ambiente,
+) -> None:
+    caminho, sessao_admin, _, gerenciador = ambiente
+    capacidade = gerenciador.emitir(
+        sessao_admin,
+        OPERACAO_CANCELAR_VENDA,
+        501,
+        "administrador",
+        SENHA_ADMIN,
+        caminho,
+        limitador=LimitadorTentativasLogin(),
+    )
+
+    gerenciador.invalidar_usuario(sessao_admin.usuario_id)
+
+    with pytest.raises(AutorizacaoPontualConsumidaError):
+        gerenciador.consumir(
+            capacidade,
+            sessao_admin,
+            OPERACAO_CANCELAR_VENDA,
+            501,
+            caminho,
+        )
+
+
+def test_invalidacao_revoga_capacidade_concedida_a_outro_usuario(
+    ambiente,
+) -> None:
+    caminho, sessao_admin, sessao_caixa, gerenciador = ambiente
+    capacidade = emitir(ambiente, 502)
+
+    gerenciador.invalidar_usuario(sessao_admin.usuario_id)
+
+    assert sessao_caixa.perfil == "CAIXA"
+    with pytest.raises(AutorizacaoPontualConsumidaError):
+        gerenciador.consumir(
+            capacidade,
+            sessao_caixa,
+            OPERACAO_CANCELAR_VENDA,
+            502,
+            caminho,
+        )
+
+
+def test_invalidacao_nao_afeta_capacidade_de_outro_administrador(
+    ambiente,
+) -> None:
+    caminho, sessao_admin, sessao_caixa, gerenciador = ambiente
+    conexao = conectar(caminho)
+    try:
+        cursor = conexao.execute(
+            """
+            INSERT INTO usuarios (identificacao_acesso, perfil, senha_hash, ativo)
+            VALUES ('administrador-2', 'ADMINISTRADOR', ?, 1)
+            """,
+            (gerar_hash_senha(SENHA_ADMIN),),
+        )
+        administrador_2_id = cursor.lastrowid
+        conexao.commit()
+    finally:
+        conexao.close()
+    assert administrador_2_id is not None
+    capacidade_admin_1 = emitir(ambiente, 503)
+    capacidade_admin_2 = gerenciador.emitir(
+        sessao_caixa,
+        OPERACAO_CANCELAR_VENDA,
+        504,
+        "administrador-2",
+        SENHA_ADMIN,
+        caminho,
+        limitador=LimitadorTentativasLogin(),
+    )
+
+    gerenciador.invalidar_usuario(sessao_admin.usuario_id)
+
+    with pytest.raises(AutorizacaoPontualConsumidaError):
+        gerenciador.consumir(
+            capacidade_admin_1,
+            sessao_caixa,
+            OPERACAO_CANCELAR_VENDA,
+            503,
+            caminho,
+        )
+    assert gerenciador.consumir(
+        capacidade_admin_2,
+        sessao_caixa,
+        OPERACAO_CANCELAR_VENDA,
+        504,
+        caminho,
+    ) == "administrador-2"
+
+
+def test_revogacao_concorrente_com_emissao_remove_capacidade_publicada(
+    ambiente,
+    monkeypatch,
+) -> None:
+    _, sessao_admin, _, gerenciador = ambiente
+    validacao_iniciada = Event()
+    liberar_validacao = Event()
+    revogacao_iniciada = Event()
+    validar_original = autorizacao_pontual_service.validar_credenciais_usuario
+
+    def validar_com_pausa(*args, **kwargs):
+        validacao_iniciada.set()
+        assert liberar_validacao.wait(timeout=5)
+        return validar_original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        autorizacao_pontual_service,
+        "validar_credenciais_usuario",
+        validar_com_pausa,
+    )
+
+    def revogar():
+        revogacao_iniciada.set()
+        gerenciador.invalidar_usuario(sessao_admin.usuario_id)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        emissao = executor.submit(emitir, ambiente, 505)
+        assert validacao_iniciada.wait(timeout=5)
+        revogacao = executor.submit(revogar)
+        assert revogacao_iniciada.wait(timeout=5)
+        liberar_validacao.set()
+        capacidade = emissao.result(timeout=5)
+        revogacao.result(timeout=5)
+
+    with pytest.raises(AutorizacaoPontualConsumidaError):
+        gerenciador.consumir(
+            capacidade,
+            ambiente[2],
+            OPERACAO_CANCELAR_VENDA,
+            505,
+            ambiente[0],
+        )
 
 
 def test_logout_invalida_capacidade_sem_elevar_sessao(ambiente) -> None:

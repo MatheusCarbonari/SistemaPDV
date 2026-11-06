@@ -85,12 +85,22 @@ mantém a operação bloqueada.
   correspondência com o mesmo objeto em memória. Construir `SessaoUsuario`
   manualmente não produz uma sessão reconhecida.
 - O gerenciador de autorizações conserva privadamente solicitante, operação,
-  recurso, administrador e expiração. O chamador recebe somente um nonce; o
-  consumo atômico em memória ocorre antes da transação comercial e nunca é
-  revertido por falha posterior. Nenhuma capacidade ou senha é persistida.
+  recurso, ID estável e identificação textual do administrador, além da
+  expiração. O chamador recebe somente um nonce; emissão, consumo e revogação
+  usam o mesmo bloqueio. A invalidação de uma identidade remove capacidades
+  solicitadas ou concedidas por ela. O consumo atômico em memória ocorre antes
+  da transação comercial e nunca é revertido por falha posterior. Nenhuma
+  capacidade ou senha é persistida.
 - A INT-E reutiliza o login e os registros processuais existentes para criar,
   listar, ativar e desativar contas Caixa. Não cria Administradores adicionais,
   sessão elevada nem um segundo mecanismo de identidade.
+- O cancelamento distingue falha anterior ao commit, falha de commit
+  reconciliada com venda ainda ativa e resultado incerto. Após exceção no
+  commit, uma nova conexão consulta somente status e metadados. `ATIVA`
+  confirma ausência do cancelamento; `CANCELADA` não identifica a tentativa,
+  mesmo com metadados iguais, pois o esquema não possui UUID de cancelamento.
+  Consulta indisponível também mantém a incerteza. A interface pode atualizar o
+  Histórico, mas não repete a operação nem reutiliza a autorização consumida.
 - Códigos de recuperação são mostrados somente no retorno da emissão. Devem ser
   guardados em meio externo seguro; interrupção ou perda não permite consulta e
   requer rotação autenticada. O limitador de tentativas é local e em memória,

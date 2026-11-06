@@ -407,6 +407,48 @@ bloqueia navegação e encerramento. Fechar a janela invalida a sessão e não p
 descartar atendimento aberto. INT-E encerra as integrações funcionais previstas
 antes da homologação manual do Marco 2.
 
+## Consolidação do Marco 2
+
+Esta fase ocorre após a INT-E e antes do T49. Seu objetivo é encerrar os
+achados da auditoria final e as lacunas funcionais ainda sem ticket próprio,
+sem antecipar o Marco 3.
+
+### COR-M2-01 — Revogação de autorizações
+**Entrega verificável:** capacidades pontuais guardam o ID estável do
+Administrador autorizador e são revogadas quando o usuário invalidado for o
+solicitante ou o autorizador. Emissão, consumo e revogação devem permanecer
+protegidos contra concorrência, sem persistir capacidades nem elevar a sessão
+Caixa.
+**Status:** concluída em 06/11/2026, com regressão de recuperação administrativa,
+isolamento entre autorizadores, concorrência e consumo único; suíte completa com
+966 testes aprovados.
+
+### COR-M2-02 — Reconciliação de cancelamento com resultado incerto
+**Entrega verificável:** distinguir falha confirmada de resultado ambíguo no
+cancelamento e reconciliar o estado persistido antes de comunicar o resultado.
+**Status:** concluída em 06/11/2026, sem alteração de schema. Falha anterior ao
+commit e venda `ATIVA` após reconciliação são falhas confirmadas; venda
+`CANCELADA` ou consulta indisponível permanecem resultado incerto por ausência
+de identificador persistente da tentativa. A interface não repete o
+cancelamento nem reutiliza a autorização. Suíte completa com 973 testes
+aprovados.
+
+### Pendência operacional — recuperação de UUID após encerramento
+Definir procedimento para recuperar ou reconciliar o identificador de uma
+tentativa de fechamento cujo resultado permaneceu incerto após o processo ser
+encerrado. Avaliar a solução junto ao protocolo de contingência do T54, sem
+antecipar persistência do carrinho.
+
+### COMP-M2 — Complementos funcionais
+Bloco reservado às funcionalidades do Marco 2 ainda sem tickets executáveis
+próprios: consulta gráfica do histórico de preços, categorias personalizáveis,
+redefinição de senha de conta Caixa, melhorias de produtividade do diálogo de
+pagamentos e revisão de layout. O detalhamento e a execução ocorrerão somente
+em tickets específicos.
+
+Após COR-M2-01, COR-M2-02 e os tickets definidos para COMP-M2, executar nova
+homologação e auditoria final antes de iniciar o Marco 3.
+
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 
 ### T49 — Log estruturado
@@ -521,7 +563,9 @@ manuais, manter consistência com o saldo real.
 
 ## Regras de acompanhamento daqui em diante
 
-- O próximo ticket executável é **T21**; depois T22, T23 etc. Sem retroceder à numeração original.
+- Os próximos tickets executáveis devem detalhar o bloco **COMP-M2**. T49 inicia
+  somente após essas entregas, homologação e auditoria final da Consolidação do
+  Marco 2.
 - Antes de elaborar cada prompt Codex, conferir **este arquivo**, o relatório do último ticket e eventuais dependências já resolvidas. Não redefinir informalmente o objetivo numerado.
 - Marcar como concluído somente após relatório, testes e revisão. Mantenha os títulos e origens dos tickets para rastreabilidade.
 - Se um ticket estiver parcialmente pronto, implementar somente o restante e incluir testes de regressão; não duplicar código.

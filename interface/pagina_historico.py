@@ -69,6 +69,7 @@ class PaginaHistorico(QWidget):
         self.dialogo_cancelamento: DialogoSolicitacaoCancelamento | None = None
         self.dialogo_autorizacao: DialogoAutorizacaoAdministrativa | None = None
         self._cancelamento_em_processamento = False
+        self._cancelamentos_incertos: set[int] = set()
         self.setObjectName("pagina_historico")
 
         layout = QVBoxLayout(self)
@@ -207,6 +208,9 @@ class PaginaHistorico(QWidget):
             return
 
         self._preencher_vendas(vendas)
+        self._cancelamentos_incertos.difference_update(
+            venda.venda_id for venda in vendas
+        )
         if vendas:
             self.rotulo_mensagem.setText(
                 f"{len(vendas)} venda(s) encontrada(s)."
@@ -238,6 +242,7 @@ class PaginaHistorico(QWidget):
             self.rotulo_mensagem.setText("Venda não encontrada.")
             return
 
+        self._cancelamentos_incertos.discard(resumo.venda_id)
         self._preencher_vendas((resumo,))
         self.rotulo_mensagem.setText("Venda encontrada.")
         self.tabela_vendas.selectRow(0)
@@ -356,6 +361,7 @@ class PaginaHistorico(QWidget):
             and self.sessao_solicitante is not None
             and not self._operacao_bloqueada()
             and not self._cancelamento_em_processamento
+            and resumo.venda_id not in self._cancelamentos_incertos
         )
 
     def abrir_solicitacao_cancelamento(self) -> None:
@@ -501,18 +507,30 @@ class PaginaHistorico(QWidget):
             self._atualizar_venda_apos_cancelamento(venda_id)
             self.rotulo_mensagem.setText("A venda já estava cancelada.")
             return
+        except cancelamento_venda_service.CancelamentoVendaIncertoError:
+            self._registrar_resultado_incerto(
+                dialogo_solicitacao,
+                venda_id,
+            )
+            return
+        except cancelamento_venda_service.CancelamentoVendaNaoPersistidoError:
+            self._permitir_nova_autorizacao(
+                dialogo_solicitacao,
+                "A falha foi confirmada e o cancelamento não foi concluído. "
+                "Solicite uma nova autorização para tentar novamente.",
+            )
+            return
         except sqlite3.Error:
             self._permitir_nova_autorizacao(
                 dialogo_solicitacao,
-                "Falha no banco de dados. A venda não foi confirmada como "
-                "cancelada; solicite nova autorização para tentar novamente.",
+                "Falha no banco de dados confirmada. O cancelamento não foi "
+                "concluído; solicite nova autorização para tentar novamente.",
             )
             return
         except Exception:
-            self._permitir_nova_autorizacao(
+            self._registrar_resultado_incerto(
                 dialogo_solicitacao,
-                "Não foi possível confirmar o cancelamento. A venda foi "
-                "preservada; solicite nova autorização para tentar novamente.",
+                venda_id,
             )
             return
 
@@ -530,6 +548,26 @@ class PaginaHistorico(QWidget):
     ) -> None:
         self._cancelamento_em_processamento = False
         dialogo.permitir_nova_tentativa(mensagem)
+
+    def _registrar_resultado_incerto(
+        self,
+        dialogo: DialogoSolicitacaoCancelamento,
+        venda_id: int,
+    ) -> None:
+        self._cancelamento_em_processamento = False
+        self._cancelamentos_incertos.add(venda_id)
+        dialogo.reject()
+        try:
+            self._atualizar_venda_apos_cancelamento(venda_id)
+        except Exception:
+            # A atualização é apenas uma consulta auxiliar e não pode substituir
+            # nem ocultar o resultado incerto informado pelo serviço.
+            pass
+        self.rotulo_mensagem.setText(
+            "O resultado do cancelamento não pôde ser confirmado. Consulte ou "
+            "atualize o Histórico antes de qualquer nova ação; a autorização "
+            "já foi consumida."
+        )
 
     def _invalidar_capacidade_nao_utilizada(
         self,

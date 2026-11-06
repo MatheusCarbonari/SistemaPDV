@@ -7,6 +7,7 @@ from interface.janela_principal import JanelaPrincipal
 from interface.pagina_historico import PaginaHistorico
 from models.autorizacao_pontual import CapacidadeAutorizacao
 from models.sessao_usuario import SessaoUsuario
+import services.cancelamento_venda_service as cancelamento_service
 from services.autenticacao_service import (
     LimitadorTentativasLogin,
     autenticar_usuario,
@@ -26,6 +27,10 @@ from tests.test_solicitacao_cancelamento_interface import (
     estado_persistido,
     persistir_venda,
     selecionar_venda,
+)
+from tests.test_cancelamento_vendas import (
+    ConexaoCancelamentoCommitConfirmadoComErro,
+    conectar_cancelamento_simulado,
 )
 
 
@@ -400,6 +405,98 @@ def test_falha_de_persistencia_preserva_venda_e_exige_nova_autorizacao(
     assert estado_persistido(caminho, venda_id)[0][0] == "ATIVA"
     assert solicitacao.botao_prosseguir.isEnabled()
     assert "Falha no banco de dados" in solicitacao.rotulo_mensagem.text()
+
+
+def test_commit_persistido_com_resposta_perdida_exibe_resultado_incerto(
+    ambiente,
+    monkeypatch,
+) -> None:
+    caminho, sessao, gerenciador, pagina = ambiente
+    venda_id = persistir_venda(caminho)
+    antes = snapshot_comercial(caminho, venda_id)
+    solicitacao, dialogo = abrir_fluxo(
+        pagina,
+        venda_id,
+        "resposta perdida",
+    )
+    conectar_real = conectar
+    chamadas = 0
+
+    def conectar_simulado(caminho_banco):
+        nonlocal chamadas
+        chamadas += 1
+        if chamadas == 1:
+            return conectar_cancelamento_simulado(
+                caminho_banco,
+                ConexaoCancelamentoCommitConfirmadoComErro,
+            )
+        return conectar_real(caminho_banco)
+
+    monkeypatch.setattr(cancelamento_service, "conectar", conectar_simulado)
+
+    autorizar(dialogo)
+
+    assert solicitacao.result() == QDialog.DialogCode.Rejected
+    assert "não pôde ser confirmado" in pagina.rotulo_mensagem.text()
+    assert "autorização já foi consumida" in pagina.rotulo_mensagem.text()
+    assert pagina.detalhe_selecionado.status == "CANCELADA"
+    assert not pagina.botao_solicitar_cancelamento.isEnabled()
+    assert snapshot_comercial(caminho, venda_id) == antes
+    with pytest.raises(AutorizacaoPontualConsumidaError):
+        gerenciador.consumir(
+            dialogo.capacidade,
+            sessao,
+            OPERACAO_CANCELAR_VENDA,
+            venda_id,
+            caminho,
+        )
+
+
+def test_resultado_incerto_ativo_exige_consulta_expressa_antes_de_nova_tentativa(
+    ambiente,
+    monkeypatch,
+) -> None:
+    caminho, _, _, pagina = ambiente
+    venda_id = persistir_venda(caminho)
+    solicitacao, dialogo = abrir_fluxo(pagina, venda_id, "resultado incerto")
+
+    def resultado_incerto(
+        venda_id_recebido,
+        motivo,
+        capacidade,
+        sessao,
+        caminho_banco,
+        *,
+        gerenciador_autorizacoes,
+    ):
+        gerenciador_autorizacoes.consumir(
+            capacidade,
+            sessao,
+            OPERACAO_CANCELAR_VENDA,
+            venda_id_recebido,
+            caminho_banco,
+        )
+        raise cancelamento_service.CancelamentoVendaIncertoError(
+            venda_id_recebido
+        )
+
+    monkeypatch.setattr(
+        cancelamento_service,
+        "cancelar_venda",
+        resultado_incerto,
+    )
+
+    autorizar(dialogo)
+
+    assert solicitacao.result() == QDialog.DialogCode.Rejected
+    assert pagina.detalhe_selecionado.status == "ATIVA"
+    assert not pagina.botao_solicitar_cancelamento.isEnabled()
+
+    pagina.campo_id.setText(str(venda_id))
+    pagina.pesquisar_por_id()
+
+    assert pagina.detalhe_selecionado.status == "ATIVA"
+    assert pagina.botao_solicitar_cancelamento.isEnabled()
 
 
 def test_commit_incerto_bloqueia_execucao_mesmo_apos_autorizacao(

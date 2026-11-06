@@ -16,6 +16,7 @@ from models.pagamento import Pagamento, PagamentosEmAndamento
 from models.produto_snapshot import ProdutoSnapshot
 from models.venda_em_andamento import VendaEmAndamento
 import services.cancelamento_venda_service as cancelamento_service
+from services.autorizacao_pontual_service import AutorizacaoPontualConsumidaError
 from services.cancelamento_venda_service import (
     VendaJaCanceladaError,
     VendaNaoEncontradaError,
@@ -437,6 +438,240 @@ def test_falha_durante_update_executa_rollback_integral(
 
     detalhe_depois = buscar_venda_detalhada_por_id(venda_id, banco_teste)
     assert detalhe_depois == detalhe_antes
+
+
+class ConexaoCancelamentoCommitConfirmadoComErro(sqlite3.Connection):
+    def commit(self) -> None:
+        super().commit()
+        raise sqlite3.OperationalError("resposta do commit de cancelamento perdida")
+
+
+class ConexaoCancelamentoCommitFalho(sqlite3.Connection):
+    def commit(self) -> None:
+        raise sqlite3.OperationalError("commit de cancelamento recusado")
+
+
+class ConexaoCancelamentoCommitERollbackFalhos(ConexaoCancelamentoCommitFalho):
+    def rollback(self) -> None:
+        raise sqlite3.OperationalError("rollback também falhou")
+
+
+def conectar_cancelamento_simulado(caminho_banco, factory):
+    conexao = sqlite3.connect(caminho_banco, factory=factory)
+    conexao.row_factory = sqlite3.Row
+    conexao.execute("PRAGMA foreign_keys = ON")
+    return conexao
+
+
+def test_falha_apos_commit_persistido_resulta_em_incerteza_sem_repetir(
+    banco_teste,
+    venda_cancelavel,
+    ambiente_autorizacao,
+    monkeypatch,
+) -> None:
+    venda_id, _ = venda_cancelavel
+    antes = buscar_venda_detalhada_por_id(venda_id, banco_teste)
+    conectar_real = conectar
+    chamadas = 0
+
+    def conectar_simulado(caminho):
+        nonlocal chamadas
+        chamadas += 1
+        if chamadas == 1:
+            return conectar_cancelamento_simulado(
+                caminho,
+                ConexaoCancelamentoCommitConfirmadoComErro,
+            )
+        return conectar_real(caminho)
+
+    monkeypatch.setattr(cancelamento_service, "conectar", conectar_simulado)
+
+    sessao, gerenciador = ambiente_autorizacao
+    capacidade = emitir_cancelamento_teste(
+        banco_teste,
+        venda_id,
+        sessao,
+        gerenciador,
+    )
+    with pytest.raises(cancelamento_service.CancelamentoVendaIncertoError) as erro:
+        cancelar_com_autorizacao(
+            venda_id,
+            "resultado ambíguo",
+            banco_teste,
+            ambiente_autorizacao,
+            capacidade=capacidade,
+        )
+
+    assert erro.value.estado_observado == "CANCELADA"
+    assert erro.value.metadados_correspondem is True
+    depois = buscar_venda_detalhada_por_id(venda_id, banco_teste)
+    assert depois.status == "CANCELADA"
+    assert depois.itens == antes.itens
+    assert depois.pagamentos == antes.pagamentos
+    with pytest.raises(AutorizacaoPontualConsumidaError):
+        gerenciador.consumir(
+            capacidade,
+            sessao,
+            "CANCELAR_VENDA",
+            venda_id,
+            banco_teste,
+        )
+
+
+def test_falha_de_commit_sem_persistencia_e_confirmada_por_nova_conexao(
+    banco_teste,
+    venda_cancelavel,
+    ambiente_autorizacao,
+    monkeypatch,
+) -> None:
+    venda_id, _ = venda_cancelavel
+    conectar_real = conectar
+    chamadas = 0
+
+    def conectar_simulado(caminho):
+        nonlocal chamadas
+        chamadas += 1
+        if chamadas == 1:
+            return conectar_cancelamento_simulado(
+                caminho,
+                ConexaoCancelamentoCommitFalho,
+            )
+        return conectar_real(caminho)
+
+    monkeypatch.setattr(cancelamento_service, "conectar", conectar_simulado)
+
+    with pytest.raises(cancelamento_service.CancelamentoVendaNaoPersistidoError):
+        cancelar_com_autorizacao(
+            venda_id,
+            "não persistir",
+            banco_teste,
+            ambiente_autorizacao,
+        )
+
+    assert buscar_venda_resumida_por_id(venda_id, banco_teste).status == "ATIVA"
+
+
+def test_falha_na_consulta_de_reconciliacao_mantem_resultado_incerto(
+    banco_teste,
+    venda_cancelavel,
+    ambiente_autorizacao,
+    monkeypatch,
+) -> None:
+    venda_id, _ = venda_cancelavel
+    chamadas = 0
+
+    def conectar_simulado(caminho):
+        nonlocal chamadas
+        chamadas += 1
+        if chamadas == 1:
+            return conectar_cancelamento_simulado(
+                caminho,
+                ConexaoCancelamentoCommitConfirmadoComErro,
+            )
+        raise sqlite3.OperationalError("reconciliação indisponível")
+
+    monkeypatch.setattr(cancelamento_service, "conectar", conectar_simulado)
+
+    with pytest.raises(cancelamento_service.CancelamentoVendaIncertoError) as erro:
+        cancelar_com_autorizacao(
+            venda_id,
+            "consulta indisponível",
+            banco_teste,
+            ambiente_autorizacao,
+        )
+
+    assert erro.value.estado_observado is None
+    assert erro.value.metadados_correspondem is None
+    assert buscar_venda_resumida_por_id(venda_id, banco_teste).status == "CANCELADA"
+
+
+def test_cancelamento_de_outra_tentativa_nao_confirma_autoria_atual(
+    banco_teste,
+    venda_cancelavel,
+    ambiente_autorizacao,
+    monkeypatch,
+) -> None:
+    venda_id, _ = venda_cancelavel
+    conectar_real = conectar
+    chamadas = 0
+
+    def conectar_simulado(caminho):
+        nonlocal chamadas
+        chamadas += 1
+        if chamadas == 1:
+            return conectar_cancelamento_simulado(
+                caminho,
+                ConexaoCancelamentoCommitFalho,
+            )
+        externa = conectar_real(caminho)
+        try:
+            externa.execute(
+                """
+                UPDATE vendas
+                SET status = 'CANCELADA',
+                    motivo_cancelamento = 'outra tentativa',
+                    cancelada_em = '2026-11-06 12:00:00',
+                    autorizador_identidade = 'outro-administrador'
+                WHERE id = ? AND status = 'ATIVA'
+                """,
+                (venda_id,),
+            )
+            externa.commit()
+        finally:
+            externa.close()
+        return conectar_real(caminho)
+
+    monkeypatch.setattr(cancelamento_service, "conectar", conectar_simulado)
+
+    with pytest.raises(cancelamento_service.CancelamentoVendaIncertoError) as erro:
+        cancelar_com_autorizacao(
+            venda_id,
+            "tentativa atual",
+            banco_teste,
+            ambiente_autorizacao,
+        )
+
+    assert erro.value.estado_observado == "CANCELADA"
+    assert erro.value.metadados_correspondem is False
+    resumo = buscar_venda_resumida_por_id(venda_id, banco_teste)
+    assert resumo.motivo_cancelamento == "outra tentativa"
+
+
+def test_falha_de_rollback_nao_mascara_falha_original_de_commit(
+    banco_teste,
+    venda_cancelavel,
+    ambiente_autorizacao,
+    monkeypatch,
+) -> None:
+    venda_id, _ = venda_cancelavel
+    conectar_real = conectar
+    chamadas = 0
+
+    def conectar_simulado(caminho):
+        nonlocal chamadas
+        chamadas += 1
+        if chamadas == 1:
+            return conectar_cancelamento_simulado(
+                caminho,
+                ConexaoCancelamentoCommitERollbackFalhos,
+            )
+        return conectar_real(caminho)
+
+    monkeypatch.setattr(cancelamento_service, "conectar", conectar_simulado)
+
+    with pytest.raises(
+        cancelamento_service.CancelamentoVendaNaoPersistidoError
+    ) as erro:
+        cancelar_com_autorizacao(
+            venda_id,
+            "rollback falho",
+            banco_teste,
+            ambiente_autorizacao,
+        )
+
+    assert isinstance(erro.value.__cause__, sqlite3.OperationalError)
+    assert "commit de cancelamento recusado" in str(erro.value.__cause__)
+    assert buscar_venda_resumida_por_id(venda_id, banco_teste).status == "ATIVA"
 
 
 def test_reexecucao_da_migracao_preserva_cancelamento(

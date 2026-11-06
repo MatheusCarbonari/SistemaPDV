@@ -35,6 +35,7 @@ from services.recuperacao_acesso_service import (
     emitir_ou_rotacionar_codigos,
     recuperar_acesso_administrativo,
 )
+from services.senha_service import gerar_hash_senha
 
 
 SENHA_ANTIGA = "frase administrativa original 2026"
@@ -352,6 +353,54 @@ def test_recuperacao_invalida_sessoes_e_autorizacoes_da_identidade(
             sessao,
             OPERACAO_CANCELAR_VENDA,
             123,
+            caminho,
+        )
+
+
+def test_recuperacao_revoga_autorizacao_concedida_anteriormente_ao_caixa(
+    ambiente,
+) -> None:
+    caminho, usuario, _, gerenciador_sessoes, gerenciador_autorizacoes = ambiente
+    conexao = conectar(caminho)
+    try:
+        conexao.execute(
+            """
+            INSERT INTO usuarios (identificacao_acesso, perfil, senha_hash, ativo)
+            VALUES ('caixa-recuperacao', 'CAIXA', ?, 1)
+            """,
+            (gerar_hash_senha("frase segura caixa recuperacao 2026"),),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+    sessao_caixa = autenticar_usuario(
+        "caixa-recuperacao",
+        "frase segura caixa recuperacao 2026",
+        caminho,
+        gerenciador_sessoes=gerenciador_sessoes,
+    )
+    capacidade = gerenciador_autorizacoes.emitir(
+        sessao_caixa,
+        OPERACAO_CANCELAR_VENDA,
+        124,
+        "administrador",
+        SENHA_ANTIGA,
+        caminho,
+        limitador=LimitadorTentativasLogin(),
+    )
+    codigo = emitir(ambiente).codigos[0]
+
+    recuperar(ambiente, codigo)
+
+    assert sessao_caixa.autenticada
+    assert sessao_caixa.perfil == "CAIXA"
+    assert sessao_caixa.usuario_id != usuario.id
+    with pytest.raises(AutorizacaoPontualConsumidaError):
+        gerenciador_autorizacoes.consumir(
+            capacidade,
+            sessao_caixa,
+            OPERACAO_CANCELAR_VENDA,
+            124,
             caminho,
         )
 

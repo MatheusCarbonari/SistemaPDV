@@ -368,6 +368,26 @@ def buscar_status_venda(
     return venda["status"] if venda is not None else None
 
 
+def buscar_estado_cancelamento_venda(
+    conexao: sqlite3.Connection,
+    venda_id: int,
+) -> tuple[str, str | None, str | None, str | None] | None:
+    """Lê o estado persistido usado somente para reconciliação."""
+    venda = conexao.execute(
+        """
+        SELECT
+            status,
+            motivo_cancelamento,
+            cancelada_em,
+            autorizador_identidade
+        FROM vendas
+        WHERE id = ?
+        """,
+        (venda_id,),
+    ).fetchone()
+    return tuple(venda) if venda is not None else None
+
+
 def _produto_id_existente(
     conexao: sqlite3.Connection,
     produto_id: int | None,

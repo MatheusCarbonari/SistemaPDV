@@ -40,6 +40,7 @@ class _EstadoAutorizacao:
     sessao_solicitante: SessaoUsuario
     operacao: str
     recurso_id: int
+    administrador_autorizador_id: int
     identidade_administrador: str
     expira_em: float
 
@@ -73,33 +74,38 @@ class GerenciadorAutorizacoesPontuais:
         limitador: LimitadorTentativasLogin | None = None,
     ) -> CapacidadeAutorizacao:
         _validar_vinculo(operacao, recurso_id)
-        autorizar_sessao(
-            sessao_solicitante,
-            ("ADMINISTRADOR", "CAIXA"),
-            caminho_banco,
-            gerenciador_sessoes=self.gerenciador_sessoes,
-        )
-        administrador = validar_credenciais_usuario(
-            identificacao_administrador,
-            senha_administrador,
-            caminho_banco,
-            limitador=limitador or LIMITADOR_LOGIN_PADRAO,
-        )
-        if administrador.perfil != "ADMINISTRADOR":
-            raise CredenciaisInvalidasError(
-                "Identificação ou senha administrativa inválida."
-            )
-
-        capacidade = CapacidadeAutorizacao(secrets.token_urlsafe(32))
-        estado = _EstadoAutorizacao(
-            capacidade=capacidade,
-            sessao_solicitante=sessao_solicitante,
-            operacao=operacao,
-            recurso_id=recurso_id,
-            identidade_administrador=administrador.identificacao_acesso,
-            expira_em=self._relogio() + self.validade_segundos,
-        )
+        # Emissão e revogação compartilham a mesma região crítica. Assim, uma
+        # revogação concorrente acontece integralmente antes ou depois da
+        # publicação da capacidade; no segundo caso, remove também a recém-
+        # emitida.
         with self._bloqueio:
+            autorizar_sessao(
+                sessao_solicitante,
+                ("ADMINISTRADOR", "CAIXA"),
+                caminho_banco,
+                gerenciador_sessoes=self.gerenciador_sessoes,
+            )
+            administrador = validar_credenciais_usuario(
+                identificacao_administrador,
+                senha_administrador,
+                caminho_banco,
+                limitador=limitador or LIMITADOR_LOGIN_PADRAO,
+            )
+            if administrador.perfil != "ADMINISTRADOR":
+                raise CredenciaisInvalidasError(
+                    "Identificação ou senha administrativa inválida."
+                )
+
+            capacidade = CapacidadeAutorizacao(secrets.token_urlsafe(32))
+            estado = _EstadoAutorizacao(
+                capacidade=capacidade,
+                sessao_solicitante=sessao_solicitante,
+                operacao=operacao,
+                recurso_id=recurso_id,
+                administrador_autorizador_id=administrador.id,
+                identidade_administrador=administrador.identificacao_acesso,
+                expira_em=self._relogio() + self.validade_segundos,
+            )
             self._autorizacoes[capacidade.identificador] = estado
         return capacidade
 
@@ -157,12 +163,13 @@ class GerenciadorAutorizacoesPontuais:
         return identidade_administrador
 
     def invalidar_usuario(self, usuario_id: int) -> None:
-        """Revoga capacidades ligadas às sessões de uma identidade."""
+        """Revoga capacidades solicitadas ou concedidas pela identidade."""
         with self._bloqueio:
             identificadores = tuple(
                 identificador
                 for identificador, estado in self._autorizacoes.items()
                 if estado.sessao_solicitante.usuario_id == usuario_id
+                or estado.administrador_autorizador_id == usuario_id
             )
             for identificador in identificadores:
                 self._autorizacoes.pop(identificador, None)
