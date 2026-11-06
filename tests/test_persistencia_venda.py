@@ -30,12 +30,16 @@ def inserir_produto(
 ) -> int:
     conexao = conectar(caminho_banco)
     try:
+        categoria_id = conexao.execute(
+            "INSERT INTO categorias (nome, nome_chave) VALUES (?, ?)",
+            ("TESTE", "teste"),
+        ).lastrowid
         produto_id = conexao.execute(
             """
             INSERT INTO produtos (
                 codigo,
                 nome,
-                categoria,
+                categoria_id,
                 forma_venda,
                 preco_venda_centavos,
                 origem
@@ -45,7 +49,7 @@ def inserir_produto(
             (
                 codigo,
                 nome,
-                "TESTE",
+                categoria_id,
                 "UNIDADE",
                 preco_centavos,
                 "COMPRADO",

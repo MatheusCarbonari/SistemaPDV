@@ -239,7 +239,7 @@ def test_dialogo_login_oculta_senha_e_aceita_credencial_valida(
     assert dialogo.campo_senha.text() == ""
 
 
-def test_caixa_nao_acessa_produtos_e_admin_acessa(
+def test_caixa_acessa_produtos_sem_acesso_administrativo(
     qtbot,
     banco_autenticacao,
 ) -> None:
@@ -247,9 +247,11 @@ def test_caixa_nao_acessa_produtos_e_admin_acessa(
     sessao_caixa = autenticar_usuario("caixa01", SENHA_CAIXA, banco_autenticacao)
     janela_caixa = JanelaPrincipal(banco_autenticacao, sessao_caixa)
     qtbot.addWidget(janela_caixa)
-    assert not janela_caixa.botao_navegar_produtos.isEnabled()
+    assert janela_caixa.botao_navegar_produtos.isEnabled()
     janela_caixa.mostrar_produtos()
-    assert janela_caixa.paginas.currentWidget() is janela_caixa.pagina_frente_caixa
+    assert janela_caixa.paginas.currentWidget() is janela_caixa.pagina_produtos
+    assert not janela_caixa.pagina_produtos.botao_alterar_situacao.isEnabled()
+    assert not janela_caixa.pagina_produtos.botao_gerenciar_categorias.isEnabled()
 
     janela_admin = JanelaPrincipal(banco_autenticacao, autenticar_admin(banco_autenticacao))
     qtbot.addWidget(janela_admin)

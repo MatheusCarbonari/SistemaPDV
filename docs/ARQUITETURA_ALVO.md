@@ -43,6 +43,11 @@ SQL e só atualiza lista e detalhe depois do sucesso comprovado.
 - O esquema versão 9 introduz `codigos_recuperacao`, vinculando verificadores de
   alta entropia ao administrador e registrando consumo ou revogação sem guardar
   o código original. Consumo e atualização de senha compartilham a transação.
+- O esquema versão 10 introduz `categorias` como cadastro estável e substitui o
+  texto livre de `produtos` por `categoria_id`. A chave de unicidade usa
+  normalização Unicode determinística; inativação preserva os produtos já
+  vinculados, enquanto novas associações são validadas dentro da transação.
+  Vendas e snapshots históricos permanecem independentes do nome atual.
 - `id` técnico não é `codigo` operacional. ID de venda persistente e único; usar identificador separado por tentativa para idempotência.
 - Snapshot de cada item para não depender de mudanças no cadastro; `produto_id` opcional para Diversos.
 - Preços monetários em centavos; multiplicação de kg usa Decimal e política explícita de arredondamento.
@@ -74,9 +79,9 @@ mantém a operação bloqueada.
   mesma resposta. O limitador local aplica espera de 30 segundos depois de cinco
   falhas em 60 segundos; reiniciar não autentica nem bloqueia permanentemente.
 - Autorização reconsulta ID, identificação, perfil e situação da conta. Caixa
-  opera vendas e consulta Histórico; Administrador também administra Produtos e
-  provisiona Caixa pelo serviço protegido. A tela avançada de usuários não foi
-  antecipada.
+  opera vendas, consulta Histórico e Produtos e pode cadastrar ou editar um
+  produto somente com capacidade administrativa vinculada aos dados. Situação,
+  categorias, histórico de preços e provisionamento permanecem administrativos.
 - O T47 produz a capacidade de autorização pontual exigida pela INT-D2 sem
   elevar a sessão corrente. O T48 permite recuperação administrativa offline
   com código de uso único, invalida sessões e capacidades da identidade após a
@@ -91,9 +96,21 @@ mantém a operação bloqueada.
   solicitadas ou concedidas por ela. O consumo atômico em memória ocorre antes
   da transação comercial e nunca é revertido por falha posterior. Nenhuma
   capacidade ou senha é persistida.
+- Para Produtos, o vínculo inclui SHA-256 de representação canônica versionada
+  do comando normalizado. Cadastro usa o catálogo como recurso; edição usa o ID
+  do produto e inclui seu estado-base. O serviço consome a capacidade antes de
+  abrir a transação e o repositório compara produto e categoria sob
+  `BEGIN IMMEDIATE`; divergência exige nova autorização. O hash nunca substitui
+  a capacidade opaca.
 - A INT-E reutiliza o login e os registros processuais existentes para criar,
   listar, ativar e desativar contas Caixa. Não cria Administradores adicionais,
   sessão elevada nem um segundo mecanismo de identidade.
+- A redefinição administrativa de senha reutiliza a mesma política e o mesmo
+  hash, atualiza somente uma identidade Caixa em transação e preserva sua
+  situação. Login, emissão de capacidade e troca de credencial compartilham um
+  bloqueio processual; depois do commit, sessões e capacidades do Caixa são
+  revogadas antes de liberar novas autenticações. Não há coordenação entre
+  instâncias distintas enquanto os gerenciadores permanecerem em memória.
 - O cancelamento distingue falha anterior ao commit, falha de commit
   reconciliada com venda ainda ativa e resultado incerto. Após exceção no
   commit, uma nova conexão consulta somente status e metadados. `ATIVA`

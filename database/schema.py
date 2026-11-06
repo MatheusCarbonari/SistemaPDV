@@ -1,7 +1,11 @@
 from database.conexao import CAMINHO_BANCO, conectar
+from models.categoria import (
+    NOME_CATEGORIA_LEGADA,
+    normalizar_identidade_categoria,
+)
 
 
-VERSAO_ESQUEMA = 9
+VERSAO_ESQUEMA = 10
 
 _COMANDO_CRIAR_PRODUTOS = """
 CREATE TABLE IF NOT EXISTS produtos (
@@ -20,6 +24,49 @@ CREATE TABLE IF NOT EXISTS produtos (
     criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     atualizado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+"""
+
+_COMANDO_CRIAR_CATEGORIAS = """
+CREATE TABLE categorias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL
+        CHECK (
+            typeof(nome) = 'text'
+            AND length(trim(nome)) > 0
+        ),
+    nome_chave TEXT NOT NULL UNIQUE
+        CHECK (
+            typeof(nome_chave) = 'text'
+            AND length(nome_chave) > 0
+        ),
+    ativo INTEGER NOT NULL DEFAULT 1
+        CHECK (ativo IN (0, 1))
+);
+"""
+
+_COMANDO_CRIAR_PRODUTOS_V10 = """
+CREATE TABLE produtos_novo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT NOT NULL UNIQUE,
+    nome TEXT NOT NULL,
+    categoria_id INTEGER NOT NULL,
+    forma_venda TEXT NOT NULL
+        CHECK (forma_venda IN ('PESO', 'UNIDADE')),
+    preco_venda_centavos INTEGER NOT NULL
+        CHECK (preco_venda_centavos > 0),
+    origem TEXT NOT NULL
+        CHECK (origem IN ('COMPRADO', 'PRODUZIDO')),
+    ativo INTEGER NOT NULL DEFAULT 1
+        CHECK (ativo IN (0, 1)),
+    criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE RESTRICT
+);
+"""
+
+_COMANDO_CRIAR_INDICE_PRODUTOS_CATEGORIA = """
+CREATE INDEX IF NOT EXISTS ix_produtos_categoria_ativo_nome
+ON produtos (categoria_id, ativo, nome);
 """
 
 _COMANDO_CRIAR_VENDAS = """
@@ -360,6 +407,7 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
     """
     conexao = conectar(caminho_banco)
 
+    chaves_estrangeiras_desabilitadas = False
     try:
         versao_atual = conexao.execute("PRAGMA user_version").fetchone()[0]
 
@@ -370,6 +418,10 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
 
         if versao_atual == VERSAO_ESQUEMA:
             return
+
+        if versao_atual < 10:
+            conexao.execute("PRAGMA foreign_keys = OFF")
+            chaves_estrangeiras_desabilitadas = True
 
         # DDL também participa da transação no SQLite. Se qualquer comando
         # falhar, nem as tabelas anteriores nem a nova versão são confirmadas.
@@ -420,10 +472,101 @@ def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
             conexao.execute(_COMANDO_CRIAR_INDICE_CODIGOS_RECUPERACAO)
             versao_atual = 9
 
+        if versao_atual < 10:
+            _migrar_categorias_v10(conexao)
+            versao_atual = 10
+
+        referencias_invalidas = conexao.execute(
+            "PRAGMA foreign_key_check"
+        ).fetchall()
+        if referencias_invalidas:
+            raise RuntimeError(
+                "A migração produziu referências inválidas."
+            )
+
         conexao.execute(f"PRAGMA user_version = {versao_atual}")
         conexao.commit()
     except Exception:
         conexao.rollback()
         raise
     finally:
+        if chaves_estrangeiras_desabilitadas:
+            conexao.execute("PRAGMA foreign_keys = ON")
         conexao.close()
+
+
+def _migrar_categorias_v10(conexao) -> None:
+    colunas_produtos = {
+        linha["name"]
+        for linha in conexao.execute("PRAGMA table_info(produtos)").fetchall()
+    }
+    if "categoria_id" in colunas_produtos:
+        conexao.execute(_COMANDO_CRIAR_INDICE_PRODUTOS_CATEGORIA)
+        return
+    conexao.execute(_COMANDO_CRIAR_CATEGORIAS)
+    produtos = conexao.execute(
+        """
+        SELECT
+            id, codigo, nome, categoria, forma_venda,
+            preco_venda_centavos, origem, ativo, criado_em, atualizado_em
+        FROM produtos
+        ORDER BY id
+        """
+    ).fetchall()
+
+    categorias_por_chave: dict[str, int] = {}
+    categoria_por_produto: dict[int, int] = {}
+    for produto in produtos:
+        nome, chave = normalizar_identidade_categoria(produto["categoria"])
+        categoria_legada_invalida = not nome or nome.isdigit()
+        if not nome:
+            nome, chave = normalizar_identidade_categoria(
+                NOME_CATEGORIA_LEGADA
+            )
+
+        categoria_id = categorias_por_chave.get(chave)
+        if categoria_id is None:
+            cursor = conexao.execute(
+                """
+                INSERT INTO categorias (nome, nome_chave, ativo)
+                VALUES (?, ?, ?)
+                """,
+                (nome, chave, int(not categoria_legada_invalida)),
+            )
+            categoria_id = cursor.lastrowid
+            categorias_por_chave[chave] = categoria_id
+        elif categoria_legada_invalida:
+            conexao.execute(
+                "UPDATE categorias SET ativo = 0 WHERE id = ?",
+                (categoria_id,),
+            )
+        categoria_por_produto[produto["id"]] = categoria_id
+
+    conexao.execute(_COMANDO_CRIAR_PRODUTOS_V10)
+    conexao.executemany(
+        """
+        INSERT INTO produtos_novo (
+            id, codigo, nome, categoria_id, forma_venda,
+            preco_venda_centavos, origem, ativo, criado_em, atualizado_em
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            (
+                produto["id"],
+                produto["codigo"],
+                produto["nome"],
+                categoria_por_produto[produto["id"]],
+                produto["forma_venda"],
+                produto["preco_venda_centavos"],
+                produto["origem"],
+                produto["ativo"],
+                produto["criado_em"],
+                produto["atualizado_em"],
+            )
+            for produto in produtos
+        ),
+    )
+    conexao.execute("DROP TABLE produtos")
+    conexao.execute("ALTER TABLE produtos_novo RENAME TO produtos")
+    conexao.execute(_COMANDO_CRIAR_INDICE_PRODUTOS_CATEGORIA)

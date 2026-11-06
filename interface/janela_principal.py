@@ -237,7 +237,8 @@ class JanelaPrincipal(QMainWindow):
                 self.estado_venda.venda.itens
             ),
             operacao_bloqueada=self._fechamento_bloqueia_operacao,
-            alteracao_permitida=self._usuario_pode_administrar_produtos,
+            alteracao_permitida=self._usuario_pode_operar,
+            sessao_administrativa=self.sessao,
             parent=self.paginas,
         )
         self.pagina_administracao = PaginaAdministracao(
@@ -303,9 +304,9 @@ class JanelaPrincipal(QMainWindow):
         self.pagina_historico.restaurar_foco()
 
     def mostrar_produtos(self) -> None:
-        if not self._usuario_pode_administrar_produtos():
+        if not self._usuario_pode_operar():
             self.rotulo_status.setText(
-                "A página Produtos exige perfil Administrador."
+                "A página Produtos exige uma sessão operacional válida."
             )
             self.botao_navegar_caixa.setChecked(True)
             return
@@ -686,7 +687,6 @@ class JanelaPrincipal(QMainWindow):
         self.botao_navegar_historico.setEnabled(sessao_valida and not operacao_bloqueada)
         self.botao_navegar_produtos.setEnabled(
             sessao_valida
-            and self.sessao.perfil == "ADMINISTRADOR"
             and not operacao_bloqueada
         )
         self.botao_navegar_administracao.setEnabled(

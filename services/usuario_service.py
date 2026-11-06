@@ -5,6 +5,7 @@ from repositories.usuario_repository import (
     alterar_situacao_usuario_caixa_repository,
     criar_usuario_caixa_repository,
     listar_usuarios_caixa_repository,
+    redefinir_senha_usuario_caixa_repository,
 )
 from services.administrador_inicial_service import (
     normalizar_identificacao,
@@ -15,6 +16,7 @@ from services.autenticacao_service import (
     GERENCIADOR_SESSOES,
     GerenciadorSessoes,
     autorizar_sessao,
+    coordenar_credenciais,
 )
 from services.autorizacao_pontual_service import (
     GERENCIADOR_AUTORIZACOES,
@@ -97,3 +99,56 @@ def alterar_situacao_conta_caixa(
         gerenciador_autorizacoes.invalidar_usuario(usuario.id)
         gerenciador_sessoes.invalidar_usuario(usuario.id)
     return usuario
+
+
+def redefinir_senha_conta_caixa(
+    sessao_administrativa: SessaoUsuario,
+    usuario_id,
+    nova_senha,
+    confirmacao_senha,
+    caminho_banco=CAMINHO_BANCO,
+    *,
+    gerenciador_sessoes: GerenciadorSessoes = GERENCIADOR_SESSOES,
+    gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
+        GERENCIADOR_AUTORIZACOES
+    ),
+):
+    autorizar_sessao(
+        sessao_administrativa,
+        ("ADMINISTRADOR",),
+        caminho_banco,
+        gerenciador_sessoes=gerenciador_sessoes,
+    )
+    if not isinstance(usuario_id, int) or isinstance(usuario_id, bool):
+        raise TypeError("O ID do operador deve ser um inteiro.")
+    if usuario_id <= 0:
+        raise ValueError("O ID do operador deve ser positivo.")
+
+    erros = validar_senha(nova_senha)
+    if nova_senha != confirmacao_senha:
+        erros.append("A confirmação da senha não confere.")
+    if erros:
+        return None, erros
+
+    nova_senha_hash = gerar_hash_senha(nova_senha)
+    with coordenar_credenciais():
+        autorizar_sessao(
+            sessao_administrativa,
+            ("ADMINISTRADOR",),
+            caminho_banco,
+            gerenciador_sessoes=gerenciador_sessoes,
+        )
+        usuario = redefinir_senha_usuario_caixa_repository(
+            usuario_id,
+            nova_senha_hash,
+            caminho_banco,
+        )
+        if usuario is None:
+            raise LookupError("A conta Caixa não foi encontrada.")
+
+        # O commit da credencial precede a revogação. Mantendo o bloqueio
+        # de credenciais, nenhum novo login ou capacidade pode ser publicado
+        # entre essas etapas neste processo.
+        gerenciador_autorizacoes.invalidar_usuario(usuario.id)
+        gerenciador_sessoes.invalidar_usuario(usuario.id)
+    return usuario, []

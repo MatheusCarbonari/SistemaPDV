@@ -5,6 +5,10 @@ import time
 
 from database.conexao import CAMINHO_BANCO
 from models.autorizacao_pontual import CapacidadeAutorizacao
+from models.comando_produto import (
+    OPERACAO_CADASTRAR_PRODUTO,
+    OPERACAO_EDITAR_PRODUTO,
+)
 from models.sessao_usuario import SessaoUsuario
 from services.autenticacao_service import (
     GERENCIADOR_SESSOES,
@@ -14,12 +18,19 @@ from services.autenticacao_service import (
     LimitadorTentativasLogin,
     SessaoInvalidaError,
     autorizar_sessao,
+    coordenar_credenciais,
     validar_credenciais_usuario,
 )
 
 
 OPERACAO_CANCELAR_VENDA = "CANCELAR_VENDA"
-OPERACOES_SUPORTADAS = frozenset((OPERACAO_CANCELAR_VENDA,))
+OPERACOES_SUPORTADAS = frozenset(
+    (
+        OPERACAO_CANCELAR_VENDA,
+        OPERACAO_CADASTRAR_PRODUTO,
+        OPERACAO_EDITAR_PRODUTO,
+    )
+)
 
 
 class AutorizacaoPontualInvalidaError(PermissionError):
@@ -40,6 +51,7 @@ class _EstadoAutorizacao:
     sessao_solicitante: SessaoUsuario
     operacao: str
     recurso_id: int
+    dados_autorizados_hash: str | None
     administrador_autorizador_id: int
     identidade_administrador: str
     expira_em: float
@@ -71,42 +83,45 @@ class GerenciadorAutorizacoesPontuais:
         senha_administrador,
         caminho_banco=CAMINHO_BANCO,
         *,
+        dados_autorizados_hash: str | None = None,
         limitador: LimitadorTentativasLogin | None = None,
     ) -> CapacidadeAutorizacao:
-        _validar_vinculo(operacao, recurso_id)
+        _validar_vinculo(operacao, recurso_id, dados_autorizados_hash)
         # Emissão e revogação compartilham a mesma região crítica. Assim, uma
         # revogação concorrente acontece integralmente antes ou depois da
         # publicação da capacidade; no segundo caso, remove também a recém-
         # emitida.
-        with self._bloqueio:
-            autorizar_sessao(
-                sessao_solicitante,
-                ("ADMINISTRADOR", "CAIXA"),
-                caminho_banco,
-                gerenciador_sessoes=self.gerenciador_sessoes,
-            )
-            administrador = validar_credenciais_usuario(
-                identificacao_administrador,
-                senha_administrador,
-                caminho_banco,
-                limitador=limitador or LIMITADOR_LOGIN_PADRAO,
-            )
-            if administrador.perfil != "ADMINISTRADOR":
-                raise CredenciaisInvalidasError(
-                    "Identificação ou senha administrativa inválida."
+        with coordenar_credenciais():
+            with self._bloqueio:
+                autorizar_sessao(
+                    sessao_solicitante,
+                    ("ADMINISTRADOR", "CAIXA"),
+                    caminho_banco,
+                    gerenciador_sessoes=self.gerenciador_sessoes,
                 )
+                administrador = validar_credenciais_usuario(
+                    identificacao_administrador,
+                    senha_administrador,
+                    caminho_banco,
+                    limitador=limitador or LIMITADOR_LOGIN_PADRAO,
+                )
+                if administrador.perfil != "ADMINISTRADOR":
+                    raise CredenciaisInvalidasError(
+                        "Identificação ou senha administrativa inválida."
+                    )
 
-            capacidade = CapacidadeAutorizacao(secrets.token_urlsafe(32))
-            estado = _EstadoAutorizacao(
-                capacidade=capacidade,
-                sessao_solicitante=sessao_solicitante,
-                operacao=operacao,
-                recurso_id=recurso_id,
-                administrador_autorizador_id=administrador.id,
-                identidade_administrador=administrador.identificacao_acesso,
-                expira_em=self._relogio() + self.validade_segundos,
-            )
-            self._autorizacoes[capacidade.identificador] = estado
+                capacidade = CapacidadeAutorizacao(secrets.token_urlsafe(32))
+                estado = _EstadoAutorizacao(
+                    capacidade=capacidade,
+                    sessao_solicitante=sessao_solicitante,
+                    operacao=operacao,
+                    recurso_id=recurso_id,
+                    dados_autorizados_hash=dados_autorizados_hash,
+                    administrador_autorizador_id=administrador.id,
+                    identidade_administrador=administrador.identificacao_acesso,
+                    expira_em=self._relogio() + self.validade_segundos,
+                )
+                self._autorizacoes[capacidade.identificador] = estado
         return capacidade
 
     def consumir(
@@ -116,6 +131,8 @@ class GerenciadorAutorizacoesPontuais:
         operacao: str,
         recurso_id: int,
         caminho_banco=CAMINHO_BANCO,
+        *,
+        dados_autorizados_hash: str | None = None,
     ) -> str:
         if not isinstance(capacidade, CapacidadeAutorizacao):
             raise AutorizacaoPontualInvalidaError(
@@ -143,7 +160,11 @@ class GerenciadorAutorizacoesPontuais:
                 raise AutorizacaoPontualInvalidaError(
                     "A autorização pertence a outra sessão."
                 )
-            if estado.operacao != operacao or estado.recurso_id != recurso_id:
+            if (
+                estado.operacao != operacao
+                or estado.recurso_id != recurso_id
+                or estado.dados_autorizados_hash != dados_autorizados_hash
+            ):
                 raise AutorizacaoPontualInvalidaError(
                     "A autorização não corresponde à operação solicitada."
                 )
@@ -176,13 +197,38 @@ class GerenciadorAutorizacoesPontuais:
                 self._consumidas.add(identificador)
 
 
-def _validar_vinculo(operacao: str, recurso_id: int) -> None:
+def _validar_vinculo(
+    operacao: str,
+    recurso_id: int,
+    dados_autorizados_hash: str | None,
+) -> None:
     if operacao not in OPERACOES_SUPORTADAS:
         raise ValueError("O tipo de operação crítica é inválido.")
     if not isinstance(recurso_id, int) or isinstance(recurso_id, bool):
         raise TypeError("O ID do recurso deve ser um inteiro.")
     if recurso_id <= 0:
         raise ValueError("O ID do recurso deve ser positivo.")
+    operacao_produto = operacao in (
+        OPERACAO_CADASTRAR_PRODUTO,
+        OPERACAO_EDITAR_PRODUTO,
+    )
+    if operacao_produto:
+        if not _hash_sha256_valido(dados_autorizados_hash):
+            raise ValueError(
+                "A autorização de Produto exige o hash dos dados aprovados."
+            )
+    elif dados_autorizados_hash is not None:
+        raise ValueError(
+            "A operação não admite vínculo adicional de dados."
+        )
+
+
+def _hash_sha256_valido(valor) -> bool:
+    return (
+        isinstance(valor, str)
+        and len(valor) == 64
+        and all(caractere in "0123456789abcdef" for caractere in valor)
+    )
 
 
 GERENCIADOR_AUTORIZACOES = GerenciadorAutorizacoesPontuais()

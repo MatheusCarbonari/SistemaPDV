@@ -15,12 +15,18 @@ from repositories.produto_repository import (
     salvar_produto,
 )
 from services.produto_service import atualizar_produto
+from services.autenticacao_service import autenticar_usuario
+from tests.helpers_identidade import (
+    SENHA_ADMIN_TESTE,
+    criar_sessao_admin_teste,
+)
 
 
 @pytest.fixture
 def banco_precos(tmp_path):
     caminho = tmp_path / "historico_precos.db"
     criar_tabelas(caminho)
+    criar_sessao_admin_teste(caminho)
     return caminho
 
 
@@ -48,6 +54,9 @@ def editar_produto(caminho, produto, *, preco, nome=None):
         preco,
         produto.origem,
         caminho,
+        sessao_solicitante=autenticar_usuario(
+            "administrador", SENHA_ADMIN_TESTE, caminho
+        ),
     )
 
 
@@ -257,7 +266,12 @@ def test_edicao_grafica_usa_atualizacao_auditavel(
     banco_precos,
 ) -> None:
     produto = salvar_produto_teste(banco_precos)
-    pagina = PaginaProdutos(banco_precos)
+    pagina = PaginaProdutos(
+        banco_precos,
+        sessao_administrativa=autenticar_usuario(
+            "administrador", SENHA_ADMIN_TESTE, banco_precos
+        ),
+    )
     qtbot.addWidget(pagina)
     pagina.show()
     pagina.ativar()

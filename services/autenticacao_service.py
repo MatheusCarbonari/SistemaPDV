@@ -2,7 +2,8 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 import secrets
-from threading import Lock
+from contextlib import contextmanager
+from threading import Lock, RLock
 import time
 
 from database.conexao import CAMINHO_BANCO
@@ -95,6 +96,17 @@ class LimitadorTentativasLogin:
 
 LIMITADOR_LOGIN_PADRAO = LimitadorTentativasLogin()
 
+# Serializa, neste processo, autenticações e trocas de credencial. O RLock
+# permite que um serviço protegido mantenha a coordenação enquanto revalida a
+# sessão pelo contrato público abaixo.
+_BLOQUEIO_CREDENCIAIS = RLock()
+
+
+@contextmanager
+def coordenar_credenciais():
+    with _BLOQUEIO_CREDENCIAIS:
+        yield
+
 
 class GerenciadorSessoes:
     """Registro processual que distingue sessões emitidas de objetos fabricados."""
@@ -157,13 +169,14 @@ def autenticar_usuario(
     limitador: LimitadorTentativasLogin | None = None,
     gerenciador_sessoes: GerenciadorSessoes = GERENCIADOR_SESSOES,
 ) -> SessaoUsuario:
-    usuario = validar_credenciais_usuario(
-        identificacao_acesso,
-        senha,
-        caminho_banco,
-        limitador=limitador,
-    )
-    return gerenciador_sessoes.emitir(usuario)
+    with coordenar_credenciais():
+        usuario = validar_credenciais_usuario(
+            identificacao_acesso,
+            senha,
+            caminho_banco,
+            limitador=limitador,
+        )
+        return gerenciador_sessoes.emitir(usuario)
 
 
 def validar_credenciais_usuario(
@@ -205,27 +218,39 @@ def autorizar_sessao(
     *,
     gerenciador_sessoes: GerenciadorSessoes = GERENCIADOR_SESSOES,
 ):
-    gerenciador_sessoes.validar(sessao)
+    with coordenar_credenciais():
+        gerenciador_sessoes.validar(sessao)
 
-    usuario = buscar_usuario_por_id(sessao.usuario_id, caminho_banco)
-    if (
-        usuario is None
-        or not usuario.ativo
-        or usuario.identificacao_acesso != sessao.identificacao_acesso
-        or usuario.perfil != sessao.perfil
-    ):
-        gerenciador_sessoes.invalidar(sessao)
-        raise SessaoInvalidaError(
-            "A conta não está mais habilitada para esta sessão."
-        )
-    if usuario.perfil not in tuple(perfis_permitidos):
-        raise PermissaoNegadaError("O perfil autenticado não possui permissão.")
-    return usuario
+        usuario = buscar_usuario_por_id(sessao.usuario_id, caminho_banco)
+        if (
+            usuario is None
+            or not usuario.ativo
+            or usuario.identificacao_acesso != sessao.identificacao_acesso
+            or usuario.perfil != sessao.perfil
+        ):
+            gerenciador_sessoes.invalidar(sessao)
+            raise SessaoInvalidaError(
+                "A conta não está mais habilitada para esta sessão."
+            )
+        if usuario.perfil not in tuple(perfis_permitidos):
+            raise PermissaoNegadaError(
+                "O perfil autenticado não possui permissão."
+            )
+        return usuario
 
 
 def encerrar_sessao(
     sessao: SessaoUsuario,
     *,
     gerenciador_sessoes: GerenciadorSessoes = GERENCIADOR_SESSOES,
+    gerenciador_autorizacoes=None,
 ) -> None:
+    if gerenciador_autorizacoes is None:
+        from services.autorizacao_pontual_service import (
+            GERENCIADOR_AUTORIZACOES,
+        )
+
+        gerenciador_autorizacoes = GERENCIADOR_AUTORIZACOES
+    if isinstance(sessao, SessaoUsuario):
+        gerenciador_autorizacoes.invalidar_usuario(sessao.usuario_id)
     gerenciador_sessoes.invalidar(sessao)

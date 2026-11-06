@@ -9,6 +9,8 @@ from services.produto_service import (
     criar_produto, 
     atualizar_produto, 
     consultar_produto_por_codigo)
+from tests.helpers_categorias import garantir_categoria_teste
+from tests.helpers_identidade import criar_sessao_admin_teste
 
 
 # Cenário válido e normalização dos dados.
@@ -27,7 +29,6 @@ def test_criar_produto(tmp_path) -> None:
         origem=" comprado ",
         caminho_banco=caminho_banco,
     )
-
     assert erros == []
     assert produto.codigo == "101"
     assert produto.nome == "Picanha"
@@ -400,6 +401,7 @@ def test_criar_produto_retorna_erro_quando_codigo_ja_existe(tmp_path) -> None:
     caminho_banco = tmp_path / "teste_produto_service.db"
 
     criar_tabelas(caminho_banco)
+    categoria = garantir_categoria_teste(caminho_banco)
 
     conexao = sqlite3.connect(caminho_banco)
 
@@ -409,7 +411,7 @@ def test_criar_produto_retorna_erro_quando_codigo_ja_existe(tmp_path) -> None:
             INSERT INTO produtos (
                 codigo,
                 nome,
-                categoria,
+                categoria_id,
                 forma_venda,
                 preco_venda_centavos,
                 origem
@@ -419,7 +421,7 @@ def test_criar_produto_retorna_erro_quando_codigo_ja_existe(tmp_path) -> None:
             (
                 "101",
                 "Picanha",
-                "BOVINOS",
+                categoria.id,
                 "PESO",
                 7990,
                 "COMPRADO",
@@ -643,6 +645,7 @@ def test_alterar_situacao_produto_service_inativa_produto_existente(
         produto_id=produto.id,
         ativo=False,
         caminho_banco=caminho_banco,
+        sessao_solicitante=criar_sessao_admin_teste(caminho_banco),
     )
 
     conexao = sqlite3.connect(caminho_banco)
@@ -668,6 +671,7 @@ def test_alterar_situacao_produto_service_rejeita_id_invalido(tmp_path) -> None:
         produto_id="1",
         ativo=False,
         caminho_banco=caminho_banco,
+        sessao_solicitante=criar_sessao_admin_teste(caminho_banco),
     )
 
     assert foi_atualizado is False
@@ -685,6 +689,7 @@ def test_alterar_situacao_produto_service_rejeita_ativo_invalido(
         produto_id=1,
         ativo=None,
         caminho_banco=caminho_banco,
+        sessao_solicitante=criar_sessao_admin_teste(caminho_banco),
     )
 
     assert foi_atualizado is False
@@ -702,6 +707,7 @@ def test_alterar_situacao_produto_service_retorna_erro_para_id_inexistente(
         produto_id=999,
         ativo=False,
         caminho_banco=caminho_banco,
+        sessao_solicitante=criar_sessao_admin_teste(caminho_banco),
     )
 
     assert foi_atualizado is False
@@ -732,6 +738,7 @@ def test_atualizar_produto_com_dados_validos(tmp_path) -> None:
         preco_venda_centavos=8490,
         origem=" comprado ",
         caminho_banco=caminho_banco,
+        sessao_solicitante=criar_sessao_admin_teste(caminho_banco),
     )
 
     assert erros == []
@@ -763,16 +770,18 @@ def test_atualizar_produto_rejeita_codigo_9999_e_preserva_dados(tmp_path) -> Non
         preco_venda_centavos=1000,
         origem="PRODUZIDO",
         caminho_banco=caminho_banco,
+        sessao_solicitante=criar_sessao_admin_teste(caminho_banco),
     )
 
     conexao = sqlite3.connect(caminho_banco)
     try:
         dados_salvos = conexao.execute(
             """
-            SELECT codigo, nome, categoria, forma_venda,
-                   preco_venda_centavos, origem
-            FROM produtos
-            WHERE id = ?
+            SELECT p.codigo, p.nome, c.nome, p.forma_venda,
+                   p.preco_venda_centavos, p.origem
+            FROM produtos AS p
+            JOIN categorias AS c ON c.id = p.categoria_id
+            WHERE p.id = ?
             """,
             (produto_salvo.id,),
         ).fetchone()
@@ -804,6 +813,7 @@ def test_atualizar_produto_retorna_erro_quando_produto_nao_existe(tmp_path) -> N
         preco_venda_centavos=7990,
         origem="COMPRADO",
         caminho_banco=caminho_banco,
+        sessao_solicitante=criar_sessao_admin_teste(caminho_banco),
     )
 
     assert produto_atualizado is None
@@ -844,6 +854,7 @@ def test_atualizar_produto_retorna_erro_quando_codigo_pertence_a_outro_produto(t
         preco_venda_centavos=6990,
         origem="COMPRADO",
         caminho_banco=caminho_banco,
+        sessao_solicitante=criar_sessao_admin_teste(caminho_banco),
     )
 
     assert produto_atualizado is None
@@ -874,6 +885,7 @@ def test_atualizar_produto_retorna_erro_quando_preco_invalido(tmp_path) -> None:
         preco_venda_centavos=0,
         origem="COMPRADO",
         caminho_banco=caminho_banco,
+        sessao_solicitante=criar_sessao_admin_teste(caminho_banco),
     )
 
     assert produto_atualizado is None
@@ -904,6 +916,7 @@ def test_atualizar_produto_retorna_erro_quando_forma_venda_invalida(tmp_path) ->
         preco_venda_centavos=7990,
         origem="COMPRADO",
         caminho_banco=caminho_banco,
+        sessao_solicitante=criar_sessao_admin_teste(caminho_banco),
     )
 
     assert produto_atualizado is None

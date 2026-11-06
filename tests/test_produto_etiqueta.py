@@ -4,9 +4,11 @@ import pytest
 
 from database.schema import criar_tabelas
 from models.produto import Produto
-from repositories.produto_repository import salvar_produto
+from repositories.produto_repository import (
+    alterar_situacao_produto_repository,
+    salvar_produto,
+)
 from services.produto_etiqueta import associar_etiqueta_ao_produto
-from services.produto_service import alterar_situacao_produto
 
 
 def salvar_produto_de_teste(caminho_banco, codigo="234") -> Produto:
@@ -75,11 +77,12 @@ def test_associar_etiqueta_rejeita_produto_inativo(tmp_path) -> None:
     caminho_banco = tmp_path / "teste_produto_etiqueta.db"
     criar_tabelas(caminho_banco)
     produto_salvo = salvar_produto_de_teste(caminho_banco)
-    foi_atualizado, erros_situacao = alterar_situacao_produto(
+    foi_atualizado = alterar_situacao_produto_repository(
         produto_salvo.id,
         False,
         caminho_banco,
     )
+    erros_situacao = []
 
     associacao, erros = associar_etiqueta_ao_produto(
         "2023400053672",

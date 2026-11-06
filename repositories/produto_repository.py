@@ -1,6 +1,22 @@
 from database.conexao import CAMINHO_BANCO, conectar
+from models.categoria import (
+    normalizar_identidade_categoria,
+    validar_nome_categoria,
+)
 from models.produto import Produto
+from models.comando_produto import (
+    ComandoCadastroProduto,
+    ComandoEdicaoProduto,
+)
 from datetime import datetime
+
+
+class CategoriaProdutoIndisponivelError(ValueError):
+    pass
+
+
+class ConflitoProdutoError(RuntimeError):
+    pass
 
 # Verifica se o código já pertence a algum produto cadastrado.
 def codigo_existe(codigo: str, caminho_banco=CAMINHO_BANCO) -> bool:
@@ -28,12 +44,47 @@ def salvar_produto(produto:Produto, caminho_banco=CAMINHO_BANCO) -> Produto:
     conexao = conectar(caminho_banco)
 
     try:
+        conexao.execute("BEGIN IMMEDIATE")
+        if produto.categoria_id is None:
+            nome_categoria, chave_categoria, erros_categoria = (
+                validar_nome_categoria(produto.categoria)
+            )
+            if erros_categoria:
+                raise CategoriaProdutoIndisponivelError(
+                    "Selecione uma categoria ativa."
+                )
+            conexao.execute(
+                """
+                INSERT INTO categorias (nome, nome_chave)
+                VALUES (?, ?)
+                ON CONFLICT(nome_chave) DO NOTHING
+                """,
+                (nome_categoria, chave_categoria),
+            )
+            categoria_legada = conexao.execute(
+                """
+                SELECT id, ativo FROM categorias WHERE nome_chave = ?
+                """,
+                (chave_categoria,),
+            ).fetchone()
+            produto.categoria_id = categoria_legada["id"]
+        categoria_selecionada = conexao.execute(
+            "SELECT ativo FROM categorias WHERE id = ?",
+            (produto.categoria_id,),
+        ).fetchone()
+        if (
+            categoria_selecionada is None
+            or categoria_selecionada["ativo"] != 1
+        ):
+            raise CategoriaProdutoIndisponivelError(
+                "Selecione uma categoria ativa."
+            )
         cursor = conexao.execute(
             """
             INSERT INTO produtos(
                 codigo,
                 nome,
-                categoria,
+                categoria_id,
                 forma_venda,
                 preco_venda_centavos,
                 origem
@@ -43,7 +94,7 @@ def salvar_produto(produto:Produto, caminho_banco=CAMINHO_BANCO) -> Produto:
             (
                 produto.codigo,
                 produto.nome,
-                produto.categoria,
+                produto.categoria_id,
                 produto.forma_venda,
                 produto.preco_venda_centavos,
                 produto.origem
@@ -62,6 +113,9 @@ def salvar_produto(produto:Produto, caminho_banco=CAMINHO_BANCO) -> Produto:
 
         novo_produto = montar_produto(produto_buscado)
 
+    except Exception:
+        conexao.rollback()
+        raise
     finally:
         conexao.close()
 
@@ -75,18 +129,20 @@ def buscar_produto_banco_pelo_id(produto_id:int, caminho_banco=CAMINHO_BANCO):
         produto_buscado = conexao.execute(
             """
             SELECT
-                id,
-                codigo,
-                nome,
-                categoria, 
-                forma_venda,
-                preco_venda_centavos,
-                origem,
-                ativo,
-                criado_em,
-                atualizado_em
-            FROM produtos
-            WHERE id = ?
+                p.id,
+                p.codigo,
+                p.nome,
+                p.categoria_id,
+                c.nome AS categoria,
+                p.forma_venda,
+                p.preco_venda_centavos,
+                p.origem,
+                p.ativo,
+                p.criado_em,
+                p.atualizado_em
+            FROM produtos AS p
+            JOIN categorias AS c ON c.id = p.categoria_id
+            WHERE p.id = ?
             """,
             (produto_id,),
         ).fetchone()
@@ -104,18 +160,20 @@ def buscar_produto_por_codigo(codigo:str, caminho_banco=CAMINHO_BANCO) -> Produt
         produto_buscado = conexao.execute(
             """
             SELECT
-                id,
-                codigo,
-                nome,
-                categoria, 
-                forma_venda,
-                preco_venda_centavos,
-                origem,
-                ativo,
-                criado_em,
-                atualizado_em
-            FROM produtos
-            WHERE codigo = ?
+                p.id,
+                p.codigo,
+                p.nome,
+                p.categoria_id,
+                c.nome AS categoria,
+                p.forma_venda,
+                p.preco_venda_centavos,
+                p.origem,
+                p.ativo,
+                p.criado_em,
+                p.atualizado_em
+            FROM produtos AS p
+            JOIN categorias AS c ON c.id = p.categoria_id
+            WHERE p.codigo = ?
             """,
             (codigo,),
         ).fetchone()
@@ -151,6 +209,7 @@ def montar_produto(produto_buscado) -> Produto:
         id=produto_buscado["id"],
         criado_em=criado_em,
         atualizado_em=atualizado_em,
+        categoria_id=produto_buscado["categoria_id"],
     )
 
     return novo_produto
@@ -161,47 +220,55 @@ def listar_produtos_repository(
     categoria: str | None = None,
     nome: str | None = None,
     termo: str | None = None,
+    categoria_id: int | None = None,
 ) -> list[Produto]:
     conexao = conectar(caminho_banco)
 
     try:
         consulta = """
             SELECT
-                id,
-                codigo,
-                nome,
-                categoria,
-                forma_venda,
-                preco_venda_centavos,
-                origem,
-                ativo,
-                criado_em,
-                atualizado_em
-            FROM produtos
+                p.id,
+                p.codigo,
+                p.nome,
+                p.categoria_id,
+                c.nome AS categoria,
+                p.forma_venda,
+                p.preco_venda_centavos,
+                p.origem,
+                p.ativo,
+                p.criado_em,
+                p.atualizado_em
+            FROM produtos AS p
+            JOIN categorias AS c ON c.id = p.categoria_id
             """
         condicoes = []
         parametros = []
 
         if ativo is not None:
-            condicoes.append("ativo = ?")
+            condicoes.append("p.ativo = ?")
             parametros.append(int(ativo))
 
         if categoria is not None:
-            condicoes.append("categoria = ?")
-            parametros.append(categoria)
+            _, chave = normalizar_identidade_categoria(categoria)
+            condicoes.append("c.nome_chave = ?")
+            parametros.append(chave)
+
+        if categoria_id is not None:
+            condicoes.append("p.categoria_id = ?")
+            parametros.append(categoria_id)
 
         if nome is not None:
-            condicoes.append("nome LIKE ?")
+            condicoes.append("p.nome LIKE ?")
             parametros.append(f"%{nome}%")
 
         if termo is not None:
-            condicoes.append("(codigo LIKE ? OR nome LIKE ?)")
+            condicoes.append("(p.codigo LIKE ? OR p.nome LIKE ?)")
             parametros.extend((f"%{termo}%", f"%{termo}%"))
 
         if condicoes:
             consulta += "\nWHERE " + " AND ".join(condicoes)
 
-        consulta += "\nORDER BY nome"
+        consulta += "\nORDER BY p.nome"
 
         produtos_encontrados = conexao.execute(
             consulta,
@@ -252,7 +319,7 @@ def atualizar_produto_repository(
         conexao.execute("BEGIN IMMEDIATE")
         produto_atual = conexao.execute(
             """
-            SELECT preco_venda_centavos
+            SELECT preco_venda_centavos, categoria_id
             FROM produtos
             WHERE id = ?
             """,
@@ -262,6 +329,18 @@ def atualizar_produto_repository(
             conexao.rollback()
             return None
 
+        categoria_selecionada = conexao.execute(
+            "SELECT ativo FROM categorias WHERE id = ?",
+            (produto.categoria_id,),
+        ).fetchone()
+        if categoria_selecionada is None or (
+            categoria_selecionada["ativo"] != 1
+            and produto.categoria_id != produto_atual["categoria_id"]
+        ):
+            raise CategoriaProdutoIndisponivelError(
+                "Selecione uma categoria ativa."
+            )
+
         preco_anterior = produto_atual["preco_venda_centavos"]
         cursor = conexao.execute(
             """
@@ -269,7 +348,7 @@ def atualizar_produto_repository(
             SET
                 codigo = ?,
                 nome = ?,
-                categoria = ?,
+                categoria_id = ?,
                 forma_venda = ?,
                 preco_venda_centavos = ?,
                 origem = ?,
@@ -279,7 +358,7 @@ def atualizar_produto_repository(
             (
                 produto.codigo,
                 produto.nome,
-                produto.categoria,
+                produto.categoria_id,
                 produto.forma_venda,
                 produto.preco_venda_centavos,
                 produto.origem,
@@ -325,3 +404,160 @@ def atualizar_produto_repository(
         return None
 
     return montar_produto(produto_buscado)
+
+
+def cadastrar_produto_comando_repository(
+    comando: ComandoCadastroProduto,
+    caminho_banco=CAMINHO_BANCO,
+) -> Produto:
+    conexao = conectar(caminho_banco)
+    try:
+        conexao.execute("BEGIN IMMEDIATE")
+        _exigir_categoria_aprovada(conexao, comando.categoria)
+        cursor = conexao.execute(
+            """
+            INSERT INTO produtos (
+                codigo, nome, categoria_id, forma_venda,
+                preco_venda_centavos, origem
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                comando.codigo,
+                comando.nome,
+                comando.categoria.id,
+                comando.forma_venda,
+                comando.preco_venda_centavos,
+                comando.origem,
+            ),
+        )
+        produto_id = cursor.lastrowid
+        conexao.commit()
+    except Exception:
+        conexao.rollback()
+        raise
+    finally:
+        conexao.close()
+    return montar_produto(
+        buscar_produto_banco_pelo_id(produto_id, caminho_banco)
+    )
+
+
+def editar_produto_comando_repository(
+    comando: ComandoEdicaoProduto,
+    caminho_banco=CAMINHO_BANCO,
+) -> Produto:
+    conexao = conectar(caminho_banco)
+    try:
+        conexao.execute("BEGIN IMMEDIATE")
+        atual = conexao.execute(
+            """
+            SELECT
+                p.id, p.codigo, p.nome, p.forma_venda,
+                p.preco_venda_centavos, p.origem, p.ativo,
+                c.id AS categoria_id, c.nome AS categoria_nome,
+                c.nome_chave AS categoria_chave, c.ativo AS categoria_ativa
+            FROM produtos AS p
+            JOIN categorias AS c ON c.id = p.categoria_id
+            WHERE p.id = ?
+            """,
+            (comando.estado_base.id,),
+        ).fetchone()
+        if atual is None or not _estado_base_corresponde(
+            atual,
+            comando.estado_base,
+        ):
+            raise ConflitoProdutoError(
+                "O produto foi alterado após a autorização. Recarregue os "
+                "dados e solicite uma nova autorização."
+            )
+        _exigir_categoria_aprovada(
+            conexao,
+            comando.categoria,
+            permitir_inativa=(
+                comando.categoria.id == comando.estado_base.categoria.id
+            ),
+        )
+
+        conexao.execute(
+            """
+            UPDATE produtos
+            SET nome = ?, categoria_id = ?, forma_venda = ?,
+                preco_venda_centavos = ?, origem = ?,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                comando.nome,
+                comando.categoria.id,
+                comando.forma_venda,
+                comando.preco_venda_centavos,
+                comando.origem,
+                comando.estado_base.id,
+            ),
+        )
+        if (
+            comando.estado_base.preco_venda_centavos
+            != comando.preco_venda_centavos
+        ):
+            conexao.execute(
+                """
+                INSERT INTO historico_precos_produtos (
+                    produto_id, preco_anterior_centavos, preco_novo_centavos
+                ) VALUES (?, ?, ?)
+                """,
+                (
+                    comando.estado_base.id,
+                    comando.estado_base.preco_venda_centavos,
+                    comando.preco_venda_centavos,
+                ),
+            )
+        conexao.commit()
+    except Exception:
+        conexao.rollback()
+        raise
+    finally:
+        conexao.close()
+    return montar_produto(
+        buscar_produto_banco_pelo_id(
+            comando.estado_base.id,
+            caminho_banco,
+        )
+    )
+
+
+def _exigir_categoria_aprovada(
+    conexao,
+    categoria,
+    *,
+    permitir_inativa=False,
+) -> None:
+    atual = conexao.execute(
+        "SELECT id, nome, nome_chave, ativo FROM categorias WHERE id = ?",
+        (categoria.id,),
+    ).fetchone()
+    if atual is None or (
+        atual["nome"] != categoria.nome
+        or atual["nome_chave"] != categoria.nome_chave
+        or bool(atual["ativo"]) is not categoria.ativo
+        or (not categoria.ativo and not permitir_inativa)
+    ):
+        raise ConflitoProdutoError(
+            "A categoria foi alterada após a autorização. Recarregue os "
+            "dados e solicite uma nova autorização."
+        )
+
+
+def _estado_base_corresponde(atual, esperado) -> bool:
+    return (
+        atual["id"] == esperado.id
+        and atual["codigo"] == esperado.codigo
+        and atual["nome"] == esperado.nome
+        and atual["categoria_id"] == esperado.categoria.id
+        and atual["categoria_nome"] == esperado.categoria.nome
+        and atual["categoria_chave"] == esperado.categoria.nome_chave
+        and bool(atual["categoria_ativa"]) is esperado.categoria.ativo
+        and atual["forma_venda"] == esperado.forma_venda
+        and atual["preco_venda_centavos"] == esperado.preco_venda_centavos
+        and atual["origem"] == esperado.origem
+        and bool(atual["ativo"]) is esperado.ativo
+    )

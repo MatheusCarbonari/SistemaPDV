@@ -1,4 +1,6 @@
 import pytest
+import sqlite3
+from threading import Event, Thread
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog, QLineEdit
 
@@ -6,6 +8,7 @@ from database.conexao import conectar
 from database.schema import criar_tabelas
 import interface.aplicacao as aplicacao_module
 from interface.dialogo_login import DialogoLogin
+from interface.dialogo_redefinicao_senha import DialogoRedefinicaoSenha
 from interface.janela_principal import JanelaPrincipal
 from models.item_venda import ItemVenda
 from models.sessao_usuario import SessaoUsuario
@@ -18,6 +21,7 @@ from services.autenticacao_service import (
     PermissaoNegadaError,
     SessaoInvalidaError,
     autenticar_usuario,
+    autorizar_sessao,
 )
 from services.autorizacao_pontual_service import (
     OPERACAO_CANCELAR_VENDA,
@@ -29,11 +33,13 @@ from services.usuario_service import (
     alterar_situacao_conta_caixa,
     criar_conta_caixa,
     listar_contas_caixa,
+    redefinir_senha_conta_caixa,
 )
 
 
 SENHA_ADMIN = "frase administrativa para int e 2026"
 SENHA_CAIXA = "frase individual do operador caixa 2026"
+SENHA_CAIXA_NOVA = "nova frase individual do operador 2026"
 
 
 @pytest.fixture
@@ -92,7 +98,7 @@ def test_login_caixa_opera_sem_acesso_administrativo(ambiente, qtbot) -> None:
 
     assert janela.rotulo_usuario.text() == "caixa01 (CAIXA)"
     assert not janela.botao_navegar_administracao.isEnabled()
-    assert not janela.botao_navegar_produtos.isEnabled()
+    assert janela.botao_navegar_produtos.isEnabled()
     janela.mostrar_administracao()
     assert janela.paginas.currentWidget() is janela.pagina_frente_caixa
     assert "exige perfil Administrador" in janela.rotulo_status.text()
@@ -202,6 +208,14 @@ def test_servicos_administrativos_rejeitam_caixa(ambiente) -> None:
             False,
             caminho,
         )
+    with pytest.raises(PermissaoNegadaError):
+        redefinir_senha_conta_caixa(
+            sessao_caixa,
+            usuario.id,
+            SENHA_CAIXA_NOVA,
+            SENHA_CAIXA_NOVA,
+            caminho,
+        )
 
 
 def test_servicos_rejeitam_sessao_administrativa_fabricada(ambiente) -> None:
@@ -223,6 +237,294 @@ def test_servicos_rejeitam_sessao_administrativa_fabricada(ambiente) -> None:
             SENHA_CAIXA,
             caminho,
         )
+    usuario = cadastrar_caixa(caminho, sessao_admin)
+    with pytest.raises(SessaoInvalidaError):
+        redefinir_senha_conta_caixa(
+            fabricada,
+            usuario.id,
+            SENHA_CAIXA_NOVA,
+            SENHA_CAIXA_NOVA,
+            caminho,
+        )
+
+
+def test_redefinicao_rejeita_sessao_administrativa_encerrada(ambiente) -> None:
+    caminho, sessao_admin, _ = ambiente
+    usuario = cadastrar_caixa(caminho, sessao_admin)
+    sessao_admin.encerrar()
+
+    with pytest.raises(SessaoInvalidaError):
+        redefinir_senha_conta_caixa(
+            sessao_admin,
+            usuario.id,
+            SENHA_CAIXA_NOVA,
+            SENHA_CAIXA_NOVA,
+            caminho,
+        )
+
+
+def test_admin_redefine_senha_caixa_e_credencial_antiga_falha(ambiente) -> None:
+    caminho, sessao_admin, _ = ambiente
+    usuario = cadastrar_caixa(caminho, sessao_admin)
+
+    redefinido, erros = redefinir_senha_conta_caixa(
+        sessao_admin,
+        usuario.id,
+        SENHA_CAIXA_NOVA,
+        SENHA_CAIXA_NOVA,
+        caminho,
+    )
+
+    assert erros == []
+    assert redefinido.id == usuario.id
+    assert redefinido.identificacao_acesso == usuario.identificacao_acesso
+    with pytest.raises(CredenciaisInvalidasError):
+        autenticar_usuario(
+            "caixa01",
+            SENHA_CAIXA,
+            caminho,
+            limitador=LimitadorTentativasLogin(),
+        )
+    assert autenticar_usuario(
+        "caixa01",
+        SENHA_CAIXA_NOVA,
+        caminho,
+        limitador=LimitadorTentativasLogin(),
+    ).autenticada
+
+
+def test_redefinicao_rejeita_admin_e_senhas_invalidas(ambiente) -> None:
+    caminho, sessao_admin, _ = ambiente
+
+    usuario, erros = redefinir_senha_conta_caixa(
+        sessao_admin,
+        999,
+        "curta",
+        "outra",
+        caminho,
+    )
+    assert usuario is None
+    assert any("ao menos 12" in erro for erro in erros)
+    assert any("confirma" in erro for erro in erros)
+
+    with pytest.raises(LookupError, match="Caixa"):
+        redefinir_senha_conta_caixa(
+            sessao_admin,
+            sessao_admin.usuario_id,
+            SENHA_CAIXA_NOVA,
+            SENHA_CAIXA_NOVA,
+            caminho,
+        )
+
+
+def test_redefinicao_preserva_conta_inativa(ambiente) -> None:
+    caminho, sessao_admin, _ = ambiente
+    usuario = cadastrar_caixa(caminho, sessao_admin)
+    alterar_situacao_conta_caixa(sessao_admin, usuario.id, False, caminho)
+
+    redefinido, erros = redefinir_senha_conta_caixa(
+        sessao_admin,
+        usuario.id,
+        SENHA_CAIXA_NOVA,
+        SENHA_CAIXA_NOVA,
+        caminho,
+    )
+
+    assert erros == []
+    assert not redefinido.ativo
+    with pytest.raises(CredenciaisInvalidasError):
+        autenticar_usuario(
+            "caixa01",
+            SENHA_CAIXA_NOVA,
+            caminho,
+            limitador=LimitadorTentativasLogin(),
+        )
+
+
+def test_redefinicao_revoga_sessoes_e_capacidades_do_caixa(ambiente) -> None:
+    caminho, sessao_admin_padrao, _ = ambiente
+    usuario = cadastrar_caixa(caminho, sessao_admin_padrao)
+    gerenciador_sessoes = GerenciadorSessoes()
+    sessao_admin = autenticar_usuario(
+        "administrador",
+        SENHA_ADMIN,
+        caminho,
+        gerenciador_sessoes=gerenciador_sessoes,
+    )
+    sessao_caixa = autenticar_usuario(
+        "caixa01",
+        SENHA_CAIXA,
+        caminho,
+        gerenciador_sessoes=gerenciador_sessoes,
+    )
+    gerenciador_autorizacoes = GerenciadorAutorizacoesPontuais(
+        gerenciador_sessoes=gerenciador_sessoes,
+    )
+    capacidade = gerenciador_autorizacoes.emitir(
+        sessao_caixa,
+        OPERACAO_CANCELAR_VENDA,
+        10,
+        "administrador",
+        SENHA_ADMIN,
+        caminho,
+        limitador=LimitadorTentativasLogin(),
+    )
+
+    redefinir_senha_conta_caixa(
+        sessao_admin,
+        usuario.id,
+        SENHA_CAIXA_NOVA,
+        SENHA_CAIXA_NOVA,
+        caminho,
+        gerenciador_sessoes=gerenciador_sessoes,
+        gerenciador_autorizacoes=gerenciador_autorizacoes,
+    )
+
+    assert not sessao_caixa.autenticada
+    with pytest.raises(AutorizacaoPontualConsumidaError):
+        gerenciador_autorizacoes.consumir(
+            capacidade,
+            sessao_caixa,
+            OPERACAO_CANCELAR_VENDA,
+            10,
+            caminho,
+        )
+    assert sessao_admin.autenticada
+
+
+def test_falha_de_persistencia_preserva_senha_e_sessao(ambiente) -> None:
+    caminho, sessao_admin, _ = ambiente
+    usuario = cadastrar_caixa(caminho, sessao_admin)
+    sessao_caixa = autenticar_usuario("caixa01", SENHA_CAIXA, caminho)
+    with conectar(caminho) as conexao:
+        conexao.execute(
+            """
+            CREATE TRIGGER falhar_redefinicao_caixa
+            BEFORE UPDATE OF senha_hash ON usuarios
+            WHEN OLD.id = %d
+            BEGIN
+                SELECT RAISE(ABORT, 'falha redefinicao caixa');
+            END
+            """ % usuario.id
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="falha redefinicao caixa"):
+        redefinir_senha_conta_caixa(
+            sessao_admin,
+            usuario.id,
+            SENHA_CAIXA_NOVA,
+            SENHA_CAIXA_NOVA,
+            caminho,
+        )
+
+    assert sessao_caixa.autenticada
+    assert autenticar_usuario(
+        "caixa01",
+        SENHA_CAIXA,
+        caminho,
+        limitador=LimitadorTentativasLogin(),
+    ).autenticada
+    with pytest.raises(CredenciaisInvalidasError):
+        autenticar_usuario(
+            "caixa01",
+            SENHA_CAIXA_NOVA,
+            caminho,
+            limitador=LimitadorTentativasLogin(),
+        )
+
+
+def test_redefinicao_serializa_uso_concorrente_de_sessao_antiga(ambiente) -> None:
+    caminho, sessao_admin_padrao, _ = ambiente
+    usuario = cadastrar_caixa(caminho, sessao_admin_padrao)
+    gerenciador_sessoes = GerenciadorSessoes()
+    sessao_admin = autenticar_usuario(
+        "administrador",
+        SENHA_ADMIN,
+        caminho,
+        gerenciador_sessoes=gerenciador_sessoes,
+    )
+    sessao_caixa = autenticar_usuario(
+        "caixa01",
+        SENHA_CAIXA,
+        caminho,
+        gerenciador_sessoes=gerenciador_sessoes,
+    )
+    invalidacao_iniciada = Event()
+    liberar_invalidacao = Event()
+    resultados = []
+
+    class AutorizacoesLentas:
+        def invalidar_usuario(self, usuario_id):
+            invalidacao_iniciada.set()
+            assert liberar_invalidacao.wait(5)
+
+    def redefinir():
+        redefinir_senha_conta_caixa(
+            sessao_admin,
+            usuario.id,
+            SENHA_CAIXA_NOVA,
+            SENHA_CAIXA_NOVA,
+            caminho,
+            gerenciador_sessoes=gerenciador_sessoes,
+            gerenciador_autorizacoes=AutorizacoesLentas(),
+        )
+
+    def usar_sessao_antiga():
+        try:
+            autorizar_sessao(
+                sessao_caixa,
+                ("CAIXA",),
+                caminho,
+                gerenciador_sessoes=gerenciador_sessoes,
+            )
+            resultados.append("autorizada")
+        except SessaoInvalidaError:
+            resultados.append("revogada")
+
+    thread_redefinicao = Thread(target=redefinir)
+    thread_redefinicao.start()
+    assert invalidacao_iniciada.wait(5)
+    thread_uso = Thread(target=usar_sessao_antiga)
+    thread_uso.start()
+    assert thread_uso.is_alive()
+    liberar_invalidacao.set()
+    thread_redefinicao.join(5)
+    thread_uso.join(5)
+
+    assert resultados == ["revogada"]
+
+
+def test_dialogo_redefine_senha_e_limpa_campos(ambiente, qtbot) -> None:
+    caminho, sessao_admin, _ = ambiente
+    usuario = cadastrar_caixa(caminho, sessao_admin)
+    dialogo = DialogoRedefinicaoSenha(
+        sessao_admin,
+        usuario.id,
+        usuario.identificacao_acesso,
+        caminho,
+    )
+    qtbot.addWidget(dialogo)
+    dialogo.campo_nova_senha.setText(SENHA_CAIXA_NOVA)
+    dialogo.campo_confirmacao.setText(SENHA_CAIXA_NOVA)
+
+    dialogo.redefinir()
+
+    assert dialogo.result() == QDialog.DialogCode.Accepted
+    assert dialogo.usuario_redefinido.id == usuario.id
+    assert dialogo.campo_nova_senha.text() == ""
+    assert dialogo.campo_confirmacao.text() == ""
+
+
+def test_pagina_habilita_redefinicao_somente_com_operador_selecionado(
+    ambiente,
+) -> None:
+    caminho, sessao_admin, janela = ambiente
+    cadastrar_caixa(caminho, sessao_admin)
+    pagina = abrir_administracao(janela)
+
+    assert not pagina.botao_redefinir_senha.isEnabled()
+    pagina.tabela_operadores.selectRow(0)
+    assert pagina.botao_redefinir_senha.isEnabled()
 
 
 def test_desativacao_revoga_sessao_e_autorizacao_do_caixa(ambiente) -> None:

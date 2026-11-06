@@ -5,20 +5,30 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
 from database.schema import criar_tabelas
-from tests.helpers_identidade import criar_janela_autenticada
+from tests.helpers_identidade import (
+    criar_janela_autenticada,
+    criar_sessao_admin_teste,
+)
 from interface.pagina_produtos import PaginaProdutos
 import interface.pagina_produtos as pagina_produtos_module
 from models.item_venda import ItemVenda
 from models.pagamento import Pagamento, PagamentosEmAndamento
 from models.produto_snapshot import ProdutoSnapshot
-from repositories.produto_repository import buscar_produto_por_codigo
-from services.produto_service import cadastrar_produto, atualizar_produto
+from models.produto import Produto
+from repositories.produto_repository import (
+    alterar_situacao_produto_repository,
+    buscar_produto_por_codigo,
+    salvar_produto,
+)
+from services.produto_service import atualizar_produto
+from tests.helpers_categorias import garantir_categoria_teste
 
 
 @pytest.fixture
 def banco_produtos(tmp_path):
     caminho = tmp_path / "produtos_interface.db"
     criar_tabelas(caminho)
+    garantir_categoria_teste(caminho)
     return caminho
 
 
@@ -30,28 +40,31 @@ def cadastrar(
     preco=7990,
     ativo=True,
 ):
-    produto, erros = cadastrar_produto(
-        codigo,
-        nome,
-        "BOVINOS",
-        forma,
-        preco,
-        "COMPRADO",
+    categoria = garantir_categoria_teste(caminho)
+    produto = salvar_produto(
+        Produto(
+            codigo,
+            nome,
+            categoria.nome,
+            forma,
+            preco,
+            "COMPRADO",
+            categoria_id=categoria.id,
+        ),
         caminho,
     )
-    assert erros == []
     if not ativo:
-        pagina_produtos_module.alterar_situacao_produto(
-            produto.id,
-            False,
-            caminho,
-        )
+        alterar_situacao_produto_repository(produto.id, False, caminho)
     return produto
 
 
 @pytest.fixture
 def pagina(qtbot, banco_produtos):
-    widget = PaginaProdutos(banco_produtos)
+    sessao = criar_sessao_admin_teste(banco_produtos)
+    widget = PaginaProdutos(
+        banco_produtos,
+        sessao_administrativa=sessao,
+    )
     qtbot.addWidget(widget)
     widget.show()
     widget.ativar()
@@ -71,7 +84,11 @@ def preencher_dialogo(
 ):
     dialogo.campo_codigo.setText(codigo)
     dialogo.campo_nome.setText(nome)
-    dialogo.campo_categoria.setText(categoria)
+    for indice in range(dialogo.campo_categoria.count()):
+        item = dialogo.campo_categoria.itemData(indice)
+        if item.nome.casefold() == categoria.casefold():
+            dialogo.campo_categoria.setCurrentIndex(indice)
+            break
     dialogo.combo_forma_venda.setCurrentText(forma)
     dialogo.campo_preco.setText(preco)
     dialogo.combo_origem.setCurrentText(origem)
@@ -193,6 +210,7 @@ def test_venda_em_andamento_bloqueia_edicao_e_situacao_mas_permite_cadastro(
     pagina = PaginaProdutos(
         banco_produtos,
         tem_venda_em_andamento=lambda: em_atendimento,
+        sessao_administrativa=criar_sessao_admin_teste(banco_produtos),
     )
     qtbot.addWidget(pagina)
     pagina.show()
@@ -218,6 +236,7 @@ def test_bloqueio_de_fechamento_impede_todas_as_operacoes(
     pagina = PaginaProdutos(
         banco_produtos,
         operacao_bloqueada=lambda: True,
+        sessao_administrativa=criar_sessao_admin_teste(banco_produtos),
     )
     qtbot.addWidget(pagina)
     pagina.show()
@@ -330,6 +349,7 @@ def test_edicao_nao_altera_snapshot_ja_lancado(banco_produtos) -> None:
         8990,
         produto.origem,
         banco_produtos,
+        sessao_solicitante=criar_sessao_admin_teste(banco_produtos),
     )
 
     assert erros == []

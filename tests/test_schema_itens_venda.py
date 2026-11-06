@@ -16,19 +16,45 @@ def banco_teste(tmp_path):
 
 
 def _inserir_produto(conexao, codigo="234") -> int:
+    colunas = {
+        coluna["name"]
+        for coluna in conexao.execute("PRAGMA table_info(produtos)").fetchall()
+    }
+    if "categoria_id" not in colunas:
+        return conexao.execute(
+            """
+            INSERT INTO produtos (
+                codigo, nome, categoria, forma_venda,
+                preco_venda_centavos, origem
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (codigo, "Picanha", "BOVINO", "PESO", 7990, "COMPRADO"),
+        ).lastrowid
+
+    categoria = conexao.execute(
+        "SELECT id FROM categorias WHERE nome_chave = 'bovino'"
+    ).fetchone()
+    categoria_id = (
+        categoria[0]
+        if categoria is not None
+        else conexao.execute(
+            "INSERT INTO categorias (nome, nome_chave) "
+            "VALUES ('BOVINO', 'bovino')"
+        ).lastrowid
+    )
     return conexao.execute(
         """
         INSERT INTO produtos (
             codigo,
             nome,
-            categoria,
+            categoria_id,
             forma_venda,
             preco_venda_centavos,
             origem
         )
         VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (codigo, "Picanha", "BOVINO", "PESO", 7990, "COMPRADO"),
+        (codigo, "Picanha", categoria_id, "PESO", 7990, "COMPRADO"),
     ).lastrowid
 
 

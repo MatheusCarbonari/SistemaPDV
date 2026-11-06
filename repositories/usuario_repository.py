@@ -249,6 +249,43 @@ def alterar_situacao_usuario_caixa_repository(
         conexao.close()
 
 
+def redefinir_senha_usuario_caixa_repository(
+    usuario_id: int,
+    nova_senha_hash: str,
+    caminho_banco=CAMINHO_BANCO,
+) -> Usuario | None:
+    conexao = conectar(caminho_banco)
+    try:
+        conexao.execute("BEGIN IMMEDIATE")
+        _consultar_estado_identidade_conexao(conexao)
+        atualizado = conexao.execute(
+            """
+            UPDATE usuarios
+            SET senha_hash = ?
+            WHERE id = ? AND perfil = 'CAIXA'
+            """,
+            (nova_senha_hash, usuario_id),
+        )
+        if atualizado.rowcount != 1:
+            conexao.rollback()
+            return None
+        linha = conexao.execute(
+            """
+            SELECT id, identificacao_acesso, perfil, ativo, criado_em
+            FROM usuarios
+            WHERE id = ?
+            """,
+            (usuario_id,),
+        ).fetchone()
+        conexao.commit()
+        return _montar_usuario(linha)
+    except Exception:
+        conexao.rollback()
+        raise
+    finally:
+        conexao.close()
+
+
 def _consultar_estado_identidade_conexao(conexao) -> str:
     estado = conexao.execute(
         """

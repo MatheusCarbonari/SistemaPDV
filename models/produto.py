@@ -18,3 +18,4 @@ class Produto:
     id: int | None = None
     criado_em: datetime | None = None
     atualizado_em: datetime | None = None
+    categoria_id: int | None = None

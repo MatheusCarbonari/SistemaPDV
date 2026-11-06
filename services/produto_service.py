@@ -1,18 +1,46 @@
 from models.produto import Produto
+from models.comando_produto import (
+    CategoriaAprovada,
+    ComandoCadastroProduto,
+    ComandoEdicaoProduto,
+    EstadoBaseProduto,
+)
+from models.sessao_usuario import SessaoUsuario
 from database.conexao import CAMINHO_BANCO
+from models.categoria import normalizar_identidade_categoria
+from repositories.categoria_repository import (
+    buscar_categoria_por_chave_repository,
+    buscar_categoria_por_id_repository,
+)
 from repositories.produto_repository import (
     alterar_situacao_produto_repository,
     codigo_existe,
     listar_produtos_repository,
-    salvar_produto,
     buscar_produto_banco_pelo_id,
     buscar_produto_por_codigo,
-    atualizar_produto_repository
+    cadastrar_produto_comando_repository,
+    editar_produto_comando_repository,
+)
+from services.autenticacao_service import autorizar_sessao
+from services.autorizacao_pontual_service import (
+    GERENCIADOR_AUTORIZACOES,
+    GerenciadorAutorizacoesPontuais,
 )
 
 
 # Normaliza e valida os dados antes de criar um produto.
-def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, origem, caminho_banco=CAMINHO_BANCO):
+def criar_produto(
+    codigo,
+    nome,
+    categoria,
+    forma_venda,
+    preco_venda_centavos,
+    origem,
+    caminho_banco=CAMINHO_BANCO,
+    *,
+    categoria_id=None,
+    _exigir_categoria_existente=False,
+):
 
     codigo_limpo = limpar_codigo(codigo) 
     lista_de_erros = validar_codigo(codigo_limpo)
@@ -20,8 +48,13 @@ def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, or
     nome_limpo = limpar_nome(nome)
     lista_de_erros.extend(validar_nome(nome_limpo))
 
-    categoria_limpa = limpar_categoria(categoria)
-    lista_de_erros.extend(validar_categoria(categoria_limpa))
+    categoria_selecionada, erros_categoria = _resolver_categoria(
+        categoria,
+        categoria_id,
+        caminho_banco,
+        permitir_ausente=not _exigir_categoria_existente,
+    )
+    lista_de_erros.extend(erros_categoria)
 
     forma_venda_limpa = limpar_forma_venda(forma_venda)
     lista_de_erros.extend(validar_forma_venda(forma_venda_limpa))
@@ -44,10 +77,11 @@ def criar_produto(codigo, nome, categoria, forma_venda, preco_venda_centavos, or
     produto = Produto(
         codigo=codigo_limpo,
         nome=nome_limpo,
-        categoria=categoria_limpa,
+        categoria=categoria_selecionada[0],
         forma_venda=forma_venda_limpa,
         preco_venda_centavos=preco_venda_centavos,
         origem=origem_limpa,
+        categoria_id=categoria_selecionada[1],
     )
 
     return produto, []
@@ -62,6 +96,45 @@ def cadastrar_produto(
     preco_venda_centavos,
     origem,
     caminho_banco=CAMINHO_BANCO,
+    *,
+    categoria_id=None,
+    sessao_solicitante: SessaoUsuario,
+    capacidade=None,
+    gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
+        GERENCIADOR_AUTORIZACOES
+    ),
+):
+    comando, erros = preparar_comando_cadastro_produto(
+        codigo,
+        nome,
+        categoria,
+        forma_venda,
+        preco_venda_centavos,
+        origem,
+        caminho_banco,
+        categoria_id=categoria_id,
+    )
+    if erros:
+        return None, erros
+    return executar_cadastro_produto(
+        comando,
+        sessao_solicitante,
+        caminho_banco,
+        capacidade=capacidade,
+        gerenciador_autorizacoes=gerenciador_autorizacoes,
+    ), []
+
+
+def preparar_comando_cadastro_produto(
+    codigo,
+    nome,
+    categoria,
+    forma_venda,
+    preco_venda_centavos,
+    origem,
+    caminho_banco=CAMINHO_BANCO,
+    *,
+    categoria_id=None,
 ):
     produto, erros = criar_produto(
         codigo,
@@ -71,11 +144,47 @@ def cadastrar_produto(
         preco_venda_centavos,
         origem,
         caminho_banco,
+        categoria_id=categoria_id,
+        _exigir_categoria_existente=True,
     )
     if erros:
         return None, erros
+    categoria_aprovada = _categoria_aprovada(
+        produto.categoria_id,
+        caminho_banco,
+    )
+    if categoria_aprovada is None or not categoria_aprovada.ativo:
+        return None, ["Selecione uma categoria ativa."]
+    return ComandoCadastroProduto(
+        codigo=produto.codigo,
+        nome=produto.nome,
+        categoria=categoria_aprovada,
+        forma_venda=produto.forma_venda,
+        preco_venda_centavos=produto.preco_venda_centavos,
+        origem=produto.origem,
+    ), []
 
-    return salvar_produto(produto, caminho_banco), []
+
+def executar_cadastro_produto(
+    comando: ComandoCadastroProduto,
+    sessao_solicitante: SessaoUsuario,
+    caminho_banco=CAMINHO_BANCO,
+    *,
+    capacidade=None,
+    gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
+        GERENCIADOR_AUTORIZACOES
+    ),
+) -> Produto:
+    if not isinstance(comando, ComandoCadastroProduto):
+        raise TypeError("O comando de cadastro de produto é inválido.")
+    _autorizar_comando_produto(
+        comando,
+        sessao_solicitante,
+        capacidade,
+        caminho_banco,
+        gerenciador_autorizacoes,
+    )
+    return cadastrar_produto_comando_repository(comando, caminho_banco)
 
 
 # Prepara os filtros e solicita ao repository a listagem de produtos.
@@ -85,6 +194,7 @@ def listar_produtos(
     nome: str | None = None,
     caminho_banco=CAMINHO_BANCO,
     termo: str | None = None,
+    categoria_id: int | None = None,
 ):
     if ativo is not None and not isinstance(ativo, bool):
         return [], ["A situação informada para a listagem é inválida."]
@@ -107,6 +217,7 @@ def listar_produtos(
         categoria=categoria_limpa,
         nome=nome_limpo,
         termo=termo_limpo,
+        categoria_id=categoria_id,
     )
 
     return produtos, []
@@ -117,7 +228,14 @@ def alterar_situacao_produto(
     produto_id: int,
     ativo: bool,
     caminho_banco=CAMINHO_BANCO,
+    *,
+    sessao_solicitante: SessaoUsuario,
 ):
+    autorizar_sessao(
+        sessao_solicitante,
+        ("ADMINISTRADOR",),
+        caminho_banco,
+    )
     erros = []
 
     if (
@@ -213,6 +331,44 @@ def validar_categoria(categoria):
     return lista_de_erros
 
 
+def _resolver_categoria(
+    categoria,
+    categoria_id,
+    caminho_banco,
+    *,
+    categoria_atual_id=None,
+    permitir_ausente=False,
+):
+    if categoria_id is not None:
+        if (
+            not isinstance(categoria_id, int)
+            or isinstance(categoria_id, bool)
+            or categoria_id <= 0
+        ):
+            return None, ["A categoria selecionada é inválida."]
+        encontrada = buscar_categoria_por_id_repository(
+            categoria_id,
+            caminho_banco,
+        )
+    else:
+        nome, chave = normalizar_identidade_categoria(categoria)
+        erros = validar_categoria(nome)
+        if erros:
+            return None, erros
+        if permitir_ausente:
+            return (nome.upper(), None), []
+        encontrada = buscar_categoria_por_chave_repository(
+            chave,
+            caminho_banco,
+        )
+
+    if encontrada is None:
+        return None, ["A categoria selecionada não foi encontrada."]
+    if not encontrada.ativo and encontrada.id != categoria_atual_id:
+        return None, ["Selecione uma categoria ativa."]
+    return (encontrada.nome, encontrada.id), []
+
+
 # Remove espaços extras e padroniza a forma de venda em letras maiúsculas.
 def limpar_forma_venda(forma_venda):
     if forma_venda is None:
@@ -287,7 +443,7 @@ def validar_origem(origem):
     return lista_de_erros
 
 
-def atualizar_produto(
+def preparar_comando_edicao_produto(
     produto_id,
     codigo,
     nome,
@@ -296,6 +452,8 @@ def atualizar_produto(
     preco_venda_centavos,
     origem,
     caminho_banco=CAMINHO_BANCO, 
+    *,
+    categoria_id=None,
 ):
     produto_atual = buscar_produto_banco_pelo_id(
         produto_id,
@@ -307,7 +465,6 @@ def atualizar_produto(
 
     codigo_limpo = limpar_codigo(codigo)
     nome_limpo = limpar_nome(nome)
-    categoria_limpa = limpar_categoria(categoria)
     forma_venda_limpa = limpar_forma_venda(forma_venda)
     origem_limpa = limpar_origem(origem)
 
@@ -315,13 +472,21 @@ def atualizar_produto(
 
     lista_de_erros.extend(validar_codigo(codigo_limpo))
     lista_de_erros.extend(validar_nome(nome_limpo))
-    lista_de_erros.extend(validar_categoria(categoria_limpa))
     lista_de_erros.extend(validar_forma_venda(forma_venda_limpa))
     lista_de_erros.extend(validar_origem(origem_limpa))
     lista_de_erros.extend(validar_preco_venda_centavos(preco_venda_centavos))
 
     if lista_de_erros:
         return None, lista_de_erros
+
+    categoria_selecionada, erros_categoria = _resolver_categoria(
+        categoria,
+        categoria_id,
+        caminho_banco,
+        categoria_atual_id=produto_atual["categoria_id"],
+    )
+    if erros_categoria:
+        return None, erros_categoria
 
     produto_com_mesmo_codigo = buscar_produto_por_codigo(
         codigo_limpo,
@@ -334,25 +499,136 @@ def atualizar_produto(
     ):
         return None, ["Já existe outro produto com esse código."]
 
-    produto_atualizado = Produto(
-        id=produto_id,
-        codigo=codigo_limpo,
+    categoria_base = _categoria_aprovada(
+        produto_atual["categoria_id"],
+        caminho_banco,
+    )
+    categoria_nova = _categoria_aprovada(
+        categoria_selecionada[1],
+        caminho_banco,
+    )
+    if categoria_base is None or categoria_nova is None:
+        return None, ["A categoria selecionada não foi encontrada."]
+    return ComandoEdicaoProduto(
+        estado_base=EstadoBaseProduto(
+            id=produto_atual["id"],
+            codigo=produto_atual["codigo"],
+            nome=produto_atual["nome"],
+            categoria=categoria_base,
+            forma_venda=produto_atual["forma_venda"],
+            preco_venda_centavos=produto_atual["preco_venda_centavos"],
+            origem=produto_atual["origem"],
+            ativo=bool(produto_atual["ativo"]),
+        ),
         nome=nome_limpo,
-        categoria=categoria_limpa,
+        categoria=categoria_nova,
         forma_venda=forma_venda_limpa,
         preco_venda_centavos=preco_venda_centavos,
         origem=origem_limpa,
+    ), []
+
+def atualizar_produto(
+    produto_id,
+    codigo,
+    nome,
+    categoria,
+    forma_venda,
+    preco_venda_centavos,
+    origem,
+    caminho_banco=CAMINHO_BANCO,
+    *,
+    categoria_id=None,
+    sessao_solicitante: SessaoUsuario,
+    capacidade=None,
+    gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
+        GERENCIADOR_AUTORIZACOES
+    ),
+):
+    comando, erros = preparar_comando_edicao_produto(
+        produto_id,
+        codigo,
+        nome,
+        categoria,
+        forma_venda,
+        preco_venda_centavos,
+        origem,
+        caminho_banco,
+        categoria_id=categoria_id,
+    )
+    if erros:
+        return None, erros
+    return executar_edicao_produto(
+        comando,
+        sessao_solicitante,
+        caminho_banco,
+        capacidade=capacidade,
+        gerenciador_autorizacoes=gerenciador_autorizacoes,
+    ), []
+
+
+def executar_edicao_produto(
+    comando: ComandoEdicaoProduto,
+    sessao_solicitante: SessaoUsuario,
+    caminho_banco=CAMINHO_BANCO,
+    *,
+    capacidade=None,
+    gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
+        GERENCIADOR_AUTORIZACOES
+    ),
+) -> Produto:
+    if not isinstance(comando, ComandoEdicaoProduto):
+        raise TypeError("O comando de edição de produto é inválido.")
+    _autorizar_comando_produto(
+        comando,
+        sessao_solicitante,
+        capacidade,
+        caminho_banco,
+        gerenciador_autorizacoes,
+    )
+    return editar_produto_comando_repository(comando, caminho_banco)
+
+
+def _categoria_aprovada(categoria_id, caminho_banco):
+    categoria = buscar_categoria_por_id_repository(categoria_id, caminho_banco)
+    if categoria is None:
+        return None
+    _, chave = normalizar_identidade_categoria(categoria.nome)
+    return CategoriaAprovada(
+        id=categoria.id,
+        nome=categoria.nome,
+        nome_chave=chave,
+        ativo=categoria.ativo,
     )
 
-    produto_salvo = atualizar_produto_repository(
-        produto_atualizado,
-        caminho_banco
+
+def _autorizar_comando_produto(
+    comando,
+    sessao_solicitante,
+    capacidade,
+    caminho_banco,
+    gerenciador_autorizacoes,
+) -> None:
+    usuario = autorizar_sessao(
+        sessao_solicitante,
+        ("ADMINISTRADOR", "CAIXA"),
+        caminho_banco,
     )
-
-    if produto_salvo is None:
-        return None, ["Não foi possivel atualizar o produto."]
-
-    return produto_salvo, []
+    if usuario.perfil == "ADMINISTRADOR":
+        if capacidade is not None:
+            raise ValueError(
+                "A sessão Administrador não utiliza autorização pontual."
+            )
+        return
+    if type(gerenciador_autorizacoes) is not GerenciadorAutorizacoesPontuais:
+        raise TypeError("A operação exige um gerenciador confiável.")
+    gerenciador_autorizacoes.consumir(
+        capacidade,
+        sessao_solicitante,
+        comando.operacao,
+        comando.recurso_id,
+        caminho_banco,
+        dados_autorizados_hash=comando.dados_autorizados_hash,
+    )
 
 
 def consultar_produto_por_codigo(

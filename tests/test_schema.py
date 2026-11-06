@@ -17,6 +17,18 @@ def banco_teste(tmp_path):
     return caminho
 
 
+def _categoria_id(conexao, nome="BOVINO") -> int:
+    chave = nome.casefold()
+    conexao.execute(
+        "INSERT OR IGNORE INTO categorias (nome, nome_chave) VALUES (?, ?)",
+        (nome, chave),
+    )
+    return conexao.execute(
+        "SELECT id FROM categorias WHERE nome_chave = ?",
+        (chave,),
+    ).fetchone()[0]
+
+
 def test_tabela_produtos_existe(banco_teste):
     conexao = conectar(banco_teste)
 
@@ -344,12 +356,13 @@ def test_codigo_produto_nao_pode_repetir(banco_teste) -> None:
     conexao = conectar(banco_teste)
 
     try:
+        categoria_id = _categoria_id(conexao)
         conexao.execute(
             """
             INSERT INTO produtos (
                 codigo,
                 nome,
-                categoria,
+                categoria_id,
                 forma_venda,
                 preco_venda_centavos,
                 origem
@@ -359,7 +372,7 @@ def test_codigo_produto_nao_pode_repetir(banco_teste) -> None:
             (
                 "101",
                 "Picanha",
-                "BOVINO",
+                categoria_id,
                 "PESO",
                 7990,
                 "COMPRADO",
@@ -374,7 +387,7 @@ def test_codigo_produto_nao_pode_repetir(banco_teste) -> None:
                 INSERT INTO produtos (
                     codigo,
                     nome,
-                    categoria,
+                    categoria_id,
                     forma_venda,
                     preco_venda_centavos,
                     origem
@@ -384,7 +397,7 @@ def test_codigo_produto_nao_pode_repetir(banco_teste) -> None:
                 (
                     "101",
                     "Outro produto",
-                    "BOVINO",
+                    categoria_id,
                     "PESO",
                     5000,
                     "COMPRADO",
@@ -398,13 +411,14 @@ def test_preco_negativo_nao_e_aceito(banco_teste) -> None:
     conexao = conectar(banco_teste)
 
     try:
+        categoria_id = _categoria_id(conexao)
         with pytest.raises(sqlite3.IntegrityError):
             conexao.execute(
                 """
                 INSERT INTO produtos (
                     codigo,
                     nome,
-                    categoria,
+                    categoria_id,
                     forma_venda,
                     preco_venda_centavos,
                     origem
@@ -414,7 +428,7 @@ def test_preco_negativo_nao_e_aceito(banco_teste) -> None:
                 (
                     "102",
                     "Outro produto",
-                    "BOVINO",
+                    categoria_id,
                     "PESO",
                     -100,
                     "COMPRADO",
@@ -428,13 +442,14 @@ def test_forma_venda_invalida_nao_e_aceita(banco_teste) -> None:
     conexao = conectar(banco_teste)
 
     try:
+        categoria_id = _categoria_id(conexao)
         with pytest.raises(sqlite3.IntegrityError):
             conexao.execute(
                 """
                 INSERT INTO produtos (
                     codigo,
                     nome,
-                    categoria,
+                    categoria_id,
                     forma_venda,
                     preco_venda_centavos,
                     origem
@@ -444,7 +459,7 @@ def test_forma_venda_invalida_nao_e_aceita(banco_teste) -> None:
                 (
                     "102",
                     "Outro produto",
-                    "BOVINO",
+                    categoria_id,
                     "CAIXA",
                     8990,
                     "COMPRADO",
@@ -464,7 +479,7 @@ def test_categoria_nao_pode_ser_nula(banco_teste) -> None:
                 INSERT INTO produtos (
                     codigo,
                     nome,
-                    categoria,
+                    categoria_id,
                     forma_venda,
                     preco_venda_centavos,
                     origem
@@ -488,13 +503,14 @@ def test_origem_invalida_nao_e_aceita(banco_teste) -> None:
     conexao = conectar(banco_teste)
 
     try:
+        categoria_id = _categoria_id(conexao)
         with pytest.raises(sqlite3.IntegrityError):
             conexao.execute(
                 """
                 INSERT INTO  produtos(
                     codigo,
                     nome,
-                    categoria,
+                    categoria_id,
                     forma_venda,
                     preco_venda_centavos,
                     origem
@@ -504,7 +520,7 @@ def test_origem_invalida_nao_e_aceita(banco_teste) -> None:
                 (
                     "103",
                     "Picanha",
-                    "BOVINO",
+                    categoria_id,
                     "PESO",
                     9990,
                     "TERCEIRIZADO"
@@ -518,13 +534,14 @@ def test_ativo_invalido_nao_e_aceito(banco_teste) -> None:
     conexao = conectar(banco_teste)
 
     try:
+        categoria_id = _categoria_id(conexao, "ASSADOS")
         with pytest.raises(sqlite3.IntegrityError):
             conexao.execute(
                 """
                 INSERT INTO produtos(
                     codigo,
                     nome,
-                    categoria,
+                    categoria_id,
                     forma_venda,
                     preco_venda_centavos,
                     origem,
@@ -535,7 +552,7 @@ def test_ativo_invalido_nao_e_aceito(banco_teste) -> None:
                 (
                     "103",
                     "Frango Assado",
-                    "ASSADOS",
+                    categoria_id,
                     "UNIDADE",
                     6000,
                     "PRODUZIDO",
@@ -550,12 +567,13 @@ def test_produto_valido_e_cadastrado_com_valores_automaticos(banco_teste)->None:
     conexao = conectar(banco_teste)
 
     try:
+        categoria_id = _categoria_id(conexao, "ASSADOS")
         conexao.execute(
             """
             INSERT INTO produtos(
                 codigo,
                 nome,
-                categoria,
+                categoria_id,
                 forma_venda,
                 preco_venda_centavos,
                 origem
@@ -565,7 +583,7 @@ def test_produto_valido_e_cadastrado_com_valores_automaticos(banco_teste)->None:
             (
                 "106",
                 "Frango Assado",
-                "ASSADOS",
+                categoria_id,
                 "UNIDADE",
                 6000,
                 'PRODUZIDO'
@@ -577,17 +595,18 @@ def test_produto_valido_e_cadastrado_com_valores_automaticos(banco_teste)->None:
         resultado = conexao.execute(
             """
             SELECT
-                id,
-                codigo,
-                nome,
-                categoria,
+                produtos.id,
+                produtos.codigo,
+                produtos.nome,
+                categorias.nome AS categoria,
                 forma_venda,
                 preco_venda_centavos,
                 origem,
-                ativo,
-                criado_em,
-                atualizado_em
+                produtos.ativo,
+                produtos.criado_em,
+                produtos.atualizado_em
             FROM produtos
+            JOIN categorias ON categorias.id = produtos.categoria_id
             WHERE codigo = ?
             """,
             ("106",),
@@ -613,13 +632,14 @@ def test_preco_zero_nao_aceito(banco_teste) -> None:
     conexao = conectar(banco_teste)
 
     try:
+        categoria_id = _categoria_id(conexao, "ASSADOS")
         with pytest.raises(sqlite3.IntegrityError):
             conexao.execute(
                 """
                 INSERT INTO produtos(
                     codigo,
                     nome,
-                    categoria,
+                    categoria_id,
                     forma_venda,
                     preco_venda_centavos,
                     origem
@@ -629,7 +649,7 @@ def test_preco_zero_nao_aceito(banco_teste) -> None:
                 (
                     "106",
                     "Frango Assado",
-                    "ASSADOS",
+                    categoria_id,
                     "UNIDADE",
                     0,
                     'PRODUZIDO'

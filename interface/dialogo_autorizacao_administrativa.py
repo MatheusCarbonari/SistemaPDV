@@ -33,6 +33,7 @@ class DialogoAutorizacaoAdministrativa(QDialog):
         caminho_banco=CAMINHO_BANCO,
         parent=None,
         *,
+        dados_autorizados_hash: str | None = None,
         gerenciador: GerenciadorAutorizacoesPontuais = GERENCIADOR_AUTORIZACOES,
         limitador=LIMITADOR_LOGIN_PADRAO,
     ) -> None:
@@ -41,6 +42,7 @@ class DialogoAutorizacaoAdministrativa(QDialog):
         self.operacao = operacao
         self.recurso_id = recurso_id
         self.caminho_banco = caminho_banco
+        self.dados_autorizados_hash = dados_autorizados_hash
         self.gerenciador = gerenciador
         self.limitador = limitador
         self.capacidade = None
@@ -92,6 +94,7 @@ class DialogoAutorizacaoAdministrativa(QDialog):
                 self.campo_identificacao.text(),
                 self.campo_senha.text(),
                 self.caminho_banco,
+                dados_autorizados_hash=self.dados_autorizados_hash,
                 limitador=self.limitador,
             )
         except (CredenciaisInvalidasError, TentativasLoginExcedidasError) as erro:

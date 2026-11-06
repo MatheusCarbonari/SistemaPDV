@@ -12,6 +12,7 @@ from repositories.produto_repository import (
     salvar_produto,
     atualizar_produto_repository
 )
+from tests.helpers_categorias import garantir_categoria_teste
 import repositories.produto_repository as produto_repository
 
 
@@ -20,6 +21,7 @@ def test_codigo_existe_retorna_true_quando_codigo_esta_cadastrado(tmp_path) -> N
     caminho_banco = tmp_path / "teste_repository.db"
 
     criar_tabelas(caminho_banco)
+    categoria = garantir_categoria_teste(caminho_banco)
 
     conexao = sqlite3.connect(caminho_banco)
 
@@ -29,7 +31,7 @@ def test_codigo_existe_retorna_true_quando_codigo_esta_cadastrado(tmp_path) -> N
             INSERT INTO produtos (
                 codigo,
                 nome,
-                categoria,
+                    categoria_id,
                 forma_venda,
                 preco_venda_centavos,
                 origem
@@ -39,7 +41,7 @@ def test_codigo_existe_retorna_true_quando_codigo_esta_cadastrado(tmp_path) -> N
             (
                 "101",
                 "Picanha",
-                "BOVINOS",
+                    categoria.id,
                 "PESO",
                 7990,
                 "COMPRADO",
@@ -111,15 +113,16 @@ def test_salvar_produto_persiste_dados_no_banco(tmp_path) -> None:
         produto_persistido = conexao.execute(
             """
             SELECT
-                codigo,
-                nome,
-                categoria,
-                forma_venda,
-                preco_venda_centavos,
-                origem,
-                ativo
-            FROM produtos
-            WHERE codigo = ?
+                p.codigo,
+                p.nome,
+                c.nome AS categoria,
+                p.forma_venda,
+                p.preco_venda_centavos,
+                p.origem,
+                p.ativo
+                FROM produtos AS p
+                JOIN categorias AS c ON c.id = p.categoria_id
+                WHERE p.codigo = ?
             """,
             ("102",),
         ).fetchone()
@@ -168,6 +171,7 @@ def test_salvar_produto_nao_permite_codigo_duplicado(tmp_path) -> None:
 def test_buscar_produto_banco_pelo_id_retorna_registro_correto(tmp_path) -> None:
     caminho_banco = tmp_path / "teste_repository.db"
     criar_tabelas(caminho_banco)
+    categoria = garantir_categoria_teste(caminho_banco)
 
     conexao = sqlite3.connect(caminho_banco)
 
@@ -177,28 +181,28 @@ def test_buscar_produto_banco_pelo_id_retorna_registro_correto(tmp_path) -> None
             INSERT INTO produtos (
                 codigo,
                 nome,
-                categoria,
+                    categoria_id,
                 forma_venda,
                 preco_venda_centavos,
                 origem
             )
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            ("201", "Picanha", "BOVINOS", "PESO", 7990, "COMPRADO"),
+                ("201", "Picanha", categoria.id, "PESO", 7990, "COMPRADO"),
         )
         cursor = conexao.execute(
             """
             INSERT INTO produtos (
                 codigo,
                 nome,
-                categoria,
+                    categoria_id,
                 forma_venda,
                 preco_venda_centavos,
                 origem
             )
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            ("202", "Alcatra", "BOVINOS", "PESO", 6990, "COMPRADO"),
+                ("202", "Alcatra", categoria.id, "PESO", 6990, "COMPRADO"),
         )
         segundo_produto_id = cursor.lastrowid
         conexao.commit()

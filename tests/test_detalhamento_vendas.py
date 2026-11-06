@@ -29,10 +29,14 @@ def banco_teste(tmp_path):
 def inserir_produto_atual(banco_teste) -> int:
     conexao = conectar(banco_teste)
     try:
+        categoria_id = conexao.execute(
+            "INSERT INTO categorias (nome, nome_chave) VALUES (?, ?)",
+            ("TESTE", "teste"),
+        ).lastrowid
         produto_id = conexao.execute(
             """
             INSERT INTO produtos (
-                codigo, nome, categoria, forma_venda,
+                codigo, nome, categoria_id, forma_venda,
                 preco_venda_centavos, origem
             )
             VALUES (?, ?, ?, ?, ?, ?)
@@ -40,7 +44,7 @@ def inserir_produto_atual(banco_teste) -> int:
             (
                 "ATUAL",
                 "Cadastro atual",
-                "TESTE",
+                    categoria_id,
                 "UNIDADE",
                 9999,
                 "COMPRADO",

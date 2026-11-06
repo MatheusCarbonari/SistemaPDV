@@ -46,13 +46,18 @@ def test_migracao_v7_cria_identidade_e_preserva_dados(tmp_path) -> None:
     criar_tabelas(caminho)
     conexao = conectar(caminho)
     try:
+        categoria_id = conexao.execute(
+            "INSERT INTO categorias (nome, nome_chave) VALUES (?, ?)",
+            ("BOVINOS", "bovinos"),
+        ).lastrowid
         conexao.execute(
             """
             INSERT INTO produtos (
-                codigo, nome, categoria, forma_venda,
+                codigo, nome, categoria_id, forma_venda,
                 preco_venda_centavos, origem
-            ) VALUES ('101', 'Picanha', 'BOVINOS', 'PESO', 7990, 'COMPRADO')
-            """
+            ) VALUES ('101', 'Picanha', ?, 'PESO', 7990, 'COMPRADO')
+            """,
+            (categoria_id,),
         )
         conexao.execute("DROP TABLE estado_identidade")
         conexao.execute("DROP TABLE usuarios")

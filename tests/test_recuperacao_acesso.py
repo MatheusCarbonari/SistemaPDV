@@ -495,7 +495,10 @@ def test_migracao_v8_v9_preserva_usuario_e_cria_indice(tmp_path) -> None:
 
     conexao = conectar(caminho)
     try:
-        assert conexao.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert (
+            conexao.execute("PRAGMA user_version").fetchone()[0]
+            == schema.VERSAO_ESQUEMA
+        )
         assert conexao.execute(
             "SELECT identificacao_acesso FROM usuarios WHERE id = ?",
             (usuario.id,),

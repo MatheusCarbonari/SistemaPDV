@@ -316,9 +316,10 @@ preço anterior, preço novo e instante UTC, na mesma transação da atualizaç�
 cadastro. O histórico é preservado após novas alterações ou inativação, sem
 exclusão automática. Não há responsável registrado enquanto não existir
 identidade autenticada; nenhuma identidade provisória deve ser criada.
-**Pendência posterior:** consulta gráfica com janela inicial dos últimos 12
-meses. A expressão “tela 12 meses depois” adia essa interface e não determina
-expurgo de registros mais antigos.
+**Consulta gráfica concluída no COMP-M2-02:** janela inicial dos últimos 12
+meses, com acesso expresso ao histórico integral, sem expurgo de registros mais
+antigos. O T44 não possui coluna de responsável e a interface informa essa
+ausência sem fabricar identidade histórica.
 **Dependência de segurança:** o ticket permanece no planejamento e pode evoluir
 seus contratos de domínio/persistência, mas nenhuma exposição gráfica de ação
 crítica pode contornar a autenticação e a autorização previstas nos T45–T47.
@@ -348,11 +349,11 @@ indistinguível; cinco falhas em sessenta segundos impõem espera temporária de
 trinta segundos em memória, sem bloqueio permanente. Logout invalida a sessão
 e fecha a janela; reiniciar exige novo login. A conta é revalidada nas entradas
 protegidas, de modo que desativação ou divergência posterior falha fechada.
-**Perfis:** Caixa opera Frente de Caixa, pagamentos, confirmação e consulta do
-Histórico, mas não acessa Produtos. Administrador também administra Produtos e
-pode provisionar Caixa pelo serviço protegido. Não há cadastro público nem tela
-antecipada de gestão de usuários. Cancelamento efetivo permanece bloqueado até
-T47/INT-D2.
+**Perfis:** Caixa opera Frente de Caixa, pagamentos, confirmação, Histórico e
+consulta de Produtos. Cadastro e edição de Produtos pelo Caixa exigem capacidade
+pontual vinculada aos dados aprovados; situação, categorias e histórico de
+preços permanecem administrativos. Administrador executa essas operações
+diretamente e pode provisionar Caixa pelo serviço protegido.
 
 ### T47 — Autorização pontual
 **Origem:** backlog original T36.
@@ -455,22 +456,53 @@ atalhos; suíte completa com 979 testes aprovados.
 #### COMP-M2-02 — Consulta gráfica do histórico de preços
 **Entrega verificável:** apresentar a trilha já persistida pelo T44, com janela
 inicial dos últimos 12 meses, sem alterar retenção nem preços históricos.
+**Status:** concluído em 06/11/2026. A página Produtos abre consulta somente
+leitura para o produto selecionado, protegida por sessão Administrador. O
+diálogo exibe instante local de São Paulo e preços anterior/novo, ordenados do
+mais recente, com alternância expressa entre 12 meses e todo o histórico. A
+consulta admite inativos, preserva filtros e seleção e não grava no banco.
 
 #### COMP-M2-03 — Categorias personalizáveis
 **Entrega verificável:** substituir a categoria apenas textual pelo contrato
 administrável aprovado, com migração e preservação dos produtos existentes.
+**Status:** concluído em 06/11/2026. O esquema versão 10 introduz `categorias`
+com ID estável, nome, chave Unicode normalizada e situação, e substitui a coluna
+textual de `produtos` por `categoria_id`. A migração preserva IDs e atributos dos
+produtos, referências comerciais e histórico de preços; categorias legadas
+equivalentes são consolidadas e valores vazios ou apenas numéricos ficam
+inativos para tratamento administrativo. Administradores podem cadastrar,
+renomear, ativar e desativar categorias; não há exclusão física. Os formulários
+de Produtos usam seleção fechada e revalidam a categoria ativa na gravação.
+Suíte completa aprovada com 1004 testes.
 
 #### COMP-M2-04 — Redefinição de senha de conta Caixa
 **Entrega verificável:** permitir ao Administrador redefinir a senha individual
 de Caixa, revogando sessões e capacidades da identidade sem criar senha padrão.
+**Status:** concluído em 06/11/2026. A página Administração abre diálogo
+dedicado para nova senha e confirmação, reutiliza a política e o hash vigentes
+e preserva contas inativas. O serviço revalida Administrador e alvo Caixa,
+confirma a atualização transacional e revoga sessões e capacidades do operador.
+Login, emissão de capacidade e troca de credencial são serializados no processo;
+a coordenação não se estende a outro processo da aplicação.
 
-#### COMP-M2-06 — Revisão de layout e produtividade
-**Entrega verificável:** revisar o layout integrado e os fluxos operacionais já
-concluídos, sem introduzir novas regras comerciais.
+#### COMP-M2-06 — Produtos com autorização administrativa
+**Entrega verificável:** permitir consulta de Produtos pelo Caixa e exigir
+capacidade administrativa de uso único, vinculada ao comando e ao estado-base,
+para cada cadastro ou edição.
+**Status:** concluído em 06/11/2026, sem alteração de schema. Comandos imutáveis
+e normalizados geram SHA-256 canônico; o T47 vincula sessão, operação, recurso e
+hash, preservando integralmente o cancelamento de vendas. Serviços públicos de
+gravação exigem Administrador válido ou Caixa com capacidade correspondente.
+Edições comparam produto e categoria sob `BEGIN IMMEDIATE`, e o histórico de
+preços permanece na mesma transação. Situação, categorias e histórico de preços
+continuam exclusivos do Administrador. A suíte completa foi aprovada com 1018
+testes.
 
-#### COMP-M2-05 — Homologação e auditoria final do Marco 2
-**Entrega verificável:** repetir a homologação manual, suíte completa e auditoria
-final após todas as correções e complementos, antes de autorizar o T49.
+#### COMP-M2-05 — Revisão visual e produtividade
+**Entrega verificável:** revisar layout, dimensões, espaçamentos, legibilidade,
+fluxos por teclado e produtividade das páginas e diálogos integrados, incluindo
+o diálogo de pagamentos, sem alterar regras comerciais. Ao final, repetir a
+homologação manual, suíte completa e auditoria do Marco 2 antes do T49.
 
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 
@@ -559,7 +591,7 @@ mouse. Esta pendência não autoriza mudanças visuais antes dessa etapa.
 ### Revisão funcional e de usabilidade do diálogo de pagamentos
 
 Comportamentos funcionais concluídos no COMP-M2-01. Refinamento visual amplo
-permanece reservado ao COMP-M2-06.
+permanece reservado ao COMP-M2-05.
 
 **Separação entre Adicionar e Concluir:** Enter adiciona o pagamento ou
 confirma a edição; zerar o saldo não fecha automaticamente o diálogo; concluir
@@ -584,7 +616,8 @@ manuais, manter consistência com o saldo real.
 
 ## Regras de acompanhamento daqui em diante
 
-- O próximo ticket executável é **COMP-M2-02**. Seguir depois 03, 04, 06 e 05;
+- O próximo ticket executável é **COMP-M2-05**. Considerar COMP-M2-01 a 04 e
+  COMP-M2-06 já concluídos;
   T49 inicia somente após essas entregas, homologação e auditoria final da
   Consolidação do Marco 2.
 - Antes de elaborar cada prompt Codex, conferir **este arquivo**, o relatório do último ticket e eventuais dependências já resolvidas. Não redefinir informalmente o objetivo numerado.

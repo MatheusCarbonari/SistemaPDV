@@ -55,8 +55,9 @@
   durável e a aplicação permanece fail-closed sem o login do T46. Estados
   ambíguos nunca liberam recriação nem operação comercial.
 - **DEC-031** — A janela operacional exige `SessaoUsuario` criada exclusivamente
-  por login válido. Caixa acessa Frente de Caixa e Histórico; Produtos e
-  provisionamento de Caixa exigem Administrador revalidado no banco. Logout
+  por login válido. Caixa acessa Frente de Caixa, Histórico e consulta de
+  Produtos; mutações do catálogo seguem a autorização definida no COMP-M2-06,
+  e provisionamento de Caixa exige Administrador revalidado no banco. Logout
   invalida a sessão e fecha a janela. Cinco falhas por identificação em sessenta
   segundos geram espera de trinta segundos somente em memória, evitando bloqueio
   durável explorável. Conta desativada perde permissão na próxima operação
@@ -109,7 +110,42 @@
   não apaga a sugestão. Trocar modalidade nunca substitui o valor. `Enter`
   adiciona ou salva edição e `Ctrl+Enter` conclui somente quando o total estiver
   integralmente pago. A ordem de consolidação é COMP-M2-01, 02, 03, 04, 06 e
-  por último 05, que realiza homologação e auditoria final.
+  por último 05, que realiza revisão visual, homologação e auditoria final.
+- **DEC-038** — A redefinição administrativa de senha opera somente sobre uma
+  conta Caixa selecionada e revalidada no momento da gravação. Reutiliza a
+  política e o `scrypt` existentes, não exige a senha anterior e não altera a
+  situação da conta. Após o commit confirmado, todas as sessões e capacidades
+  processuais do operador são revogadas. Login, emissão de capacidade e troca
+  de credencial compartilham coordenação reentrante em memória para que uma
+  credencial antiga não seja publicada entre commit e revogação. Como os
+  gerenciadores de T46/T47 são processuais, essa garantia não coordena duas
+  instâncias simultâneas do programa; resolver isso exigiria infraestrutura de
+  identidade compartilhada fora do escopo do COMP-M2-04.
+- **DEC-039** — A consulta gráfica de preços é somente leitura e exige sessão
+  Administrador revalidada pelo serviço. A janela inicial usa intervalo fechado
+  a partir do mesmo dia e horário de 12 meses civis antes, comparado em UTC sem
+  aplicar função sobre a coluna indexada; “Todo o histórico” remove somente esse
+  limite. Instantes são apresentados em `America/Sao_Paulo`. Como o T44 não
+  persistiu responsável, a interface declara a indisponibilidade e não infere a
+  identidade a partir da sessão atual ou do cadastro do produto.
+- **DEC-040** — O esquema versão 10 torna categorias entidades administráveis,
+  com ID estável, nome exibido, chave `NFKC` com espaços normalizados e
+  `casefold`, e estado ativo/inativo. `produtos.categoria_id` substitui o texto,
+  enquanto `Produto.categoria` permanece uma projeção de leitura compatível.
+  A migração reconstrói `produtos` em uma única transação, preserva IDs,
+  referências e histórico, consolida nomes equivalentes e cria uma categoria
+  inativa reservada para valores legados vazios; valores legados apenas
+  numéricos são preservados, porém inativos. Categorias não são excluídas.
+  Produto já vinculado pode permanecer em categoria inativa, mas nova associação
+  exige categoria ativa revalidada sob a mesma transação da gravação.
+- **DEC-041** — Cadastro e edição de Produtos pelo Caixa exigem capacidade
+  pontual do T47 vinculada à sessão, operação distinta, recurso e SHA-256 de um
+  comando canônico imutável. Edição inclui o estado-base completo; produto e
+  categoria são comparados sob `BEGIN IMMEDIATE`, e qualquer divergência consome
+  a capacidade sem gravar. Administrador opera diretamente após revalidação da
+  sessão. Ativação, categorias e histórico de preços permanecem administrativos.
+  O hash isolado não autoriza, não há elevação do Caixa nem persistência de
+  capacidade. Falha após consumo exige nova autorização.
 
 ## Decisões que exigem cuidado
 - O código de produto existente é protegido contra edição pela interface; a
