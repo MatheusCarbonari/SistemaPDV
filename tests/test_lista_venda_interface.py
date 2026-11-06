@@ -1,6 +1,8 @@
 from decimal import Decimal
 
 import pytest
+from PySide6.QtGui import QColor, QFontMetrics, QPalette
+from PySide6.QtWidgets import QHeaderView, QLabel, QWidget
 
 from tests.helpers_identidade import criar_janela_autenticada
 from models.item_venda import ItemVenda
@@ -61,6 +63,29 @@ def descricoes_tabela(janela):
     ]
 
 
+def _luminancia_relativa(cor: QColor) -> float:
+    componentes = (cor.redF(), cor.greenF(), cor.blueF())
+    linearizados = tuple(
+        componente / 12.92
+        if componente <= 0.04045
+        else ((componente + 0.055) / 1.055) ** 2.4
+        for componente in componentes
+    )
+    return (
+        0.2126 * linearizados[0]
+        + 0.7152 * linearizados[1]
+        + 0.0722 * linearizados[2]
+    )
+
+
+def _contraste(cor_a: QColor, cor_b: QColor) -> float:
+    mais_clara, mais_escura = sorted(
+        (_luminancia_relativa(cor_a), _luminancia_relativa(cor_b)),
+        reverse=True,
+    )
+    return (mais_clara + 0.05) / (mais_escura + 0.05)
+
+
 def test_tabela_mantem_ordem_visual_sem_ordenacao(janela) -> None:
     cabecalhos = [
         janela.tabela_itens.horizontalHeaderItem(coluna).text()
@@ -68,12 +93,187 @@ def test_tabela_mantem_ordem_visual_sem_ordenacao(janela) -> None:
     ]
 
     assert cabecalhos == [
-        "Produto/descrição",
-        "Quantidade ou peso",
-        "Preço unitário ou preço/kg",
+        "Produto / descrição",
+        "Quantidade / peso",
+        "Preço unitário / kg",
         "Subtotal",
     ]
     assert not janela.tabela_itens.isSortingEnabled()
+
+
+@pytest.mark.parametrize("largura,altura", [(900, 640), (1280, 800)])
+def test_layout_preserva_leitura_e_cabecalhos_em_tamanhos_usuais(
+    janela,
+    qtbot,
+    largura,
+    altura,
+) -> None:
+    janela.resize(largura, altura)
+    qtbot.wait(20)
+
+    assert janela.campo_entrada.width() <= 520
+    assert janela.campo_entrada.width() < janela.tabela_itens.width()
+    assert janela.rotulo_status.geometry().left() > (
+        janela.campo_entrada.geometry().right()
+    )
+    assert abs(
+        janela.rotulo_status.geometry().center().y()
+        - janela.campo_entrada.geometry().center().y()
+    ) <= 2
+    assert janela.rotulo_status.width() >= 300
+
+    cabecalho = janela.tabela_itens.horizontalHeader()
+    assert cabecalho.sectionResizeMode(0) == QHeaderView.ResizeMode.Stretch
+    assert cabecalho.sectionResizeMode(1) == QHeaderView.ResizeMode.Fixed
+    assert cabecalho.sectionResizeMode(2) == QHeaderView.ResizeMode.Fixed
+    assert cabecalho.sectionResizeMode(3) == QHeaderView.ResizeMode.Fixed
+
+    for coluna in range(janela.tabela_itens.columnCount()):
+        texto = janela.tabela_itens.horizontalHeaderItem(coluna).text()
+        largura_texto = cabecalho.fontMetrics().horizontalAdvance(texto) + 24
+        assert janela.tabela_itens.columnWidth(coluna) >= largura_texto
+
+    for botao in (
+        janela.botao_remover,
+        janela.botao_desfazer,
+        janela.botao_verificar_fechamento,
+        janela.botao_pagamento,
+        janela.botao_confirmar_venda,
+    ):
+        assert botao.width() >= botao.sizeHint().width()
+
+
+def test_retorno_visual_distingue_erro_e_item_confirmado(janela) -> None:
+    janela._concluir_com_erro(["Código não encontrado."])
+
+    assert janela.rotulo_status.text() == "Código não encontrado."
+    assert janela.rotulo_status.property("tipoStatus") == "erro"
+
+    janela._emitir_item(criar_item_produto())
+
+    assert janela.rotulo_status.text() == "Item confirmado."
+    assert janela.rotulo_status.property("tipoStatus") == "sucesso"
+
+
+def test_total_e_acoes_principais_possuem_hierarquia_visual(janela) -> None:
+    assert janela.rotulo_total.fontMetrics().height() > (
+        janela.rotulo_status.fontMetrics().height()
+    )
+    assert janela.botao_pagamento.property("papelAcao") == "comercial"
+    assert janela.botao_confirmar_venda.property("papelAcao") == "principal"
+    assert janela.botao_verificar_fechamento.property("papelAcao") == "alerta"
+
+
+def test_frente_caixa_remove_titulo_interno_duplicado(janela) -> None:
+    assert janela.pagina_frente_caixa.findChild(
+        QLabel,
+        "titulo_area_vendas",
+    ) is None
+
+
+def test_barra_superior_compartilha_fundo_e_estilo_visual(
+    janela,
+    qtbot,
+) -> None:
+    menu = janela.findChild(QWidget, "menu_superior")
+
+    assert menu is not None
+    assert menu.palette().color(QPalette.ColorRole.Window).name() == "#171a1f"
+    assert (
+        janela.pagina_frente_caixa.palette()
+        .color(QPalette.ColorRole.Window)
+        .name()
+        == "#171a1f"
+    )
+    assert "QPushButton:checked" in menu.styleSheet()
+    assert "QPushButton:hover:enabled" in menu.styleSheet()
+    assert "QPushButton:disabled" in menu.styleSheet()
+    assert "#2474a6" in menu.styleSheet()
+    assert janela.botao_navegar_caixa.isChecked()
+
+    botoes_navegacao = (
+        janela.botao_navegar_caixa,
+        janela.botao_navegar_historico,
+        janela.botao_navegar_produtos,
+        janela.botao_navegar_administracao,
+    )
+    for botao in botoes_navegacao:
+        fonte_selecionada = botao.font()
+        fonte_selecionada.setBold(True)
+        largura_selecionada = QFontMetrics(
+            fonte_selecionada
+        ).horizontalAdvance(botao.text())
+        tamanho_inicial = botao.size()
+
+        assert botao.minimumWidth() >= largura_selecionada + 40
+        assert botao.minimumHeight() >= 44
+        assert botao.width() >= botao.minimumWidth()
+
+        botao.setChecked(True)
+        qtbot.wait(5)
+        assert botao.size() == tamanho_inicial
+
+        botao.setEnabled(False)
+        qtbot.wait(5)
+        assert botao.size() == tamanho_inicial
+        botao.setEnabled(True)
+
+    janela.botao_navegar_caixa.setChecked(True)
+
+    for botao in (
+        *botoes_navegacao,
+        janela.botao_codigos_recuperacao,
+        janela.botao_logout,
+    ):
+        assert botao.height() >= 34
+        assert botao.width() >= botao.sizeHint().width()
+
+
+def test_paleta_da_tabela_e_do_leitor_tem_contraste_explicito(janela) -> None:
+    paleta_tabela = janela.tabela_itens.palette()
+    assert _contraste(
+        paleta_tabela.color(QPalette.ColorRole.Text),
+        paleta_tabela.color(QPalette.ColorRole.Base),
+    ) >= 4.5
+    assert _contraste(
+        paleta_tabela.color(QPalette.ColorRole.Text),
+        paleta_tabela.color(QPalette.ColorRole.AlternateBase),
+    ) >= 4.5
+    assert _contraste(
+        paleta_tabela.color(QPalette.ColorRole.HighlightedText),
+        paleta_tabela.color(QPalette.ColorRole.Highlight),
+    ) >= 4.5
+
+    paleta_entrada = janela.campo_entrada.palette()
+    assert _contraste(
+        paleta_entrada.color(QPalette.ColorRole.Text),
+        paleta_entrada.color(QPalette.ColorRole.Base),
+    ) >= 4.5
+    assert _contraste(
+        paleta_entrada.color(QPalette.ColorRole.PlaceholderText),
+        paleta_entrada.color(QPalette.ColorRole.Base),
+    ) >= 4.5
+
+
+def test_varias_linhas_e_selecao_permanecem_visiveis(janela, qtbot) -> None:
+    itens = (
+        criar_item_produto(nome="Produto principal", subtotal=1234),
+        criar_item_produto(nome="Produto alternado", subtotal=5678),
+        criar_item_produto(nome="Produto selecionado", subtotal=9012),
+    )
+    for item in itens:
+        janela.item_criado.emit(item)
+
+    janela.tabela_itens.selectRow(2)
+    qtbot.wait(20)
+
+    assert janela.tabela_itens.rowCount() == 3
+    assert not any(janela.tabela_itens.isRowHidden(linha) for linha in range(3))
+    assert janela.tabela_itens.selectionModel().selectedRows()[0].row() == 2
+    for linha, item in enumerate(itens):
+        celula = janela.tabela_itens.item(linha, 0)
+        assert celula.text() == item.produto.nome
+        assert janela.tabela_itens.visualItemRect(celula).height() > 0
 
 
 def test_item_criado_inclui_linha_e_atualiza_total(janela) -> None:

@@ -1,15 +1,18 @@
 import services.persistencia_venda_service as persistencia_venda_service
 
-from PySide6.QtCore import QSignalBlocker, QTimer, Signal
+from PySide6.QtCore import Qt, QSignalBlocker, QTimer, Signal
+from PySide6.QtGui import QColor, QFontMetrics, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
     QDialog,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -91,11 +94,59 @@ class JanelaPrincipal(QMainWindow):
 
         estrutura_principal = QWidget(self)
         estrutura_principal.setObjectName("estrutura_principal")
+        estrutura_principal.setAutoFillBackground(True)
+        paleta_estrutura = estrutura_principal.palette()
+        paleta_estrutura.setColor(
+            QPalette.ColorRole.Window,
+            QColor("#171a1f"),
+        )
+        estrutura_principal.setPalette(paleta_estrutura)
         layout_principal = QVBoxLayout(estrutura_principal)
 
         menu_superior = QWidget(estrutura_principal)
         menu_superior.setObjectName("menu_superior")
+        menu_superior.setAutoFillBackground(True)
+        paleta_menu = menu_superior.palette()
+        paleta_menu.setColor(QPalette.ColorRole.Window, QColor("#171a1f"))
+        menu_superior.setPalette(paleta_menu)
+        menu_superior.setStyleSheet(
+            """
+            QWidget#menu_superior {
+                background: #171a1f;
+            }
+            QWidget#menu_superior QLabel#usuario_autenticado {
+                color: #e3e8ed;
+                font-weight: 600;
+                padding: 0 4px;
+            }
+            QWidget#menu_superior QPushButton {
+                color: #e8edf2;
+                background: #2a2f36;
+                border: 1px solid #525d68;
+                border-radius: 5px;
+                min-height: 34px;
+                padding: 5px 14px;
+            }
+            QWidget#menu_superior QPushButton:hover:enabled {
+                background: #353c44;
+                border-color: #687684;
+            }
+            QWidget#menu_superior QPushButton:checked {
+                color: #ffffff;
+                background: #2474a6;
+                border-color: #4297cc;
+                font-weight: 700;
+            }
+            QWidget#menu_superior QPushButton:disabled {
+                color: #aab3bc;
+                background: #22262c;
+                border-color: #3e464e;
+            }
+            """
+        )
         layout_menu = QHBoxLayout(menu_superior)
+        layout_menu.setContentsMargins(8, 7, 8, 7)
+        layout_menu.setSpacing(8)
         self.botao_navegar_caixa = QPushButton("Frente de Caixa")
         self.botao_navegar_caixa.setObjectName("navegar_frente_caixa")
         self.botao_navegar_historico = QPushButton("Histórico")
@@ -113,6 +164,15 @@ class JanelaPrincipal(QMainWindow):
             self.botao_navegar_administracao,
         ):
             botao.setCheckable(True)
+            fonte_selecionada = botao.font()
+            fonte_selecionada.setBold(True)
+            largura_texto_selecionado = QFontMetrics(
+                fonte_selecionada
+            ).horizontalAdvance(botao.text())
+            botao.setMinimumWidth(
+                max(botao.sizeHint().width(), largura_texto_selecionado + 40)
+            )
+            botao.setMinimumHeight(44)
         self.grupo_navegacao = QButtonGroup(self)
         self.grupo_navegacao.setExclusive(True)
         self.grupo_navegacao.addButton(self.botao_navegar_caixa)
@@ -149,35 +209,217 @@ class JanelaPrincipal(QMainWindow):
 
         area_vendas = QWidget(self.paginas)
         area_vendas.setObjectName("area_vendas")
+        area_vendas.setAutoFillBackground(True)
+        paleta_area_vendas = area_vendas.palette()
+        paleta_area_vendas.setColor(
+            QPalette.ColorRole.Window,
+            QColor("#171a1f"),
+        )
+        area_vendas.setPalette(paleta_area_vendas)
         self.pagina_frente_caixa = area_vendas
 
         layout = QVBoxLayout(area_vendas)
-        titulo = QLabel("Área de vendas", area_vendas)
-        titulo.setObjectName("titulo_area_vendas")
-        layout.addWidget(titulo)
+        layout.setContentsMargins(24, 16, 24, 20)
+        layout.setSpacing(12)
+        area_vendas.setStyleSheet(
+            """
+            QWidget#area_vendas {
+                background: #171a1f;
+            }
+            QWidget#area_vendas QLabel#rotulo_leitura_codigo {
+                color: #e3e8ed;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QWidget#area_vendas QLineEdit#campo_entrada {
+                color: #f5f7fa;
+                background: #23272e;
+                selection-color: #ffffff;
+                selection-background-color: #2f75a6;
+                border: 1px solid #5b6570;
+                border-radius: 5px;
+                padding: 7px 10px;
+                font-size: 15px;
+            }
+            QWidget#area_vendas QLineEdit#campo_entrada:focus {
+                border: 2px solid #4aa3df;
+                padding: 6px 9px;
+            }
+            QWidget#area_vendas QLineEdit#campo_entrada:disabled {
+                color: #aab3bc;
+                background: #20242a;
+                border-color: #414a53;
+            }
+            QWidget#area_vendas QLabel#status_entrada {
+                border: 1px solid #46515c;
+                border-radius: 5px;
+                padding: 9px 12px;
+                color: #e1e7ec;
+                background: #22272d;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QWidget#area_vendas QLabel#status_entrada[tipoStatus="sucesso"] {
+                border-color: #3f8f65;
+                color: #a8e6bd;
+                background: #183426;
+            }
+            QWidget#area_vendas QLabel#status_entrada[tipoStatus="erro"] {
+                border-color: #b85c5c;
+                color: #ffb8b1;
+                background: #412326;
+            }
+            QWidget#area_vendas QLabel#status_entrada[tipoStatus="alerta"] {
+                border-color: #a98228;
+                color: #f5d889;
+                background: #3b321d;
+            }
+            QWidget#area_vendas QTableWidget#tabela_itens {
+                color: #f1f4f7;
+                background: #181b20;
+                alternate-background-color: #22272e;
+                selection-color: #ffffff;
+                selection-background-color: #2f75a6;
+                border: 1px solid #424a53;
+                border-radius: 4px;
+                gridline-color: #343b43;
+            }
+            QWidget#area_vendas QTableWidget#tabela_itens::item {
+                color: #f1f4f7;
+                padding: 5px 7px;
+            }
+            QWidget#area_vendas QTableWidget#tabela_itens::item:selected {
+                color: #ffffff;
+                background: #2f75a6;
+            }
+            QWidget#area_vendas QHeaderView::section {
+                background: #2b3038;
+                color: #f4f6f8;
+                border: 0;
+                border-right: 1px solid #424a53;
+                border-bottom: 1px solid #4a535d;
+                padding: 8px 7px;
+                font-weight: 700;
+            }
+            QWidget#area_vendas QLabel#total_venda {
+                color: #f7fbff;
+                background: #1d3040;
+                border: 1px solid #4d83aa;
+                border-radius: 6px;
+                padding: 9px 14px;
+                font-size: 22px;
+                font-weight: 700;
+            }
+            QWidget#area_vendas QPushButton {
+                color: #e8edf2;
+                background: #2a2f36;
+                border: 1px solid #525d68;
+                border-radius: 5px;
+                min-height: 34px;
+                padding: 4px 12px;
+            }
+            QWidget#area_vendas QPushButton:hover:enabled {
+                background: #353c44;
+                border-color: #687684;
+            }
+            QWidget#area_vendas QPushButton:disabled {
+                color: #aab3bc;
+                background: #22262c;
+                border-color: #3e464e;
+            }
+            QWidget#area_vendas QPushButton[papelAcao="principal"] {
+                color: #ffffff;
+                background: #2474a6;
+                border: 1px solid #4297cc;
+                border-radius: 5px;
+                font-weight: 700;
+                padding-left: 18px;
+                padding-right: 18px;
+            }
+            QWidget#area_vendas QPushButton[papelAcao="principal"]:disabled {
+                color: #b7c1c9;
+                background: #314653;
+                border-color: #435b69;
+            }
+            QWidget#area_vendas QPushButton[papelAcao="comercial"] {
+                color: #dff3ff;
+                background: #233b4b;
+                border: 1px solid #4f8db5;
+                border-radius: 5px;
+                font-weight: 700;
+            }
+            QWidget#area_vendas QPushButton[papelAcao="alerta"]:enabled {
+                color: #ffe6a6;
+                background: #46391f;
+                border: 1px solid #b58a2b;
+                border-radius: 5px;
+                font-weight: 700;
+            }
+            """
+        )
+
+        layout_operacao = QHBoxLayout()
+        layout_operacao.setSpacing(12)
+        rotulo_leitura = QLabel("Leitura de código", area_vendas)
+        rotulo_leitura.setObjectName("rotulo_leitura_codigo")
+        layout_operacao.addWidget(rotulo_leitura)
 
         self.campo_entrada = QLineEdit(area_vendas)
         self.campo_entrada.setObjectName("campo_entrada")
         self.campo_entrada.setPlaceholderText(
             "Leia a etiqueta ou digite o código do produto"
         )
+        paleta_entrada = self.campo_entrada.palette()
+        paleta_entrada.setColor(QPalette.ColorRole.Base, QColor("#23272e"))
+        paleta_entrada.setColor(QPalette.ColorRole.Text, QColor("#f5f7fa"))
+        paleta_entrada.setColor(
+            QPalette.ColorRole.PlaceholderText,
+            QColor("#b5bec7"),
+        )
+        paleta_entrada.setColor(
+            QPalette.ColorRole.Highlight,
+            QColor("#2f75a6"),
+        )
+        paleta_entrada.setColor(
+            QPalette.ColorRole.HighlightedText,
+            QColor("#ffffff"),
+        )
+        self.campo_entrada.setPalette(paleta_entrada)
+        self.campo_entrada.setMinimumWidth(320)
+        self.campo_entrada.setMaximumWidth(520)
+        self.campo_entrada.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Fixed,
+        )
         self.campo_entrada.textChanged.connect(
             self._processar_etiqueta_automaticamente
         )
         self.campo_entrada.returnPressed.connect(self._processar_enter)
-        layout.addWidget(self.campo_entrada)
+        layout_operacao.addWidget(self.campo_entrada)
 
-        self.rotulo_status = QLabel("", area_vendas)
+        self.rotulo_status = QLabel("Pronto para leitura.", area_vendas)
         self.rotulo_status.setObjectName("status_entrada")
-        layout.addWidget(self.rotulo_status)
+        self.rotulo_status.setProperty("tipoStatus", "neutro")
+        self.rotulo_status.setWordWrap(True)
+        self.rotulo_status.setMinimumHeight(42)
+        self.rotulo_status.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        self.rotulo_status.setMinimumWidth(300)
+        self.rotulo_status.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        layout_operacao.addWidget(self.rotulo_status, 1)
+        layout.addLayout(layout_operacao)
 
         self.tabela_itens = QTableWidget(0, 4, area_vendas)
         self.tabela_itens.setObjectName("tabela_itens")
         self.tabela_itens.setHorizontalHeaderLabels(
             [
-                "Produto/descrição",
-                "Quantidade ou peso",
-                "Preço unitário ou preço/kg",
+                "Produto / descrição",
+                "Quantidade / peso",
+                "Preço unitário / kg",
                 "Subtotal",
             ]
         )
@@ -191,21 +433,51 @@ class JanelaPrincipal(QMainWindow):
             QAbstractItemView.SelectionMode.SingleSelection
         )
         self.tabela_itens.setSortingEnabled(False)
-        self.tabela_itens.horizontalHeader().setStretchLastSection(True)
-        layout.addWidget(self.tabela_itens)
+        self.tabela_itens.setAlternatingRowColors(True)
+        paleta_tabela = self.tabela_itens.palette()
+        paleta_tabela.setColor(QPalette.ColorRole.Base, QColor("#181b20"))
+        paleta_tabela.setColor(
+            QPalette.ColorRole.AlternateBase,
+            QColor("#22272e"),
+        )
+        paleta_tabela.setColor(QPalette.ColorRole.Text, QColor("#f1f4f7"))
+        paleta_tabela.setColor(
+            QPalette.ColorRole.Highlight,
+            QColor("#2f75a6"),
+        )
+        paleta_tabela.setColor(
+            QPalette.ColorRole.HighlightedText,
+            QColor("#ffffff"),
+        )
+        self.tabela_itens.setPalette(paleta_tabela)
+        self.tabela_itens.verticalHeader().setVisible(False)
+        self.tabela_itens.verticalHeader().setDefaultSectionSize(34)
+        cabecalho = self.tabela_itens.horizontalHeader()
+        cabecalho.setStretchLastSection(False)
+        cabecalho.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        cabecalho.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        cabecalho.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        cabecalho.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        self.tabela_itens.setColumnWidth(1, 170)
+        self.tabela_itens.setColumnWidth(2, 180)
+        self.tabela_itens.setColumnWidth(3, 120)
+        layout.addWidget(self.tabela_itens, 1)
 
         layout_acoes = QHBoxLayout()
-        self.botao_remover = QPushButton("Remover", area_vendas)
+        layout_acoes.setSpacing(8)
+        self.botao_remover = QPushButton("Remover item", area_vendas)
         self.botao_remover.setObjectName("botao_remover")
-        self.botao_desfazer = QPushButton("Desfazer", area_vendas)
+        self.botao_desfazer = QPushButton("Desfazer remoção", area_vendas)
         self.botao_desfazer.setObjectName("botao_desfazer")
-        self.botao_pagamento = QPushButton("Pagamento", area_vendas)
+        self.botao_pagamento = QPushButton("Pagamentos", area_vendas)
         self.botao_pagamento.setObjectName("botao_pagamento")
+        self.botao_pagamento.setProperty("papelAcao", "comercial")
         self.botao_confirmar_venda = QPushButton(
             "Confirmar venda",
             area_vendas,
         )
         self.botao_confirmar_venda.setObjectName("botao_confirmar_venda")
+        self.botao_confirmar_venda.setProperty("papelAcao", "principal")
         self.botao_verificar_fechamento = QPushButton(
             "Verificar fechamento",
             area_vendas,
@@ -213,16 +485,23 @@ class JanelaPrincipal(QMainWindow):
         self.botao_verificar_fechamento.setObjectName(
             "botao_verificar_fechamento"
         )
+        self.botao_verificar_fechamento.setProperty("papelAcao", "alerta")
         layout_acoes.addWidget(self.botao_remover)
         layout_acoes.addWidget(self.botao_desfazer)
-        layout_acoes.addWidget(self.botao_pagamento)
-        layout_acoes.addWidget(self.botao_confirmar_venda)
         layout_acoes.addWidget(self.botao_verificar_fechamento)
         layout_acoes.addStretch()
 
+        layout_total = QHBoxLayout()
+        layout_total.addStretch()
         self.rotulo_total = QLabel("Total: R$ 0,00", area_vendas)
         self.rotulo_total.setObjectName("total_venda")
-        layout_acoes.addWidget(self.rotulo_total)
+        self.rotulo_total.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.rotulo_total.setMinimumWidth(205)
+        layout_total.addWidget(self.rotulo_total)
+        layout.addLayout(layout_total)
+
+        layout_acoes.addWidget(self.botao_pagamento)
+        layout_acoes.addWidget(self.botao_confirmar_venda)
         layout.addLayout(layout_acoes)
 
         self.pagina_historico = PaginaHistorico(
@@ -292,8 +571,9 @@ class JanelaPrincipal(QMainWindow):
             self.botao_navegar_caixa.setChecked(True)
             return
         if self._fechamento_bloqueia_operacao():
-            self.rotulo_status.setText(
-                "Resolva o fechamento pendente antes de sair da Frente de Caixa."
+            self._definir_status(
+                "Resolva o fechamento pendente antes de sair da Frente de Caixa.",
+                "alerta",
             )
             self.botao_navegar_caixa.setChecked(True)
             self._restaurar_foco_entrada()
@@ -305,8 +585,9 @@ class JanelaPrincipal(QMainWindow):
 
     def mostrar_produtos(self) -> None:
         if not self._usuario_pode_operar():
-            self.rotulo_status.setText(
-                "A página Produtos exige uma sessão operacional válida."
+            self._definir_status(
+                "A página Produtos exige uma sessão operacional válida.",
+                "erro",
             )
             self.botao_navegar_caixa.setChecked(True)
             return
@@ -314,8 +595,9 @@ class JanelaPrincipal(QMainWindow):
             self.botao_navegar_caixa.setChecked(True)
             return
         if self._fechamento_bloqueia_operacao():
-            self.rotulo_status.setText(
-                "Resolva o fechamento pendente antes de sair da Frente de Caixa."
+            self._definir_status(
+                "Resolva o fechamento pendente antes de sair da Frente de Caixa.",
+                "alerta",
             )
             self.botao_navegar_caixa.setChecked(True)
             self._restaurar_foco_entrada()
@@ -327,8 +609,9 @@ class JanelaPrincipal(QMainWindow):
 
     def mostrar_administracao(self) -> None:
         if not self._usuario_pode_administrar_produtos():
-            self.rotulo_status.setText(
-                "A página Administração exige perfil Administrador."
+            self._definir_status(
+                "A página Administração exige perfil Administrador.",
+                "erro",
             )
             self.botao_navegar_caixa.setChecked(True)
             return
@@ -336,8 +619,9 @@ class JanelaPrincipal(QMainWindow):
             self.botao_navegar_caixa.setChecked(True)
             return
         if self._fechamento_bloqueia_operacao():
-            self.rotulo_status.setText(
-                "Resolva o fechamento pendente antes de sair da Frente de Caixa."
+            self._definir_status(
+                "Resolva o fechamento pendente antes de sair da Frente de Caixa.",
+                "alerta",
             )
             self.botao_navegar_caixa.setChecked(True)
             self._restaurar_foco_entrada()
@@ -447,7 +731,7 @@ class JanelaPrincipal(QMainWindow):
         dialogo.open()
 
     def _emitir_item(self, item) -> None:
-        self.rotulo_status.setText("Item confirmado.")
+        self._definir_status("Item confirmado.", "sucesso")
         self.item_criado.emit(item)
 
     def _adicionar_item_a_venda(self, item: ItemVenda) -> None:
@@ -499,8 +783,9 @@ class JanelaPrincipal(QMainWindow):
 
         total_venda = calcular_total(self.estado_venda.venda)
         if total_venda <= 0:
-            self.rotulo_status.setText(
-                "Adicione ao menos um item com valor antes do pagamento."
+            self._definir_status(
+                "Adicione ao menos um item com valor antes do pagamento.",
+                "alerta",
             )
             self._restaurar_foco_entrada()
             return
@@ -527,7 +812,7 @@ class JanelaPrincipal(QMainWindow):
         self.resultado_confirmacao = None
         if composicao_alterada:
             self._reiniciar_tentativa_fechamento()
-        self.rotulo_status.setText("Pagamentos compostos.")
+        self._definir_status("Pagamentos compostos.", "sucesso")
         self.pagamentos_confirmados.emit(pagamentos)
         self._atualizar_venda_exibida()
 
@@ -541,8 +826,9 @@ class JanelaPrincipal(QMainWindow):
             return
 
         if self.composicao_pagamentos is None:
-            self.rotulo_status.setText(
-                "Conclua a composição dos pagamentos antes de confirmar."
+            self._definir_status(
+                "Conclua a composição dos pagamentos antes de confirmar.",
+                "alerta",
             )
             self._restaurar_foco_entrada()
             return
@@ -554,7 +840,7 @@ class JanelaPrincipal(QMainWindow):
                 self,
             )
         except (TypeError, ValueError) as erro:
-            self.rotulo_status.setText(str(erro))
+            self._definir_status(str(erro), "erro")
             self._restaurar_foco_entrada()
             return
 
@@ -599,7 +885,7 @@ class JanelaPrincipal(QMainWindow):
             )
 
         self._fechamento_em_processamento = True
-        self.rotulo_status.setText("Registrando venda...")
+        self._definir_status("Registrando venda...")
         self._atualizar_venda_exibida()
         try:
             venda_id = (
@@ -612,15 +898,17 @@ class JanelaPrincipal(QMainWindow):
             )
         except persistencia_venda_service.CommitVendaIncertoError:
             self._fechamento_incerto = True
-            self.rotulo_status.setText(
+            self._definir_status(
                 "O resultado do fechamento é incerto. A venda foi preservada. "
-                "Use Verificar fechamento antes de continuar."
+                "Use Verificar fechamento antes de continuar.",
+                "alerta",
             )
         except Exception as erro:
             self._fechamento_incerto = False
-            self.rotulo_status.setText(
+            self._definir_status(
                 "A venda não foi registrada. Os dados foram preservados: "
-                f"{erro}"
+                f"{erro}",
+                "erro",
             )
         else:
             self._concluir_fechamento_com_sucesso(venda_id)
@@ -637,8 +925,9 @@ class JanelaPrincipal(QMainWindow):
         self.confirmacao_pendente = None
         self.identificador_tentativa_fechamento = None
         self._fechamento_incerto = False
-        self.rotulo_status.setText(
-            f"Venda #{venda_id:06d} registrada com sucesso."
+        self._definir_status(
+            f"Venda #{venda_id:06d} registrada com sucesso.",
+            "sucesso",
         )
         self.venda_persistida.emit(venda_id)
 
@@ -650,8 +939,9 @@ class JanelaPrincipal(QMainWindow):
         self.resultado_confirmacao = None
         self._reiniciar_tentativa_fechamento()
         if havia_pagamentos:
-            self.rotulo_status.setText(
-                "Os pagamentos foram invalidados porque a venda foi alterada."
+            self._definir_status(
+                "Os pagamentos foram invalidados porque a venda foi alterada.",
+                "alerta",
             )
 
     def _atualizar_venda_exibida(self) -> None:
@@ -722,13 +1012,15 @@ class JanelaPrincipal(QMainWindow):
 
     def solicitar_logout(self) -> None:
         if self._fechamento_bloqueia_operacao():
-            self.rotulo_status.setText(
-                "Resolva o fechamento pendente antes de encerrar a sessão."
+            self._definir_status(
+                "Resolva o fechamento pendente antes de encerrar a sessão.",
+                "alerta",
             )
             return
         if self._atendimento_impede_logout():
-            self.rotulo_status.setText(
-                "Finalize ou esvazie o atendimento antes de trocar o operador."
+            self._definir_status(
+                "Finalize ou esvazie o atendimento antes de trocar o operador.",
+                "alerta",
             )
             return
         self._encerramento_autorizado = True
@@ -741,8 +1033,9 @@ class JanelaPrincipal(QMainWindow):
             evento.accept()
             return
         if self._fechamento_bloqueia_operacao() or self._atendimento_impede_logout():
-            self.rotulo_status.setText(
-                "Finalize ou esvazie o atendimento antes de encerrar o sistema."
+            self._definir_status(
+                "Finalize ou esvazie o atendimento antes de encerrar o sistema.",
+                "alerta",
             )
             evento.ignore()
             return
@@ -751,8 +1044,9 @@ class JanelaPrincipal(QMainWindow):
 
     def abrir_codigos_recuperacao(self) -> None:
         if not self._usuario_pode_administrar_produtos():
-            self.rotulo_status.setText(
-                "A emissão de códigos exige perfil Administrador."
+            self._definir_status(
+                "A emissão de códigos exige perfil Administrador.",
+                "erro",
             )
             return
         if self.dialogo_atual is not None or self._fechamento_bloqueia_operacao():
@@ -788,14 +1082,16 @@ class JanelaPrincipal(QMainWindow):
             autorizar_sessao(self.sessao, perfis, self.caminho_banco)
         except PermissaoNegadaError:
             if mostrar_mensagem:
-                self.rotulo_status.setText(
-                    "O perfil autenticado não possui permissão para esta operação."
+                self._definir_status(
+                    "O perfil autenticado não possui permissão para esta operação.",
+                    "erro",
                 )
             return False
         except Exception:
             if mostrar_mensagem:
-                self.rotulo_status.setText(
-                    "A sessão não é mais válida. Reinicie e autentique-se novamente."
+                self._definir_status(
+                    "A sessão não é mais válida. Reinicie e autentique-se novamente.",
+                    "erro",
                 )
             return False
         return True
@@ -855,7 +1151,7 @@ class JanelaPrincipal(QMainWindow):
 
     def _finalizar_dialogo(self, dialogo: QDialog, resultado: int) -> None:
         if resultado == QDialog.DialogCode.Rejected:
-            self.rotulo_status.setText("Operação cancelada.")
+            self._definir_status("Operação cancelada.")
 
         if self.dialogo_atual is dialogo:
             self.dialogo_atual = None
@@ -863,8 +1159,15 @@ class JanelaPrincipal(QMainWindow):
         dialogo.deleteLater()
         self._limpar_entrada_e_restaurar_foco()
 
+    def _definir_status(self, texto: str, tipo: str = "neutro") -> None:
+        self.rotulo_status.setProperty("tipoStatus", tipo)
+        self.rotulo_status.setText(texto)
+        estilo = self.rotulo_status.style()
+        estilo.unpolish(self.rotulo_status)
+        estilo.polish(self.rotulo_status)
+
     def _concluir_com_erro(self, erros: list[str]) -> None:
-        self.rotulo_status.setText("\n".join(erros))
+        self._definir_status("\n".join(erros), "erro")
         self._limpar_entrada_e_restaurar_foco()
 
     def _limpar_entrada_e_restaurar_foco(self) -> None:

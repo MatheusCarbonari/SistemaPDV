@@ -503,6 +503,32 @@ testes.
 fluxos por teclado e produtividade das páginas e diálogos integrados, incluindo
 o diálogo de pagamentos, sem alterar regras comerciais. Ao final, repetir a
 homologação manual, suíte completa e auditoria do Marco 2 antes do T49.
+**Andamento — Visual 01, Frente de Caixa:** reorganização visual iniciada sem
+novo identificador de ticket. O leitor de códigos foi compactado, retorno da
+última operação recebeu distinção entre sucesso, alerta e erro, a tabela passou
+a priorizar a descrição do produto e o rodapé separa ações secundárias, total e
+ações comerciais. Permanecem pendentes as demais telas, os diálogos — inclusive
+Pagamentos —, a homologação manual final e a auditoria de encerramento do
+COMP-M2-05. O Visual 01 foi validado com 1022 testes automatizados.
+**Ajuste — Visual 01.1:** a Frente de Caixa adotou paleta escura explícita e
+localizada para harmonizar com o shell no tema escuro do Windows. Leitor,
+mensagens, tabela, seleção, botões e total possuem cores independentes da
+paleta automática; o título interno duplicado foi removido. As proporções e a
+hierarquia aprovadas no Visual 01 foram preservadas. Este ajuste não inicia o
+Visual 02 nem conclui o COMP-M2-05. O Visual 01.1 foi validado com 1025 testes
+automatizados.
+**Refino — Visual 01.2:** barra superior e Frente de Caixa compartilham a mesma
+cor de fundo escura; navegação, identificação e ações de sessão usam a mesma
+linguagem dos botões inferiores, com estados normal, ativo, hover e desabilitado
+explícitos. Leitor e retorno operacional passam a ocupar a mesma faixa
+horizontal, preservando foco, scanner, mensagens e o restante do layout. Este
+refino encerra apenas o Visual 01 e não inicia o Visual 02. O Visual 01.2 foi
+validado com 1026 testes automatizados.
+**Correção — Visual 01.3:** os quatro botões de navegação reservam largura pela
+métrica da fonte selecionada em negrito, com altura e folga lateral constantes
+entre os estados normal, selecionado, hover e desabilitado. Cores, bordas e
+arredondamento aprovados no Visual 01.2 permanecem inalterados. O ajuste foi
+validado com 69 testes pertinentes e renderizações nas escalas 100% e 125%.
 
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 
