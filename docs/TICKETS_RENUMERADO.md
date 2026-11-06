@@ -440,14 +440,37 @@ encerrado. Avaliar a solução junto ao protocolo de contingência do T54, sem
 antecipar persistência do carrinho.
 
 ### COMP-M2 — Complementos funcionais
-Bloco reservado às funcionalidades do Marco 2 ainda sem tickets executáveis
-próprios: consulta gráfica do histórico de preços, categorias personalizáveis,
-redefinição de senha de conta Caixa, melhorias de produtividade do diálogo de
-pagamentos e revisão de layout. O detalhamento e a execução ocorrerão somente
-em tickets específicos.
 
-Após COR-M2-01, COR-M2-02 e os tickets definidos para COMP-M2, executar nova
-homologação e auditoria final antes de iniciar o Marco 3.
+Executar na ordem aprovada **COMP-M2-01 → 02 → 03 → 04 → 06 → 05**, sem
+antecipar o Marco 3.
+
+#### COMP-M2-01 — Melhorias no diálogo de pagamentos
+**Entrega verificável:** persistir visualmente a divisão sugerida, preencher as
+parcelas seguintes sem sobrescrever entrada manual, preservar valores ao trocar
+modalidade e separar Adicionar de Concluir pagamentos por `Ctrl+Enter`.
+**Status:** concluído em 06/11/2026. Seis novos testes cobrem persistência da
+sugestão, parcelas seguintes, entrada manual, modalidade, edição/remoção e
+atalhos; suíte completa com 979 testes aprovados.
+
+#### COMP-M2-02 — Consulta gráfica do histórico de preços
+**Entrega verificável:** apresentar a trilha já persistida pelo T44, com janela
+inicial dos últimos 12 meses, sem alterar retenção nem preços históricos.
+
+#### COMP-M2-03 — Categorias personalizáveis
+**Entrega verificável:** substituir a categoria apenas textual pelo contrato
+administrável aprovado, com migração e preservação dos produtos existentes.
+
+#### COMP-M2-04 — Redefinição de senha de conta Caixa
+**Entrega verificável:** permitir ao Administrador redefinir a senha individual
+de Caixa, revogando sessões e capacidades da identidade sem criar senha padrão.
+
+#### COMP-M2-06 — Revisão de layout e produtividade
+**Entrega verificável:** revisar o layout integrado e os fluxos operacionais já
+concluídos, sem introduzir novas regras comerciais.
+
+#### COMP-M2-05 — Homologação e auditoria final do Marco 2
+**Entrega verificável:** repetir a homologação manual, suíte completa e auditoria
+final após todas as correções e complementos, antes de autorizar o T49.
 
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 
@@ -535,20 +558,18 @@ mouse. Esta pendência não autoriza mudanças visuais antes dessa etapa.
 
 ### Revisão funcional e de usabilidade do diálogo de pagamentos
 
-Executar após a implementação e validação do fluxo completo de vendas, antes
-da homologação final. Prioridade importante para produtividade e prevenção de
-erros no caixa. Esta pendência não autoriza alterar agora a implementação do
-T37.
+Comportamentos funcionais concluídos no COMP-M2-01. Refinamento visual amplo
+permanece reservado ao COMP-M2-06.
 
 **Separação entre Adicionar e Concluir:** Enter adiciona o pagamento ou
 confirma a edição; zerar o saldo não fecha automaticamente o diálogo; concluir
 exige botão ou atalho independente e explícito. Mesmo com saldo zero, permitir
 revisar, editar e remover pagamentos.
 
-O Enter usado para adicionar o último pagamento não deve concluir o diálogo
-automaticamente, comportamento corrigido no T38. Avaliar futuramente um atalho
-explícito e independente para concluir a composição, mantendo separadas as
-ações Adicionar, Concluir pagamentos e Confirmar venda.
+O Enter usado para adicionar o último pagamento não conclui o diálogo. O
+COMP-M2-01 adotou `Ctrl+Enter` como atalho explícito e independente para
+Concluir pagamentos, mantendo separadas as ações Adicionar, Concluir pagamentos
+e Confirmar venda.
 
 **Preservação do valor informado:** alterar a modalidade entre Dinheiro,
 Crédito, Débito e Pix não substitui o valor escolhido pelo operador. Sugerir o
@@ -563,9 +584,9 @@ manuais, manter consistência com o saldo real.
 
 ## Regras de acompanhamento daqui em diante
 
-- Os próximos tickets executáveis devem detalhar o bloco **COMP-M2**. T49 inicia
-  somente após essas entregas, homologação e auditoria final da Consolidação do
-  Marco 2.
+- O próximo ticket executável é **COMP-M2-02**. Seguir depois 03, 04, 06 e 05;
+  T49 inicia somente após essas entregas, homologação e auditoria final da
+  Consolidação do Marco 2.
 - Antes de elaborar cada prompt Codex, conferir **este arquivo**, o relatório do último ticket e eventuais dependências já resolvidas. Não redefinir informalmente o objetivo numerado.
 - Marcar como concluído somente após relatório, testes e revisão. Mantenha os títulos e origens dos tickets para rastreabilidade.
 - Se um ticket estiver parcialmente pronto, implementar somente o restante e incluir testes de regressão; não duplicar código.

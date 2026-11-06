@@ -102,6 +102,14 @@
   interface apenas atualiza o Histórico e uma nova tentativa depende de
   consulta expressa. Não será criada migração somente para converter incerteza
   em sucesso aparente.
+- **DEC-037** — A divisão de pagamentos é uma referência visual explícita do
+  saldo no instante em que o operador solicita “Sugerir divisão”. Parcelas
+  usadas e pendentes permanecem visíveis; uma entrada manual ou alteração que
+  torne a referência incompatível interrompe o preenchimento automático, mas
+  não apaga a sugestão. Trocar modalidade nunca substitui o valor. `Enter`
+  adiciona ou salva edição e `Ctrl+Enter` conclui somente quando o total estiver
+  integralmente pago. A ordem de consolidação é COMP-M2-01, 02, 03, 04, 06 e
+  por último 05, que realiza homologação e auditoria final.
 
 ## Decisões que exigem cuidado
 - O código de produto existente é protegido contra edição pela interface; a

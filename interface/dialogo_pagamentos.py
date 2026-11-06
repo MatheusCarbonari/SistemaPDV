@@ -1,4 +1,5 @@
 from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -63,6 +64,11 @@ class DialogoPagamentos(QDialog):
         self._indice_edicao: int | None = None
         self._resultado_confirmado = False
         self.sugestoes_divisao: tuple[int, ...] = ()
+        self._proximo_indice_sugestao = 0
+        self._pagamentos_sugeridos: dict[int, Pagamento] = {}
+        self._divisao_automatica_ativa = False
+        self._divisao_requer_recalculo = False
+        self._alterando_valor_programaticamente = False
         self.setWindowTitle("Pagamentos")
         self.setModal(True)
 
@@ -153,8 +159,9 @@ class DialogoPagamentos(QDialog):
         self.botao_concluir = self.botoes.button(
             QDialogButtonBox.StandardButton.Ok
         )
-        self.botao_concluir.setText("Concluir")
+        self.botao_concluir.setText("Concluir pagamentos")
         self.botao_concluir.setObjectName("concluir_pagamentos")
+        self.botao_concluir.setToolTip("Atalho: Ctrl+Enter")
         self.botao_concluir.setAutoDefault(False)
         self.botao_concluir.setDefault(False)
         botao_cancelar = self.botoes.button(
@@ -178,12 +185,26 @@ class DialogoPagamentos(QDialog):
         self.botao_remover.clicked.connect(self._remover_pagamento)
         self.botao_dividir.clicked.connect(self._sugerir_divisao)
         self.campo_valor.returnPressed.connect(self._confirmar_lancamento)
-        self.combo_modalidade.currentTextChanged.connect(
-            self._sugerir_saldo_para_modalidade
+        self.campo_valor.textChanged.connect(
+            self._registrar_alteracao_manual_do_valor
         )
         self.tabela_pagamentos.itemSelectionChanged.connect(
             self._carregar_pagamento_selecionado
         )
+        self.atalho_concluir_retorno = QShortcut(
+            QKeySequence("Ctrl+Return"),
+            self,
+        )
+        self.atalho_concluir_enter = QShortcut(
+            QKeySequence("Ctrl+Enter"),
+            self,
+        )
+        for atalho in (
+            self.atalho_concluir_retorno,
+            self.atalho_concluir_enter,
+        ):
+            atalho.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            atalho.activated.connect(self.accept)
 
         self._atualizar_exibicao()
         self._preparar_novo_lancamento()
@@ -193,6 +214,14 @@ class DialogoPagamentos(QDialog):
         QTimer.singleShot(0, self.combo_modalidade.setFocus)
 
     def keyPressEvent(self, evento) -> None:
+        if (
+            evento.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            and evento.modifiers() & Qt.KeyboardModifier.ControlModifier
+        ):
+            self.accept()
+            evento.accept()
+            return
+
         if evento.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             evento.accept()
             return
@@ -234,6 +263,7 @@ class DialogoPagamentos(QDialog):
     def _adicionar_pagamento(self) -> None:
         try:
             pagamento = self._criar_pagamento_do_formulario()
+            indice_sugestao = self._indice_sugestao_automatica(pagamento)
             novo_estado = adicionar_pagamento(
                 self.estado_pagamentos,
                 pagamento,
@@ -243,6 +273,11 @@ class DialogoPagamentos(QDialog):
             return
 
         self.estado_pagamentos = novo_estado
+        if indice_sugestao is not None:
+            self._pagamentos_sugeridos[indice_sugestao] = pagamento
+            self._proximo_indice_sugestao += 1
+            if self._proximo_indice_sugestao >= len(self.sugestoes_divisao):
+                self._divisao_automatica_ativa = False
         self._atualizar_exibicao()
         self._preparar_novo_lancamento()
 
@@ -251,6 +286,9 @@ class DialogoPagamentos(QDialog):
             self._mostrar_erro(ValueError("Selecione um pagamento para editar."))
             return
 
+        pagamento_anterior = self.estado_pagamentos.pagamentos[
+            self._indice_edicao
+        ]
         try:
             pagamento = self._criar_pagamento_do_formulario()
             novo_estado = editar_pagamento(
@@ -263,6 +301,11 @@ class DialogoPagamentos(QDialog):
             return
 
         self.estado_pagamentos = novo_estado
+        self._atualizar_pagamento_sugerido_editado(
+            pagamento_anterior,
+            pagamento,
+        )
+        self._validar_compatibilidade_divisao()
         self._atualizar_exibicao()
         self._preparar_novo_lancamento()
 
@@ -271,6 +314,9 @@ class DialogoPagamentos(QDialog):
             self._mostrar_erro(ValueError("Selecione um pagamento para remover."))
             return
 
+        pagamento_removido = self.estado_pagamentos.pagamentos[
+            self._indice_edicao
+        ]
         try:
             novo_estado = remover_pagamento(
                 self.estado_pagamentos,
@@ -281,6 +327,8 @@ class DialogoPagamentos(QDialog):
             return
 
         self.estado_pagamentos = novo_estado
+        self._remover_marcacao_pagamento_sugerido(pagamento_removido)
+        self._validar_compatibilidade_divisao()
         self._atualizar_exibicao()
         self._preparar_novo_lancamento()
 
@@ -294,7 +342,7 @@ class DialogoPagamentos(QDialog):
         self._indice_edicao = linhas[0].row()
         pagamento = self.estado_pagamentos.pagamentos[self._indice_edicao]
         self.combo_modalidade.setCurrentText(pagamento.modalidade)
-        self.campo_valor.setText(
+        self._definir_valor_programaticamente(
             centavos_para_texto(pagamento.valor_centavos)
         )
         self.rotulo_erro.clear()
@@ -306,22 +354,16 @@ class DialogoPagamentos(QDialog):
         self._indice_edicao = None
         self.tabela_pagamentos.clearSelection()
         self.rotulo_erro.clear()
-        self._limpar_sugestao_divisao()
+        self._validar_compatibilidade_divisao()
         saldo = calcular_saldo_restante(self.estado_pagamentos)
-        self.campo_valor.setText(
-            centavos_para_texto(saldo) if saldo > 0 else ""
+        proxima_sugestao = self._proxima_sugestao_automatica()
+        valor = proxima_sugestao if proxima_sugestao is not None else saldo
+        self._definir_valor_programaticamente(
+            centavos_para_texto(valor) if valor > 0 else ""
         )
+        self._atualizar_rotulo_sugestao()
         self._atualizar_botoes_de_edicao()
         self.combo_modalidade.setFocus()
-
-    def _sugerir_saldo_para_modalidade(self, modalidade: str) -> None:
-        if self._indice_edicao is not None or not modalidade:
-            return
-
-        saldo = calcular_saldo_restante(self.estado_pagamentos)
-        self.campo_valor.setText(
-            centavos_para_texto(saldo) if saldo > 0 else ""
-        )
 
     def _sugerir_divisao(self) -> None:
         saldo = calcular_saldo_restante(self.estado_pagamentos)
@@ -336,11 +378,14 @@ class DialogoPagamentos(QDialog):
             return
 
         self.sugestoes_divisao = sugestoes
-        self.rotulo_sugestao.setText(
-            "Sugestão: "
-            + " + ".join(formatar_centavos(valor) for valor in sugestoes)
+        self._proximo_indice_sugestao = 0
+        self._pagamentos_sugeridos.clear()
+        self._divisao_automatica_ativa = True
+        self._divisao_requer_recalculo = False
+        self._atualizar_rotulo_sugestao()
+        self._definir_valor_programaticamente(
+            centavos_para_texto(sugestoes[0])
         )
-        self.campo_valor.setText(centavos_para_texto(sugestoes[0]))
         self.rotulo_erro.clear()
         self.campo_valor.setFocus()
         self.campo_valor.selectAll()
@@ -383,9 +428,110 @@ class DialogoPagamentos(QDialog):
         self.botao_editar.setEnabled(editando)
         self.botao_remover.setEnabled(editando)
 
-    def _limpar_sugestao_divisao(self) -> None:
-        self.sugestoes_divisao = ()
-        self.rotulo_sugestao.clear()
+    def _definir_valor_programaticamente(self, texto: str) -> None:
+        self._alterando_valor_programaticamente = True
+        try:
+            self.campo_valor.setText(texto)
+        finally:
+            self._alterando_valor_programaticamente = False
+
+    def _registrar_alteracao_manual_do_valor(self, _texto: str) -> None:
+        if (
+            self._alterando_valor_programaticamente
+            or self._indice_edicao is not None
+            or not self._divisao_automatica_ativa
+        ):
+            return
+
+        proxima = self._proxima_sugestao_automatica()
+        try:
+            valor_atual = ler_centavos(self.campo_valor.text())
+        except (TypeError, ValueError):
+            valor_atual = None
+        if valor_atual != proxima:
+            self._divisao_automatica_ativa = False
+            self._divisao_requer_recalculo = True
+            self._atualizar_rotulo_sugestao()
+
+    def _proxima_sugestao_automatica(self) -> int | None:
+        if (
+            not self._divisao_automatica_ativa
+            or self._proximo_indice_sugestao >= len(self.sugestoes_divisao)
+        ):
+            return None
+        return self.sugestoes_divisao[self._proximo_indice_sugestao]
+
+    def _indice_sugestao_automatica(
+        self,
+        pagamento: Pagamento,
+    ) -> int | None:
+        sugestao = self._proxima_sugestao_automatica()
+        if sugestao is None or pagamento.valor_centavos != sugestao:
+            return None
+        return self._proximo_indice_sugestao
+
+    def _atualizar_pagamento_sugerido_editado(
+        self,
+        anterior: Pagamento,
+        atual: Pagamento,
+    ) -> None:
+        for indice, pagamento in tuple(self._pagamentos_sugeridos.items()):
+            if pagamento is anterior:
+                if atual.valor_centavos == self.sugestoes_divisao[indice]:
+                    self._pagamentos_sugeridos[indice] = atual
+                else:
+                    self._pagamentos_sugeridos.pop(indice)
+                return
+
+    def _remover_marcacao_pagamento_sugerido(
+        self,
+        removido: Pagamento,
+    ) -> None:
+        for indice, pagamento in tuple(self._pagamentos_sugeridos.items()):
+            if pagamento is removido:
+                self._pagamentos_sugeridos.pop(indice)
+                return
+
+    def _validar_compatibilidade_divisao(self) -> None:
+        if not self.sugestoes_divisao:
+            return
+        saldo = calcular_saldo_restante(self.estado_pagamentos)
+        saldo_sugerido = sum(
+            self.sugestoes_divisao[self._proximo_indice_sugestao :]
+        )
+        if saldo != saldo_sugerido:
+            self._divisao_automatica_ativa = False
+            self._divisao_requer_recalculo = True
+
+    def _atualizar_rotulo_sugestao(self) -> None:
+        if not self.sugestoes_divisao:
+            self.rotulo_sugestao.clear()
+            return
+
+        partes = []
+        pagamentos_atuais = self.estado_pagamentos.pagamentos
+        for indice, valor in enumerate(self.sugestoes_divisao):
+            pagamento = self._pagamentos_sugeridos.get(indice)
+            utilizada = pagamento is not None and any(
+                atual is pagamento for atual in pagamentos_atuais
+            )
+            if utilizada:
+                situacao = "Usada"
+            elif (
+                self._divisao_automatica_ativa
+                and indice == self._proximo_indice_sugestao
+            ):
+                situacao = "Próxima"
+            else:
+                situacao = "Pendente"
+            partes.append(f"{situacao}: {formatar_centavos(valor)}")
+
+        texto = "Divisão — " + " | ".join(partes)
+        if self._divisao_requer_recalculo:
+            texto += " — referência mantida; solicite nova divisão."
+        elif self._proximo_indice_sugestao >= len(self.sugestoes_divisao):
+            texto += " — todas adicionadas."
+        self.rotulo_sugestao.setText(texto)
 
     def _mostrar_erro(self, erro: Exception) -> None:
         self.rotulo_erro.setText(str(erro))

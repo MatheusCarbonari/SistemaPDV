@@ -40,14 +40,14 @@ def test_abertura_exibe_total_e_sugere_saldo_restante(dialogo) -> None:
     assert not dialogo.botao_concluir.isEnabled()
 
 
-def test_selecionar_modalidade_para_novo_pagamento_sugere_saldo(
+def test_selecionar_modalidade_preserva_valor_informado(
     dialogo,
 ) -> None:
     dialogo.campo_valor.setText("1,23")
 
     dialogo.combo_modalidade.setCurrentText("PIX")
 
-    assert dialogo.campo_valor.text() == "10,00"
+    assert dialogo.campo_valor.text() == "1,23"
 
 
 def test_enter_adiciona_pagamento_unico_e_habilita_conclusao(
@@ -164,9 +164,154 @@ def test_divisao_igual_sugere_valores_sem_criar_pagamentos(
     assert dialogo.sugestoes_divisao == (334, 333, 333)
     assert dialogo.campo_valor.text() == "3,34"
     assert dialogo.rotulo_sugestao.text() == (
-        "Sugestão: R$ 3,34 + R$ 3,33 + R$ 3,33"
+        "Divisão — Próxima: R$ 3,34 | Pendente: R$ 3,33 | "
+        "Pendente: R$ 3,33"
     )
     assert dialogo.estado_pagamentos.pagamentos == ()
+
+
+def test_divisao_permanece_visivel_e_preenche_segunda_e_terceira_parcelas(
+    dialogo,
+    qtbot,
+) -> None:
+    dialogo.campo_partes.setValue(3)
+    qtbot.mouseClick(dialogo.botao_dividir, Qt.MouseButton.LeftButton)
+
+    qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
+
+    assert dialogo.sugestoes_divisao == (334, 333, 333)
+    assert dialogo.campo_valor.text() == "3,33"
+    assert "Usada: R$ 3,34" in dialogo.rotulo_sugestao.text()
+    assert "Próxima: R$ 3,33" in dialogo.rotulo_sugestao.text()
+
+    qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
+
+    assert dialogo.campo_valor.text() == "3,33"
+    assert dialogo.rotulo_sugestao.text().count("Usada:") == 2
+    assert "Próxima: R$ 3,33" in dialogo.rotulo_sugestao.text()
+
+    qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
+
+    assert dialogo.isVisible()
+    assert dialogo.estado_pagamentos.pagamentos == (
+        Pagamento("DINHEIRO", 334),
+        Pagamento("DINHEIRO", 333),
+        Pagamento("DINHEIRO", 333),
+    )
+    assert dialogo.rotulo_sugestao.text().count("Usada:") == 3
+    assert "todas adicionadas" in dialogo.rotulo_sugestao.text()
+
+
+def test_trocar_modalidade_nao_sobrescreve_parcela_sugerida(
+    dialogo,
+    qtbot,
+) -> None:
+    dialogo.campo_partes.setValue(3)
+    qtbot.mouseClick(dialogo.botao_dividir, Qt.MouseButton.LeftButton)
+
+    dialogo.combo_modalidade.setCurrentText("PIX")
+
+    assert dialogo.campo_valor.text() == "3,34"
+
+
+def test_valor_manual_interrompe_automatismo_sem_apagar_referencia(
+    dialogo,
+    qtbot,
+) -> None:
+    dialogo.campo_partes.setValue(3)
+    qtbot.mouseClick(dialogo.botao_dividir, Qt.MouseButton.LeftButton)
+
+    dialogo.campo_valor.setText("4,00")
+    qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
+
+    assert dialogo.estado_pagamentos.pagamentos == (
+        Pagamento("DINHEIRO", 400),
+    )
+    assert dialogo.sugestoes_divisao == (334, 333, 333)
+    assert dialogo.campo_valor.text() == "6,00"
+    assert "referência mantida" in dialogo.rotulo_sugestao.text()
+    assert not dialogo._divisao_automatica_ativa
+
+
+def test_nova_divisao_substitui_referencia_somente_por_acao_expressa(
+    dialogo,
+    qtbot,
+) -> None:
+    dialogo.campo_partes.setValue(3)
+    qtbot.mouseClick(dialogo.botao_dividir, Qt.MouseButton.LeftButton)
+    dialogo.campo_valor.setText("4,00")
+    qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
+
+    dialogo.campo_partes.setValue(2)
+    qtbot.mouseClick(dialogo.botao_dividir, Qt.MouseButton.LeftButton)
+
+    assert dialogo.sugestoes_divisao == (300, 300)
+    assert dialogo.campo_valor.text() == "3,00"
+    assert "referência mantida" not in dialogo.rotulo_sugestao.text()
+    assert dialogo.rotulo_sugestao.text() == (
+        "Divisão — Próxima: R$ 3,00 | Pendente: R$ 3,00"
+    )
+
+
+def test_edicao_de_modalidade_preserva_divisao_e_remocao_a_invalida(
+    dialogo,
+    qtbot,
+) -> None:
+    dialogo.campo_partes.setValue(3)
+    qtbot.mouseClick(dialogo.botao_dividir, Qt.MouseButton.LeftButton)
+    qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
+    dialogo.tabela_pagamentos.selectRow(0)
+
+    dialogo.combo_modalidade.setCurrentText("PIX")
+    qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
+
+    assert dialogo.campo_valor.text() == "3,33"
+    assert "referência mantida" not in dialogo.rotulo_sugestao.text()
+    assert "Usada: R$ 3,34" in dialogo.rotulo_sugestao.text()
+
+    dialogo.tabela_pagamentos.selectRow(0)
+    qtbot.mouseClick(dialogo.botao_remover, Qt.MouseButton.LeftButton)
+
+    assert dialogo.estado_pagamentos.pagamentos == ()
+    assert dialogo.sugestoes_divisao == (334, 333, 333)
+    assert "referência mantida" in dialogo.rotulo_sugestao.text()
+    assert not dialogo._divisao_automatica_ativa
+
+
+def test_ctrl_enter_conclui_somente_apos_pagamento_integral(
+    dialogo,
+    qtbot,
+) -> None:
+    resultados = []
+    dialogo.pagamentos_confirmados.connect(resultados.append)
+
+    qtbot.keyClick(
+        dialogo.campo_valor,
+        Qt.Key.Key_Return,
+        Qt.KeyboardModifier.ControlModifier,
+    )
+
+    assert dialogo.isVisible()
+    assert resultados == []
+    assert dialogo.estado_pagamentos.pagamentos == ()
+    assert "todo o saldo" in dialogo.rotulo_erro.text()
+
+    qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
+
+    assert dialogo.isVisible()
+    assert dialogo.estado_pagamentos.pagamentos == (
+        Pagamento("DINHEIRO", 1000),
+    )
+
+    qtbot.keyClick(
+        dialogo,
+        Qt.Key.Key_Return,
+        Qt.KeyboardModifier.ControlModifier,
+    )
+
+    qtbot.waitUntil(lambda: not dialogo.isVisible())
+    assert dialogo.result() == QDialog.DialogCode.Accepted
+    assert resultados == [dialogo.estado_pagamentos]
 
 
 def test_escape_cancela_edicao_sem_perder_pagamentos(
