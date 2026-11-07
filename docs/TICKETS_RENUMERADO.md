@@ -529,6 +529,30 @@ métrica da fonte selecionada em negrito, com altura e folga lateral constantes
 entre os estados normal, selecionado, hover e desabilitado. Cores, bordas e
 arredondamento aprovados no Visual 01.2 permanecem inalterados. O ajuste foi
 validado com 69 testes pertinentes e renderizações nas escalas 100% e 125%.
+**Andamento — Visual 02, Pagamentos:** o diálogo foi ampliado, tornou-se
+redimensionável e adotou a paleta escura da Frente de Caixa, com conteúdo
+vertical rolável e ações finais sempre acessíveis. Resumo financeiro, lançamento,
+pagamentos registrados, sugestão de divisão e conclusão possuem áreas distintas.
+A última divisão apresenta separadamente a base calculada — que pode diferir do
+total original —, quantidade, valores e situação de cada parcela; alterações
+manuais preservam essa referência como desatualizada e interrompem o
+preenchimento automático até nova solicitação expressa. `Enter`, `Ctrl+Enter`,
+edição, remoção, foco e regras comerciais do COMP-M2-01 foram preservados. O
+Visual 02 foi validado com 1033 testes automatizados, renderizações em 900×700 e
+640×480 e simulação automatizada de fonte a 125%. Esta etapa não inicia o Visual
+03 nem conclui isoladamente o COMP-M2-05.
+**Refino — Visual 02.1, Reorganização de Pagamentos:** abaixo dos cartões do
+resumo, lançamento e divisão passam a ocupar a coluna esquerda, enquanto os
+pagamentos registrados e suas ações ocupam a direita. As modalidades são quatro
+botões sempre visíveis e de seleção exclusiva; o título do bloco informa quando
+um lançamento está em edição. A tabela de pagamentos reserva proporções iguais
+para modalidade e valor, com dinheiro alinhado à direita, e a divisão organiza
+base, quantidade e situação em linhas curtas, mantendo parcelas e estados em
+tabela própria. Em 900×700 e 1024×720 não há rolagem; abaixo de 760 px as colunas
+são empilhadas e o conteúdo usa somente rolagem vertical. O refino preserva os
+atalhos e contratos do COMP-M2-01, não implementa F1–F4 e não inicia o Visual 03.
+O Visual 02.1 foi validado com 1036 testes automatizados, incluindo 46 testes
+focados de pagamentos e confirmação, e simulação de fonte a 125%.
 
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 

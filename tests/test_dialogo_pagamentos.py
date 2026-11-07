@@ -1,6 +1,7 @@
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QDialog, QHeaderView
 
 from interface.dialogo_pagamentos import DialogoPagamentos
 from models.pagamento import Pagamento
@@ -16,7 +17,9 @@ def dialogo(qtbot):
     qtbot.addWidget(dialogo_pagamentos)
     dialogo_pagamentos.show()
     qtbot.waitUntil(dialogo_pagamentos.isVisible)
-    qtbot.waitUntil(dialogo_pagamentos.combo_modalidade.hasFocus)
+    qtbot.waitUntil(
+        dialogo_pagamentos.botoes_modalidade["DINHEIRO"].hasFocus
+    )
     return dialogo_pagamentos
 
 
@@ -26,9 +29,28 @@ def adicionar_por_enter(
     modalidade: str,
     valor: str,
 ) -> None:
-    dialogo.combo_modalidade.setCurrentText(modalidade)
+    dialogo.botoes_modalidade[modalidade].click()
     dialogo.campo_valor.setText(valor)
     qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
+
+
+def _luminancia_relativa(cor: QColor) -> float:
+    canais = []
+    for canal in (cor.redF(), cor.greenF(), cor.blueF()):
+        canais.append(
+            canal / 12.92
+            if canal <= 0.04045
+            else ((canal + 0.055) / 1.055) ** 2.4
+        )
+    return 0.2126 * canais[0] + 0.7152 * canais[1] + 0.0722 * canais[2]
+
+
+def _contraste(cor_a: QColor, cor_b: QColor) -> float:
+    mais_clara, mais_escura = sorted(
+        (_luminancia_relativa(cor_a), _luminancia_relativa(cor_b)),
+        reverse=True,
+    )
+    return (mais_clara + 0.05) / (mais_escura + 0.05)
 
 
 def test_abertura_exibe_total_e_sugere_saldo_restante(dialogo) -> None:
@@ -36,7 +58,9 @@ def test_abertura_exibe_total_e_sugere_saldo_restante(dialogo) -> None:
     assert dialogo.rotulo_total_pago.text() == "R$ 0,00"
     assert dialogo.rotulo_saldo.text() == "R$ 10,00"
     assert dialogo.campo_valor.text() == "10,00"
-    assert dialogo.combo_modalidade.currentText() == "DINHEIRO"
+    assert dialogo.grupo_modalidades.checkedButton().property(
+        "modalidade"
+    ) == "DINHEIRO"
     assert not dialogo.botao_concluir.isEnabled()
 
 
@@ -45,9 +69,38 @@ def test_selecionar_modalidade_preserva_valor_informado(
 ) -> None:
     dialogo.campo_valor.setText("1,23")
 
-    dialogo.combo_modalidade.setCurrentText("PIX")
+    dialogo.botoes_modalidade["PIX"].click()
 
     assert dialogo.campo_valor.text() == "1,23"
+
+
+def test_quatro_modalidades_ficam_visiveis_com_selecao_exclusiva(
+    dialogo,
+    qtbot,
+) -> None:
+    assert tuple(dialogo.botoes_modalidade) == (
+        "DINHEIRO",
+        "CREDITO",
+        "DEBITO",
+        "PIX",
+    )
+    assert all(
+        botao.isVisible()
+        for botao in dialogo.botoes_modalidade.values()
+    )
+    assert dialogo.grupo_modalidades.exclusive()
+    assert dialogo.botoes_modalidade["DINHEIRO"].isChecked()
+
+    qtbot.mouseClick(
+        dialogo.botoes_modalidade["CREDITO"],
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert dialogo.botoes_modalidade["CREDITO"].isChecked()
+    assert sum(
+        botao.isChecked()
+        for botao in dialogo.botoes_modalidade.values()
+    ) == 1
 
 
 def test_enter_adiciona_pagamento_unico_e_habilita_conclusao(
@@ -59,6 +112,9 @@ def test_enter_adiciona_pagamento_unico_e_habilita_conclusao(
     assert dialogo.tabela_pagamentos.rowCount() == 1
     assert dialogo.tabela_pagamentos.item(0, 0).text() == "PIX"
     assert dialogo.tabela_pagamentos.item(0, 1).text() == "R$ 10,00"
+    assert dialogo.tabela_pagamentos.item(0, 1).textAlignment() & int(
+        Qt.AlignmentFlag.AlignRight
+    )
     assert calcular_total_pago(dialogo.estado_pagamentos) == 1000
     assert calcular_saldo_restante(dialogo.estado_pagamentos) == 0
     assert dialogo.rotulo_total_pago.text() == "R$ 10,00"
@@ -92,9 +148,11 @@ def test_editar_pagamento_altera_modalidade_valor_e_recalcula(
     dialogo.tabela_pagamentos.selectRow(0)
 
     assert dialogo._indice_edicao == 0
+    assert dialogo.grupo_lancamento.title() == "Editando pagamento 1"
+    assert dialogo.grupo_lancamento.property("modoEdicao")
     assert not dialogo.botao_adicionar.isEnabled()
     assert dialogo.botao_editar.isEnabled()
-    dialogo.combo_modalidade.setCurrentText("DEBITO")
+    dialogo.botoes_modalidade["DEBITO"].click()
     dialogo.campo_valor.setText("5,00")
     qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
 
@@ -105,6 +163,8 @@ def test_editar_pagamento_altera_modalidade_valor_e_recalcula(
     assert dialogo.rotulo_total_pago.text() == "R$ 8,00"
     assert dialogo.rotulo_saldo.text() == "R$ 2,00"
     assert dialogo._indice_edicao is None
+    assert dialogo.grupo_lancamento.title() == "Novo lançamento"
+    assert not dialogo.grupo_lancamento.property("modoEdicao")
 
 
 def test_remover_pagamento_recalcula_total_e_saldo(dialogo, qtbot) -> None:
@@ -164,10 +224,34 @@ def test_divisao_igual_sugere_valores_sem_criar_pagamentos(
     assert dialogo.sugestoes_divisao == (334, 333, 333)
     assert dialogo.campo_valor.text() == "3,34"
     assert dialogo.rotulo_sugestao.text() == (
-        "Divisão — Próxima: R$ 3,34 | Pendente: R$ 3,33 | "
-        "Pendente: R$ 3,33"
+        "Sugestão válida; a próxima parcela está destacada na tabela."
     )
+    assert dialogo.tabela_sugestoes.item(0, 2).text() == "Próxima"
+    assert dialogo.tabela_sugestoes.item(1, 2).text() == "Pendente"
+    assert dialogo.tabela_sugestoes.item(2, 2).text() == "Pendente"
     assert dialogo.estado_pagamentos.pagamentos == ()
+
+
+def test_divisao_exibe_base_quantidade_valores_e_situacoes(
+    dialogo,
+    qtbot,
+) -> None:
+    adicionar_por_enter(dialogo, qtbot, "PIX", "4,00")
+    dialogo.campo_partes.setValue(2)
+
+    qtbot.mouseClick(dialogo.botao_dividir, Qt.MouseButton.LeftButton)
+
+    assert dialogo.rotulo_total.text() == "R$ 10,00"
+    assert dialogo.rotulo_base_divisao.text() == "R$ 6,00"
+    assert dialogo.rotulo_quantidade_divisao.text() == "2"
+    assert dialogo.rotulo_estado_divisao.text() == "Válida"
+    assert dialogo.rotulo_estado_divisao.property("estadoSugestao") == "valida"
+    assert dialogo.tabela_sugestoes.rowCount() == 2
+    assert dialogo.tabela_sugestoes.item(0, 0).text() == "1"
+    assert dialogo.tabela_sugestoes.item(0, 1).text() == "R$ 3,00"
+    assert dialogo.tabela_sugestoes.item(0, 2).text() == "Próxima"
+    assert dialogo.tabela_sugestoes.item(1, 1).text() == "R$ 3,00"
+    assert dialogo.tabela_sugestoes.item(1, 2).text() == "Pendente"
 
 
 def test_divisao_permanece_visivel_e_preenche_segunda_e_terceira_parcelas(
@@ -181,14 +265,15 @@ def test_divisao_permanece_visivel_e_preenche_segunda_e_terceira_parcelas(
 
     assert dialogo.sugestoes_divisao == (334, 333, 333)
     assert dialogo.campo_valor.text() == "3,33"
-    assert "Usada: R$ 3,34" in dialogo.rotulo_sugestao.text()
-    assert "Próxima: R$ 3,33" in dialogo.rotulo_sugestao.text()
+    assert dialogo.tabela_sugestoes.item(0, 2).text() == "Utilizada"
+    assert dialogo.tabela_sugestoes.item(1, 2).text() == "Próxima"
 
     qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
 
     assert dialogo.campo_valor.text() == "3,33"
-    assert dialogo.rotulo_sugestao.text().count("Usada:") == 2
-    assert "Próxima: R$ 3,33" in dialogo.rotulo_sugestao.text()
+    assert dialogo.tabela_sugestoes.item(0, 2).text() == "Utilizada"
+    assert dialogo.tabela_sugestoes.item(1, 2).text() == "Utilizada"
+    assert dialogo.tabela_sugestoes.item(2, 2).text() == "Próxima"
 
     qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
 
@@ -198,8 +283,11 @@ def test_divisao_permanece_visivel_e_preenche_segunda_e_terceira_parcelas(
         Pagamento("DINHEIRO", 333),
         Pagamento("DINHEIRO", 333),
     )
-    assert dialogo.rotulo_sugestao.text().count("Usada:") == 3
-    assert "todas adicionadas" in dialogo.rotulo_sugestao.text()
+    assert all(
+        dialogo.tabela_sugestoes.item(linha, 2).text() == "Utilizada"
+        for linha in range(3)
+    )
+    assert "Todas as parcelas" in dialogo.rotulo_sugestao.text()
 
 
 def test_trocar_modalidade_nao_sobrescreve_parcela_sugerida(
@@ -209,7 +297,7 @@ def test_trocar_modalidade_nao_sobrescreve_parcela_sugerida(
     dialogo.campo_partes.setValue(3)
     qtbot.mouseClick(dialogo.botao_dividir, Qt.MouseButton.LeftButton)
 
-    dialogo.combo_modalidade.setCurrentText("PIX")
+    dialogo.botoes_modalidade["PIX"].click()
 
     assert dialogo.campo_valor.text() == "3,34"
 
@@ -229,7 +317,29 @@ def test_valor_manual_interrompe_automatismo_sem_apagar_referencia(
     )
     assert dialogo.sugestoes_divisao == (334, 333, 333)
     assert dialogo.campo_valor.text() == "6,00"
-    assert "referência mantida" in dialogo.rotulo_sugestao.text()
+    assert "referência mantida" in dialogo.rotulo_sugestao.text().lower()
+    assert not dialogo._divisao_automatica_ativa
+
+
+def test_sugestao_desatualizada_preserva_referencia_visual(
+    dialogo,
+    qtbot,
+) -> None:
+    dialogo.campo_partes.setValue(3)
+    qtbot.mouseClick(dialogo.botao_dividir, Qt.MouseButton.LeftButton)
+
+    dialogo.campo_valor.setText("4,00")
+
+    assert dialogo.rotulo_base_divisao.text() == "R$ 10,00"
+    assert dialogo.rotulo_quantidade_divisao.text() == "3"
+    assert dialogo.rotulo_estado_divisao.text() == "Desatualizada"
+    assert (
+        dialogo.rotulo_estado_divisao.property("estadoSugestao")
+        == "desatualizada"
+    )
+    assert dialogo.tabela_sugestoes.rowCount() == 3
+    assert dialogo.tabela_sugestoes.item(0, 1).text() == "R$ 3,34"
+    assert "nova divisão" in dialogo.rotulo_sugestao.text()
     assert not dialogo._divisao_automatica_ativa
 
 
@@ -247,9 +357,9 @@ def test_nova_divisao_substitui_referencia_somente_por_acao_expressa(
 
     assert dialogo.sugestoes_divisao == (300, 300)
     assert dialogo.campo_valor.text() == "3,00"
-    assert "referência mantida" not in dialogo.rotulo_sugestao.text()
+    assert "referência mantida" not in dialogo.rotulo_sugestao.text().lower()
     assert dialogo.rotulo_sugestao.text() == (
-        "Divisão — Próxima: R$ 3,00 | Pendente: R$ 3,00"
+        "Sugestão válida; a próxima parcela está destacada na tabela."
     )
 
 
@@ -262,19 +372,19 @@ def test_edicao_de_modalidade_preserva_divisao_e_remocao_a_invalida(
     qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
     dialogo.tabela_pagamentos.selectRow(0)
 
-    dialogo.combo_modalidade.setCurrentText("PIX")
+    dialogo.botoes_modalidade["PIX"].click()
     qtbot.keyPress(dialogo.campo_valor, Qt.Key.Key_Return)
 
     assert dialogo.campo_valor.text() == "3,33"
-    assert "referência mantida" not in dialogo.rotulo_sugestao.text()
-    assert "Usada: R$ 3,34" in dialogo.rotulo_sugestao.text()
+    assert "referência mantida" not in dialogo.rotulo_sugestao.text().lower()
+    assert dialogo.tabela_sugestoes.item(0, 2).text() == "Utilizada"
 
     dialogo.tabela_pagamentos.selectRow(0)
     qtbot.mouseClick(dialogo.botao_remover, Qt.MouseButton.LeftButton)
 
     assert dialogo.estado_pagamentos.pagamentos == ()
     assert dialogo.sugestoes_divisao == (334, 333, 333)
-    assert "referência mantida" in dialogo.rotulo_sugestao.text()
+    assert "referência mantida" in dialogo.rotulo_sugestao.text().lower()
     assert not dialogo._divisao_automatica_ativa
 
 
@@ -361,7 +471,134 @@ def test_conclusao_so_emite_estado_quando_saldo_e_zero(dialogo, qtbot) -> None:
     assert resultados == [dialogo.estado_pagamentos]
 
 
-def test_tab_move_foco_da_modalidade_para_o_valor(dialogo, qtbot) -> None:
-    qtbot.keyPress(dialogo.combo_modalidade, Qt.Key.Key_Tab)
+def test_tab_percorre_modalidades_e_alcanca_valor(dialogo, qtbot) -> None:
+    qtbot.keyPress(dialogo.focusWidget(), Qt.Key.Key_Tab)
 
     qtbot.waitUntil(dialogo.campo_valor.hasFocus)
+
+
+@pytest.mark.parametrize(
+    "largura,altura",
+    [(900, 700), (1024, 720), (640, 480)],
+)
+def test_layout_redimensionavel_preserva_acoes_sem_cortes(
+    dialogo,
+    qtbot,
+    largura,
+    altura,
+) -> None:
+    dialogo.resize(largura, altura)
+    qtbot.wait(20)
+
+    assert dialogo.minimumWidth() == 640
+    assert dialogo.minimumHeight() == 480
+    assert dialogo.isSizeGripEnabled()
+    assert dialogo.area_rolagem.viewport().width() > 0
+    assert dialogo.botoes.geometry().bottom() <= dialogo.rect().bottom()
+    assert dialogo.botao_concluir.isVisible()
+    assert dialogo.botao_concluir.width() >= (
+        dialogo.botao_concluir.sizeHint().width()
+    )
+    assert not dialogo.area_rolagem.horizontalScrollBar().isVisible()
+    if largura >= 900:
+        assert not dialogo._layout_empilhado
+        qtbot.waitUntil(
+            lambda: not dialogo.area_rolagem.verticalScrollBar().isVisible()
+        )
+    else:
+        assert dialogo._layout_empilhado
+        assert dialogo.area_rolagem.verticalScrollBar().isVisible()
+
+
+def test_layout_simula_escala_125_sem_rolagem_horizontal(
+    dialogo,
+    qtbot,
+) -> None:
+    fonte_ampliada = dialogo.font()
+    fonte_ampliada.setPointSizeF(fonte_ampliada.pointSizeF() * 1.25)
+    dialogo.setFont(fonte_ampliada)
+    dialogo.resize(737, 576)
+
+    qtbot.wait(20)
+
+    assert not dialogo.area_rolagem.horizontalScrollBar().isVisible()
+    assert dialogo.botao_concluir.isVisible()
+    assert dialogo.botoes.geometry().bottom() <= dialogo.rect().bottom()
+
+
+def test_tabelas_e_campos_usam_larguras_e_contraste_explicitos(dialogo) -> None:
+    cabecalho_pagamentos = dialogo.tabela_pagamentos.horizontalHeader()
+    assert cabecalho_pagamentos.sectionResizeMode(0) == (
+        QHeaderView.ResizeMode.Stretch
+    )
+    assert cabecalho_pagamentos.sectionResizeMode(1) == (
+        QHeaderView.ResizeMode.Stretch
+    )
+    assert abs(
+        dialogo.tabela_pagamentos.columnWidth(0)
+        - dialogo.tabela_pagamentos.columnWidth(1)
+    ) <= 2
+    assert dialogo.campo_valor.maximumWidth() == 160
+
+    paleta_tabela = dialogo.tabela_pagamentos.palette()
+    assert _contraste(
+        paleta_tabela.color(QPalette.ColorRole.Text),
+        paleta_tabela.color(QPalette.ColorRole.Base),
+    ) >= 4.5
+    assert _contraste(
+        paleta_tabela.color(QPalette.ColorRole.HighlightedText),
+        paleta_tabela.color(QPalette.ColorRole.Highlight),
+    ) >= 4.5
+
+    paleta_campo = dialogo.campo_valor.palette()
+    assert _contraste(
+        paleta_campo.color(QPalette.ColorRole.Text),
+        paleta_campo.color(QPalette.ColorRole.Base),
+    ) >= 4.5
+    assert "#2474a6" in dialogo.styleSheet()
+
+
+def test_duas_colunas_e_metadados_nao_se_sobrepoem_em_900x700(
+    dialogo,
+    qtbot,
+) -> None:
+    dialogo.resize(900, 700)
+    qtbot.wait(20)
+
+    posicao_esquerda = dialogo.layout_colunas.getItemPosition(
+        dialogo.layout_colunas.indexOf(dialogo.coluna_esquerda)
+    )
+    posicao_direita = dialogo.layout_colunas.getItemPosition(
+        dialogo.layout_colunas.indexOf(dialogo.grupo_registrados)
+    )
+    assert posicao_esquerda[:2] == (0, 0)
+    assert posicao_direita[:2] == (0, 1)
+    assert (
+        dialogo.coluna_esquerda.geometry().right()
+        < dialogo.grupo_registrados.geometry().left()
+    )
+
+    for rotulo in dialogo.rotulos_metadados_divisao.values():
+        assert rotulo.width() >= rotulo.sizeHint().width()
+
+
+def test_estados_das_acoes_acompanham_o_contexto(dialogo, qtbot) -> None:
+    assert dialogo.botao_adicionar.isEnabled()
+    assert not dialogo.botao_editar.isEnabled()
+    assert not dialogo.botao_remover.isEnabled()
+    assert dialogo.botao_dividir.isEnabled()
+    assert not dialogo.botao_concluir.isEnabled()
+
+    adicionar_por_enter(dialogo, qtbot, "PIX", "4,00")
+    dialogo.tabela_pagamentos.selectRow(0)
+
+    assert not dialogo.botao_adicionar.isEnabled()
+    assert dialogo.botao_editar.isEnabled()
+    assert dialogo.botao_remover.isEnabled()
+    assert not dialogo.botao_concluir.isEnabled()
+
+    qtbot.keyPress(dialogo, Qt.Key.Key_Escape)
+    adicionar_por_enter(dialogo, qtbot, "DINHEIRO", "6,00")
+
+    assert dialogo.botao_concluir.isEnabled()
+    assert not dialogo.botao_dividir.isEnabled()
