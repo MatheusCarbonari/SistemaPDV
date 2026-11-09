@@ -2,7 +2,7 @@ import pytest
 import sqlite3
 from threading import Event, Thread
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QDialog, QLineEdit
+from PySide6.QtWidgets import QApplication, QDialog, QHeaderView, QLineEdit
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
@@ -525,6 +525,90 @@ def test_pagina_habilita_redefinicao_somente_com_operador_selecionado(
     assert not pagina.botao_redefinir_senha.isEnabled()
     pagina.tabela_operadores.selectRow(0)
     assert pagina.botao_redefinir_senha.isEnabled()
+
+
+@pytest.mark.parametrize(
+    "largura,altura",
+    [(1024, 720), (1280, 800), (700, 520)],
+)
+def test_administracao_organiza_lista_acoes_e_cadastro_em_blocos(
+    ambiente,
+    qtbot,
+    largura,
+    altura,
+) -> None:
+    caminho, sessao_admin, janela = ambiente
+    cadastrar_caixa(caminho, sessao_admin)
+    janela.resize(largura, altura)
+    pagina = abrir_administracao(janela)
+    if largura < 850:
+        pagina._ajustar_layout_responsivo(largura)
+    qtbot.wait(20)
+
+    cabecalho = pagina.tabela_operadores.horizontalHeader()
+    assert all(
+        cabecalho.sectionResizeMode(coluna) == QHeaderView.ResizeMode.Fixed
+        for coluna in range(3)
+    )
+    assert pagina.grupo_operadores.isVisible()
+    assert pagina.grupo_cadastro.isVisible()
+    assert pagina.campo_identificacao.size().toTuple() == (320, 30)
+    assert pagina.campo_senha.size().toTuple() == (320, 30)
+    assert pagina.campo_confirmacao.size().toTuple() == (320, 30)
+    assert pagina.botao_cadastrar.width() < pagina.width() / 2
+    assert not pagina.tabela_operadores.horizontalScrollBar().isVisible()
+    assert "QWidget#pagina_administracao" in pagina.styleSheet()
+    largura_tabela = pagina.tabela_operadores.viewport().width()
+    assert abs(
+        sum(
+            pagina.tabela_operadores.columnWidth(coluna)
+            for coluna in range(3)
+        )
+        - largura_tabela
+    ) <= 4
+    if largura >= 850:
+        assert not pagina._blocos_empilhados
+        assert abs(
+            pagina.grupo_operadores.width() - pagina.grupo_cadastro.width()
+        ) <= 20
+        assert abs(
+            pagina.grupo_operadores.y() - pagina.grupo_cadastro.y()
+        ) <= 10
+    else:
+        assert pagina._blocos_empilhados
+        grade = pagina.layout_blocos
+        assert grade.getItemPosition(
+            grade.indexOf(pagina.grupo_operadores)
+        )[0] == 0
+        assert grade.getItemPosition(
+            grade.indexOf(pagina.grupo_cadastro)
+        )[0] == 1
+
+
+def test_dialogo_redefinicao_exibe_operador_e_campos_compactos(
+    ambiente,
+    qtbot,
+) -> None:
+    caminho, sessao_admin, _ = ambiente
+    usuario = cadastrar_caixa(caminho, sessao_admin)
+    dialogo = DialogoRedefinicaoSenha(
+        sessao_admin,
+        usuario.id,
+        usuario.identificacao_acesso,
+        caminho,
+    )
+    qtbot.addWidget(dialogo)
+    dialogo.show()
+    dialogo.resize(440, 260)
+    qtbot.wait(20)
+
+    assert usuario.identificacao_acesso in dialogo.rotulo_operador.text()
+    assert dialogo.campo_nova_senha.maximumWidth() == 320
+    assert dialogo.campo_confirmacao.maximumWidth() == 320
+    assert dialogo.botoes.width() < dialogo.width()
+    assert dialogo.botao_salvar.height() < 50
+    assert dialogo.campo_nova_senha.echoMode() == QLineEdit.EchoMode.Password
+    assert "QDialog#dialogo_redefinicao_senha_caixa" in dialogo.styleSheet()
 
 
 def test_desativacao_revoga_sessao_e_autorizacao_do_caixa(ambiente) -> None:

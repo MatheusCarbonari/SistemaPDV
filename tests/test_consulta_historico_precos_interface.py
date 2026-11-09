@@ -2,7 +2,8 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
-from PySide6.QtWidgets import QLineEdit
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QHeaderView, QLineEdit
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
@@ -239,3 +240,32 @@ def test_abrir_e_fechar_preserva_pagina_e_nao_grava(ambiente, qtbot) -> None:
     assert pagina.combo_situacao.currentData() is None
     assert pagina.tabela_produtos.currentRow() == 0
     assert linhas_historico(caminho) == antes
+
+
+def test_dialogo_historico_precos_distribui_colunas_e_controles(
+    ambiente,
+    qtbot,
+) -> None:
+    caminho, sessao, produto = ambiente
+    inserir_alteracao(caminho, produto.id, 7990, 8990, datetime.now(UTC))
+    dialogo = DialogoHistoricoPrecos(sessao, produto, caminho)
+    qtbot.addWidget(dialogo)
+    dialogo.show()
+    dialogo.resize(720, 480)
+    qtbot.wait(20)
+
+    cabecalho = dialogo.tabela.horizontalHeader()
+    assert cabecalho.sectionResizeMode(0) == QHeaderView.ResizeMode.Stretch
+    assert cabecalho.sectionResizeMode(1) == (
+        QHeaderView.ResizeMode.ResizeToContents
+    )
+    assert cabecalho.sectionResizeMode(2) == (
+        QHeaderView.ResizeMode.ResizeToContents
+    )
+    assert dialogo.tabela.columnWidth(0) > dialogo.tabela.columnWidth(1)
+    assert dialogo.tabela.item(0, 1).textAlignment() & int(
+        Qt.AlignmentFlag.AlignRight
+    )
+    assert dialogo.combo_periodo.maximumWidth() == 220
+    assert not dialogo.tabela.horizontalScrollBar().isVisible()
+    assert "QDialog#dialogo_historico_precos" in dialogo.styleSheet()

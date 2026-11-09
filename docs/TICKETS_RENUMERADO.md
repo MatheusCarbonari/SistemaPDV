@@ -593,6 +593,45 @@ rolagem vertical. O campo de data abre o calendário ao ser clicado e mantém á
 reservada para o seletor. Tema, diálogo de cancelamento, autorizações, snapshots e
 regras comerciais foram preservados. Esta etapa não inicia o Visual 04.
 O Visual 03.2 foi validado com 1045 testes automatizados.
+**Andamento — Visual 04, Produtos e Administração:** Produtos adota filtros e
+ações responsivos, tabela com proporções explícitas que priorizam nome e
+categoria e valores monetários alinhados à direita. O cadastro e a edição foram
+separados em Identificação e Classificação e venda, com campos limitados pelo
+conteúdo e indicação clara de novo produto ou edição. Categorias e Histórico de
+preços receberam janelas proporcionais, tabelas equilibradas, controles compactos
+e tema escuro explícito. Administração foi organizada nos blocos Operadores
+cadastrados e Cadastrar operador, mantendo ações junto à lista e credenciais em
+campos compactos; Redefinir senha destaca o operador e mantém botões próximos.
+Em 1024×720 e 1280×800, tabelas aproveitam a largura sem rolagem horizontal; em
+larguras reduzidas, filtros e ações de Produtos são redistribuídos em duas linhas.
+Seleção, foco, permissões, autorizações pontuais, limpeza de senhas, categorias,
+histórico de preços e bloqueios comerciais permanecem inalterados. Esta etapa não
+inicia o Visual 05 nem altera schema, modelos ou serviços comerciais.
+O Visual 04 foi validado com 1055 testes automatizados, incluindo páginas em
+1024×720, 1280×800 e dimensões reduzidas.
+**Ajuste — Visual 04.1, Diálogos de Produtos:** cadastro e edição preservam o
+tamanho geral, mas passam a usar campos menores e uma grade de duas linhas em
+Classificação e venda, com espaçamentos explícitos entre categoria, forma de
+venda, preço e origem. Código e nome também foram compactados. A confirmação de
+ativação ou desativação mantém a mesma decisão comercial em um diálogo simples,
+agora com botões `Sim` e `Não` mais largos e baixos. Página Produtos, Categorias,
+Histórico de preços, permissões, autorizações e persistência permanecem
+inalterados. Esta etapa não inicia o Visual 05.
+O Visual 04.1 foi validado com 1058 testes automatizados.
+**Refino — Visual 04.2, Formulários de Produtos e Administração:** cadastro e
+edição de produtos passam a compor cada rótulo acima do respectivo controle, em
+blocos independentes organizados em duas colunas. Essa composição preserva as
+duas linhas comerciais — Categoria e Forma de venda; Preço e Origem — sem disputa
+horizontal entre rótulos, inclusive com fonte ampliada a 125%. A confirmação de
+situação deixa o `QMessageBox` padrão e utiliza diálogo compacto, sem ícone ou
+áreas reservadas, com pergunta direta e botões `Sim` e `Não` lado a lado.
+Administração organiza Operadores cadastrados e Cadastrar operador em colunas
+equivalentes e alinhadas ao topo, com campos verticais compactos; abaixo de 850 px
+os blocos são empilhados com rolagem vertical. Capturas renderizadas foram
+inspecionadas em 1024×720, 1280×800 e fonte a 125%. Regras, permissões, serviços e
+persistência permanecem inalterados. Esta etapa não inicia o Visual 05.
+O Visual 04.2 foi validado com 1060 testes automatizados e capturas renderizadas
+dos estados vazio, preenchido, confirmação, resoluções-alvo e fonte a 125%.
 
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 

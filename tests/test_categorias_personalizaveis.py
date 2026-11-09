@@ -2,6 +2,7 @@ import sqlite3
 from threading import Barrier, Thread
 
 import pytest
+from PySide6.QtWidgets import QHeaderView
 
 from database.conexao import conectar
 import database.schema as schema
@@ -315,3 +316,28 @@ def test_dialogo_permite_primeira_categoria_e_combo_substitui_texto(
     formulario = pagina.dialogo_atual
     assert formulario.campo_categoria.currentData().nome == "BOVINOS"
     assert formulario.campo_categoria.isEditable() is False
+
+
+def test_dialogo_categorias_usa_tabela_e_controles_proporcionais(
+    ambiente,
+    qtbot,
+) -> None:
+    caminho, sessao = ambiente
+    criar_categoria(sessao, "BOVINOS", caminho)
+    criar_categoria(sessao, "HORTIFRUTI E VERDURAS", caminho)
+    dialogo = DialogoCategorias(sessao, caminho)
+    qtbot.addWidget(dialogo)
+    dialogo.show()
+    dialogo.resize(620, 460)
+    qtbot.wait(20)
+
+    cabecalho = dialogo.tabela.horizontalHeader()
+    assert cabecalho.sectionResizeMode(0) == QHeaderView.ResizeMode.Stretch
+    assert cabecalho.sectionResizeMode(1) == (
+        QHeaderView.ResizeMode.ResizeToContents
+    )
+    assert dialogo.tabela.columnWidth(0) > dialogo.tabela.columnWidth(1) * 2
+    assert dialogo.campo_nome.maximumWidth() == 360
+    assert dialogo.botao_cadastrar.width() < dialogo.width() / 2
+    assert dialogo.botao_fechar.height() < 50
+    assert "QDialog#dialogo_categorias" in dialogo.styleSheet()

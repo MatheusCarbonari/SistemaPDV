@@ -1,17 +1,20 @@
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFormLayout,
+    QGridLayout,
+    QGroupBox,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -71,15 +74,48 @@ class DialogoProduto(QDialog):
         self.produto = produto
         self.setModal(True)
         self.setWindowTitle("Editar produto" if produto else "Cadastrar produto")
+        self.setObjectName("dialogo_produto")
+        self.resize(600, 450)
+        self.setMinimumSize(500, 400)
 
         layout = QVBoxLayout(self)
-        formulario = QFormLayout()
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+        self.rotulo_estado = QLabel(
+            f"Editando produto {produto.codigo}" if produto else "Novo produto"
+        )
+        self.rotulo_estado.setObjectName("estado_formulario_produto")
+        layout.addWidget(self.rotulo_estado)
+
+        self.grupo_identificacao = QGroupBox("Identificação")
+        formulario_identificacao = QGridLayout(self.grupo_identificacao)
+        formulario_identificacao.setContentsMargins(12, 18, 12, 12)
+        formulario_identificacao.setHorizontalSpacing(10)
+        formulario_identificacao.setVerticalSpacing(10)
         self.campo_codigo = QLineEdit()
         self.campo_codigo.setObjectName("produto_codigo")
+        self.campo_codigo.setFixedSize(140, 30)
         self.campo_nome = QLineEdit()
         self.campo_nome.setObjectName("produto_nome")
+        self.campo_nome.setFixedSize(320, 30)
+        self.bloco_codigo = self._criar_bloco_campo(
+            "Código",
+            self.campo_codigo,
+        )
+        self.bloco_nome = self._criar_bloco_campo("Nome", self.campo_nome)
+        formulario_identificacao.addWidget(self.bloco_codigo, 0, 0)
+        formulario_identificacao.addWidget(self.bloco_nome, 0, 1)
+        formulario_identificacao.setColumnStretch(2, 1)
+        layout.addWidget(self.grupo_identificacao)
+
+        self.grupo_comercial = QGroupBox("Classificação e venda")
+        formulario = QGridLayout(self.grupo_comercial)
+        formulario.setContentsMargins(12, 18, 12, 12)
+        formulario.setHorizontalSpacing(10)
+        formulario.setVerticalSpacing(12)
         self.campo_categoria = QComboBox()
         self.campo_categoria.setObjectName("produto_categoria")
+        self.campo_categoria.setFixedSize(210, 30)
         for categoria in categorias:
             rotulo = categoria.nome
             if not categoria.ativo:
@@ -87,20 +123,40 @@ class DialogoProduto(QDialog):
             self.campo_categoria.addItem(rotulo, categoria)
         self.combo_forma_venda = QComboBox()
         self.combo_forma_venda.setObjectName("produto_forma_venda")
+        self.combo_forma_venda.setFixedSize(130, 30)
         self.combo_forma_venda.addItems(("PESO", "UNIDADE"))
         self.campo_preco = QLineEdit()
         self.campo_preco.setObjectName("produto_preco")
+        self.campo_preco.setFixedSize(130, 30)
         self.campo_preco.setPlaceholderText("0,00")
         self.combo_origem = QComboBox()
         self.combo_origem.setObjectName("produto_origem")
+        self.combo_origem.setFixedSize(150, 30)
         self.combo_origem.addItems(("COMPRADO", "PRODUZIDO"))
-        formulario.addRow("Código:", self.campo_codigo)
-        formulario.addRow("Nome:", self.campo_nome)
-        formulario.addRow("Categoria:", self.campo_categoria)
-        formulario.addRow("Forma de venda:", self.combo_forma_venda)
-        formulario.addRow("Preço de venda (R$):", self.campo_preco)
-        formulario.addRow("Origem:", self.combo_origem)
-        layout.addLayout(formulario)
+        self.bloco_categoria = self._criar_bloco_campo(
+            "Categoria",
+            self.campo_categoria,
+        )
+        self.bloco_forma_venda = self._criar_bloco_campo(
+            "Forma de venda",
+            self.combo_forma_venda,
+        )
+        self.bloco_preco = self._criar_bloco_campo(
+            "Preço de venda (R$)",
+            self.campo_preco,
+        )
+        self.bloco_origem = self._criar_bloco_campo(
+            "Origem",
+            self.combo_origem,
+        )
+        formulario.addWidget(self.bloco_categoria, 0, 0)
+        formulario.addWidget(self.bloco_forma_venda, 0, 1)
+        formulario.addWidget(self.bloco_preco, 1, 0)
+        formulario.addWidget(self.bloco_origem, 1, 1)
+        formulario.setColumnStretch(0, 1)
+        formulario.setColumnStretch(1, 1)
+        formulario.setColumnStretch(2, 1)
+        layout.addWidget(self.grupo_comercial)
 
         self.rotulo_mensagem = QLabel("")
         self.rotulo_mensagem.setObjectName("mensagem_formulario_produto")
@@ -116,6 +172,7 @@ class DialogoProduto(QDialog):
         self.botoes.accepted.connect(self.confirmar)
         self.botoes.rejected.connect(self.reject)
         layout.addWidget(self.botoes)
+        self._aplicar_tema_escuro()
 
         if produto is not None:
             self.campo_codigo.setText(produto.codigo)
@@ -155,6 +212,101 @@ class DialogoProduto(QDialog):
     def mostrar_erros(self, erros) -> None:
         self.rotulo_mensagem.setText("\n".join(str(erro) for erro in erros))
 
+    @staticmethod
+    def _criar_bloco_campo(rotulo: str, campo: QWidget) -> QWidget:
+        bloco = QWidget()
+        layout = QVBoxLayout(bloco)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        legenda = QLabel(rotulo)
+        legenda.setObjectName("rotulo_campo_produto")
+        layout.addWidget(legenda)
+        layout.addWidget(campo, 0, Qt.AlignmentFlag.AlignLeft)
+        return bloco
+
+    def _aplicar_tema_escuro(self) -> None:
+        self.setStyleSheet(
+            """
+            QDialog#dialogo_produto { background: #171a1f; color: #e8edf2; }
+            QLabel { color: #e3e8ed; }
+            QLabel#estado_formulario_produto {
+                color: #f7fbff; font-size: 16px; font-weight: 700;
+                background: #1d3040; border: 1px solid #4d83aa;
+                border-radius: 5px; padding: 8px 10px;
+            }
+            QLabel#mensagem_formulario_produto { color: #ffb8b1; }
+            QGroupBox {
+                color: #dce4ea; border: 1px solid #404850;
+                border-radius: 6px; margin-top: 9px; font-weight: 700;
+            }
+            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }
+            QLineEdit, QComboBox {
+                color: #f5f7fa; background: #23272e; border: 1px solid #5b6570;
+                border-radius: 5px; min-height: 26px; max-height: 26px;
+                padding: 1px 7px;
+            }
+            QLineEdit:focus, QComboBox:focus { border: 2px solid #4aa3df; }
+            QPushButton {
+                color: #e8edf2; background: #2a2f36; border: 1px solid #525d68;
+                border-radius: 5px; min-height: 32px; padding: 3px 12px;
+            }
+            QPushButton:hover:enabled { background: #353c44; border-color: #687684; }
+            """
+        )
+
+
+class DialogoConfirmacaoSituacaoProduto(QDialog):
+    """Confirma a mudança de situação com botões proporcionais."""
+
+    def __init__(self, produto: Produto, nova_situacao: bool, parent=None) -> None:
+        super().__init__(parent)
+        acao = "ativar" if nova_situacao else "desativar"
+        self.setObjectName("confirmacao_situacao_produto")
+        self.setWindowTitle(f"Confirmar {acao}")
+        self.setModal(True)
+        self.resize(440, 150)
+        self.setMinimumSize(380, 140)
+        self.setMaximumSize(500, 190)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 14, 16, 12)
+        layout.setSpacing(12)
+        self.rotulo_pergunta = QLabel(
+            f"Deseja {acao} o produto {produto.codigo} — {produto.nome}?"
+        )
+        self.rotulo_pergunta.setObjectName("pergunta_situacao_produto")
+        self.rotulo_pergunta.setWordWrap(True)
+        layout.addWidget(self.rotulo_pergunta)
+
+        self.botao_sim = QPushButton("Sim")
+        self.botao_nao = QPushButton("Não")
+        for botao in (self.botao_sim, self.botao_nao):
+            botao.setFixedSize(96, 30)
+        self.botao_nao.setDefault(True)
+        botoes = QHBoxLayout()
+        botoes.setSpacing(8)
+        botoes.addStretch()
+        botoes.addWidget(self.botao_sim)
+        botoes.addWidget(self.botao_nao)
+        botoes.addStretch()
+        layout.addLayout(botoes)
+        self.botao_sim.clicked.connect(self.accept)
+        self.botao_nao.clicked.connect(self.reject)
+        self.setStyleSheet(
+            """
+            QDialog#confirmacao_situacao_produto {
+                background: #171a1f; color: #e8edf2;
+            }
+            QLabel#pergunta_situacao_produto { color: #e3e8ed; font-size: 14px; }
+            QPushButton {
+                color: #e8edf2; background: #2a2f36; border: 1px solid #525d68;
+                border-radius: 5px; min-width: 96px; min-height: 30px;
+                max-height: 30px; padding: 0 10px;
+            }
+            QPushButton:hover { background: #353c44; border-color: #687684; }
+            """
+        )
+
 
 class PaginaProdutos(QWidget):
     """Página interna para administração do catálogo de produtos."""
@@ -180,28 +332,36 @@ class PaginaProdutos(QWidget):
         self._autorizacao_produto_em_processamento = False
         self.dialogo_autorizacao_produto = None
         self.dialogo_atual: QDialog | None = None
+        self._filtros_empilhados: bool | None = None
+        self._acoes_empilhadas: bool | None = None
         self.setObjectName("pagina_produtos")
+        self._aplicar_tema_escuro()
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Produtos"))
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(9)
+        titulo = QLabel("Produtos")
+        titulo.setObjectName("titulo_produtos")
+        layout.addWidget(titulo)
 
-        filtros = QHBoxLayout()
+        grupo_filtros = QGroupBox("Filtros")
+        self.layout_filtros = QGridLayout(grupo_filtros)
+        self.layout_filtros.setContentsMargins(10, 14, 10, 8)
         self.campo_pesquisa = QLineEdit()
         self.campo_pesquisa.setObjectName("pesquisa_produtos")
         self.campo_pesquisa.setPlaceholderText("Código ou nome")
+        self.campo_pesquisa.setMaximumWidth(420)
         self.combo_situacao = QComboBox()
         self.combo_situacao.setObjectName("situacao_produtos")
         self.combo_situacao.addItem("Todos", None)
         self.combo_situacao.addItem("Ativos", True)
         self.combo_situacao.addItem("Inativos", False)
+        self.combo_situacao.setMaximumWidth(180)
         self.botao_pesquisar = QPushButton("Pesquisar")
         self.botao_pesquisar.setObjectName("pesquisar_produtos")
-        filtros.addWidget(QLabel("Pesquisa:"))
-        filtros.addWidget(self.campo_pesquisa)
-        filtros.addWidget(QLabel("Situação:"))
-        filtros.addWidget(self.combo_situacao)
-        filtros.addWidget(self.botao_pesquisar)
-        layout.addLayout(filtros)
+        self.rotulo_pesquisa = QLabel("Pesquisa:")
+        self.rotulo_situacao = QLabel("Situação:")
+        layout.addWidget(grupo_filtros)
 
         self.rotulo_mensagem = QLabel("")
         self.rotulo_mensagem.setObjectName("mensagem_produtos")
@@ -222,10 +382,18 @@ class PaginaProdutos(QWidget):
         self.tabela_produtos.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
         )
-        self.tabela_produtos.horizontalHeader().setStretchLastSection(True)
+        self.tabela_produtos.setAlternatingRowColors(True)
+        self.tabela_produtos.verticalHeader().setVisible(False)
+        self.tabela_produtos.verticalHeader().setDefaultSectionSize(30)
+        cabecalho = self.tabela_produtos.horizontalHeader()
+        cabecalho.setStretchLastSection(False)
+        for coluna in range(6):
+            cabecalho.setSectionResizeMode(coluna, QHeaderView.ResizeMode.Fixed)
         layout.addWidget(self.tabela_produtos)
 
-        acoes = QHBoxLayout()
+        self.layout_acoes = QGridLayout()
+        self.layout_acoes.setHorizontalSpacing(8)
+        self.layout_acoes.setVerticalSpacing(6)
         self.botao_cadastrar = QPushButton("Cadastrar")
         self.botao_cadastrar.setObjectName("cadastrar_produto")
         self.botao_editar = QPushButton("Editar")
@@ -236,13 +404,16 @@ class PaginaProdutos(QWidget):
         self.botao_historico_precos.setObjectName("historico_precos_produto")
         self.botao_gerenciar_categorias = QPushButton("Gerenciar categorias")
         self.botao_gerenciar_categorias.setObjectName("gerenciar_categorias")
-        acoes.addWidget(self.botao_cadastrar)
-        acoes.addWidget(self.botao_editar)
-        acoes.addWidget(self.botao_alterar_situacao)
-        acoes.addWidget(self.botao_historico_precos)
-        acoes.addWidget(self.botao_gerenciar_categorias)
-        acoes.addStretch()
-        layout.addLayout(acoes)
+        self._botoes_acoes = (
+            self.botao_cadastrar,
+            self.botao_editar,
+            self.botao_alterar_situacao,
+            self.botao_historico_precos,
+            self.botao_gerenciar_categorias,
+        )
+        for botao in self._botoes_acoes:
+            botao.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        layout.addLayout(self.layout_acoes)
 
         self.botao_pesquisar.clicked.connect(self.carregar_produtos)
         self.campo_pesquisa.returnPressed.connect(self.carregar_produtos)
@@ -262,6 +433,113 @@ class PaginaProdutos(QWidget):
             self._atualizar_acoes_selecao
         )
         self._atualizar_acoes_selecao()
+        self._ajustar_layout_responsivo(self.width())
+
+    def _aplicar_tema_escuro(self) -> None:
+        self.setAutoFillBackground(True)
+        paleta = self.palette()
+        paleta.setColor(QPalette.ColorRole.Window, QColor("#171a1f"))
+        paleta.setColor(QPalette.ColorRole.Base, QColor("#181b20"))
+        paleta.setColor(QPalette.ColorRole.AlternateBase, QColor("#22272e"))
+        paleta.setColor(QPalette.ColorRole.Text, QColor("#f1f4f7"))
+        paleta.setColor(QPalette.ColorRole.Highlight, QColor("#2f75a6"))
+        paleta.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+        self.setPalette(paleta)
+        self.setStyleSheet(
+            """
+            QWidget#pagina_produtos { background: #171a1f; color: #e8edf2; }
+            QLabel { color: #e3e8ed; background: transparent; }
+            QLabel#titulo_produtos { color: #f7fbff; font-size: 20px; font-weight: 700; }
+            QLabel#mensagem_produtos { color: #c7d0d8; padding: 2px 4px; }
+            QGroupBox {
+                color: #dce4ea; border: 1px solid #404850;
+                border-radius: 6px; margin-top: 9px; font-weight: 700;
+            }
+            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }
+            QLineEdit, QComboBox {
+                color: #f5f7fa; background: #23272e; border: 1px solid #5b6570;
+                border-radius: 5px; min-height: 32px; padding: 2px 8px;
+            }
+            QLineEdit:focus, QComboBox:focus { border: 2px solid #4aa3df; }
+            QTableWidget {
+                color: #f1f4f7; background: #181b20;
+                alternate-background-color: #22272e;
+                selection-color: #ffffff; selection-background-color: #2f75a6;
+                border: 1px solid #424a53; border-radius: 4px;
+                gridline-color: #343b43;
+            }
+            QTableWidget::item { padding: 4px 6px; }
+            QHeaderView::section {
+                color: #f4f6f8; background: #2b3038;
+                border: 0; border-right: 1px solid #424a53;
+                border-bottom: 1px solid #4a535d; padding: 6px; font-weight: 700;
+            }
+            QPushButton {
+                color: #e8edf2; background: #2a2f36; border: 1px solid #525d68;
+                border-radius: 5px; min-height: 32px; padding: 3px 11px;
+            }
+            QPushButton:hover:enabled { background: #353c44; border-color: #687684; }
+            QPushButton:disabled { color: #929ba4; background: #22262c; border-color: #3e464e; }
+            QPushButton#cadastrar_produto {
+                color: #e8f4ff; background: #245477; border-color: #4d8fbd;
+                font-weight: 700;
+            }
+            """
+        )
+
+    def resizeEvent(self, evento) -> None:
+        super().resizeEvent(evento)
+        if hasattr(self, "layout_filtros"):
+            self._ajustar_layout_responsivo(evento.size().width())
+            QTimer.singleShot(0, self._ajustar_larguras_tabela)
+
+    def _ajustar_layout_responsivo(self, largura: int) -> None:
+        filtros_empilhados = largura < 720
+        if filtros_empilhados != self._filtros_empilhados:
+            if filtros_empilhados:
+                posicoes = (
+                    (self.rotulo_pesquisa, 0, 0),
+                    (self.campo_pesquisa, 0, 1),
+                    (self.botao_pesquisar, 0, 2),
+                    (self.rotulo_situacao, 1, 0),
+                    (self.combo_situacao, 1, 1),
+                )
+            else:
+                posicoes = (
+                    (self.rotulo_pesquisa, 0, 0),
+                    (self.campo_pesquisa, 0, 1),
+                    (self.rotulo_situacao, 0, 2),
+                    (self.combo_situacao, 0, 3),
+                    (self.botao_pesquisar, 0, 4),
+                )
+            for widget, linha, coluna in posicoes:
+                self.layout_filtros.addWidget(widget, linha, coluna)
+            self.layout_filtros.setColumnStretch(1, 1)
+            self._filtros_empilhados = filtros_empilhados
+
+        acoes_empilhadas = largura < 900
+        if acoes_empilhadas != self._acoes_empilhadas:
+            for indice, botao in enumerate(self._botoes_acoes):
+                if acoes_empilhadas:
+                    linha = 0 if indice < 3 else 1
+                    coluna = indice if indice < 3 else indice - 3
+                else:
+                    linha, coluna = 0, indice
+                self.layout_acoes.addWidget(botao, linha, coluna)
+            self.layout_acoes.setColumnStretch(5, 1)
+            self._acoes_empilhadas = acoes_empilhadas
+
+    def _ajustar_larguras_tabela(self) -> None:
+        largura = self.tabela_produtos.viewport().width()
+        if largura < 480:
+            return
+        proporcoes = (0.12, 0.30, 0.18, 0.13, 0.14)
+        usadas = 0
+        for coluna, proporcao in enumerate(proporcoes):
+            largura_coluna = int(largura * proporcao)
+            self.tabela_produtos.setColumnWidth(coluna, largura_coluna)
+            usadas += largura_coluna
+        self.tabela_produtos.setColumnWidth(5, largura - usadas)
 
     def ativar(self) -> None:
         self.carregar_produtos()
@@ -301,6 +579,12 @@ class PaginaProdutos(QWidget):
                 QTableWidgetItem("Ativo" if produto.ativo else "Inativo"),
             )
             for coluna, item in enumerate(valores):
+                if coluna == 4:
+                    item.setTextAlignment(
+                        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                    )
+                elif coluna in (0, 3, 5):
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.tabela_produtos.setItem(linha, coluna, item)
 
         self.rotulo_mensagem.setText(
@@ -309,6 +593,7 @@ class PaginaProdutos(QWidget):
             else "Nenhum produto encontrado."
         )
         self._atualizar_acoes_selecao()
+        QTimer.singleShot(0, self._ajustar_larguras_tabela)
 
     def abrir_cadastro(self) -> None:
         if not self._pode_operar() or self._bloqueado_por_fechamento():
@@ -353,13 +638,13 @@ class PaginaProdutos(QWidget):
             )
             return
         nova_situacao = not produto.ativo
-        acao = "ativar" if nova_situacao else "desativar"
-        resposta = QMessageBox.question(
+        dialogo = DialogoConfirmacaoSituacaoProduto(
+            produto,
+            nova_situacao,
             self,
-            f"Confirmar {acao}",
-            f"Deseja {acao} o produto {produto.codigo} — {produto.nome}?",
         )
-        if resposta != QMessageBox.StandardButton.Yes:
+        self.dialogo_confirmacao_situacao = dialogo
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
             return
 
         try:

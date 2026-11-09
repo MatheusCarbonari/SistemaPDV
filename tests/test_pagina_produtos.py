@@ -1,15 +1,18 @@
 import sqlite3
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtWidgets import QDialog, QHeaderView
 
 from database.schema import criar_tabelas
 from tests.helpers_identidade import (
     criar_janela_autenticada,
     criar_sessao_admin_teste,
 )
-from interface.pagina_produtos import PaginaProdutos
+from interface.pagina_produtos import (
+    DialogoConfirmacaoSituacaoProduto,
+    PaginaProdutos,
+)
 import interface.pagina_produtos as pagina_produtos_module
 from models.item_venda import ItemVenda
 from models.pagamento import Pagamento, PagamentosEmAndamento
@@ -188,9 +191,9 @@ def test_ativacao_e_desativacao_atualizam_lista(
     pagina.carregar_produtos()
     pagina.tabela_produtos.selectRow(0)
     monkeypatch.setattr(
-        QMessageBox,
-        "question",
-        lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+        DialogoConfirmacaoSituacaoProduto,
+        "exec",
+        lambda self: int(QDialog.DialogCode.Accepted),
     )
 
     pagina.alterar_situacao_selecionada()
@@ -356,3 +359,141 @@ def test_edicao_nao_altera_snapshot_ja_lancado(banco_produtos) -> None:
     assert atualizado.nome == "Picanha premium"
     assert snapshot.nome == "Picanha"
     assert snapshot.preco_referencia_centavos == 7990
+
+
+@pytest.mark.parametrize("largura,altura", [(1024, 720), (1280, 800)])
+def test_layout_produtos_distribui_colunas_sem_cortes(
+    pagina,
+    qtbot,
+    largura,
+    altura,
+) -> None:
+    cadastrar(pagina.caminho_banco, "101", "Picanha premium maturada")
+    cadastrar(pagina.caminho_banco, "202", "Alcatra")
+    pagina.carregar_produtos()
+    pagina.resize(largura, altura)
+    qtbot.wait(30)
+
+    cabecalho = pagina.tabela_produtos.horizontalHeader()
+    assert all(
+        cabecalho.sectionResizeMode(coluna) == QHeaderView.ResizeMode.Fixed
+        for coluna in range(6)
+    )
+    largura_tabela = pagina.tabela_produtos.viewport().width()
+    assert abs(
+        sum(pagina.tabela_produtos.columnWidth(coluna) for coluna in range(6))
+        - largura_tabela
+    ) <= 5
+    assert pagina.tabela_produtos.columnWidth(1) > (
+        pagina.tabela_produtos.columnWidth(0) * 2
+    )
+    assert pagina.tabela_produtos.columnWidth(1) > (
+        pagina.tabela_produtos.columnWidth(5) * 2
+    )
+    assert pagina.tabela_produtos.item(0, 4).textAlignment() & int(
+        Qt.AlignmentFlag.AlignRight
+    )
+    assert not pagina.tabela_produtos.horizontalScrollBar().isVisible()
+    assert not pagina._filtros_empilhados
+    assert not pagina._acoes_empilhadas
+
+
+def test_layout_produtos_reduzido_empilha_filtros_e_acoes(
+    pagina,
+    qtbot,
+) -> None:
+    pagina.resize(680, 520)
+    qtbot.wait(30)
+
+    assert pagina._filtros_empilhados
+    assert pagina._acoes_empilhadas
+    assert pagina.layout_filtros.getItemPosition(
+        pagina.layout_filtros.indexOf(pagina.combo_situacao)
+    )[0] == 1
+    assert pagina.layout_acoes.getItemPosition(
+        pagina.layout_acoes.indexOf(pagina.botao_historico_precos)
+    )[0] == 1
+
+
+def test_formulario_produto_usa_campos_compactos_e_destaca_edicao(
+    pagina,
+    qtbot,
+) -> None:
+    produto = cadastrar(pagina.caminho_banco)
+    pagina.carregar_produtos()
+    pagina.tabela_produtos.selectRow(0)
+    pagina.abrir_edicao()
+    dialogo = pagina.dialogo_atual
+    dialogo.resize(500, 400)
+    qtbot.wait(20)
+
+    assert dialogo.rotulo_estado.text() == f"Editando produto {produto.codigo}"
+    assert dialogo.campo_codigo.size().toTuple() == (140, 30)
+    assert dialogo.campo_nome.size().toTuple() == (320, 30)
+    assert dialogo.campo_preco.size().toTuple() == (130, 30)
+    assert dialogo.campo_categoria.size().toTuple() == (210, 30)
+    assert dialogo.combo_forma_venda.size().toTuple() == (130, 30)
+    assert dialogo.combo_origem.size().toTuple() == (150, 30)
+    assert not dialogo.campo_categoria.isEditable()
+    assert dialogo.botoes.width() < dialogo.width()
+    assert "QDialog#dialogo_produto" in dialogo.styleSheet()
+
+
+@pytest.mark.parametrize("editar", [False, True])
+@pytest.mark.parametrize("escala_fonte", [1.0, 1.25])
+def test_formulario_produto_nao_sobrepoe_campos(
+    pagina,
+    qtbot,
+    editar,
+    escala_fonte,
+) -> None:
+    if editar:
+        cadastrar(pagina.caminho_banco)
+        pagina.carregar_produtos()
+        pagina.tabela_produtos.selectRow(0)
+        pagina.abrir_edicao()
+    else:
+        pagina.abrir_cadastro()
+    dialogo = pagina.dialogo_atual
+    fonte = dialogo.font()
+    fonte.setPointSizeF(fonte.pointSizeF() * escala_fonte)
+    dialogo.setFont(fonte)
+    dialogo.show()
+    dialogo.resize(600, 450)
+    qtbot.wait(20)
+
+    campos_comerciais = (
+        dialogo.campo_categoria,
+        dialogo.combo_forma_venda,
+        dialogo.campo_preco,
+        dialogo.combo_origem,
+    )
+    retangulos = []
+    for campo in campos_comerciais:
+        origem = campo.mapTo(dialogo.grupo_comercial, QPoint(0, 0))
+        retangulos.append(QRect(origem, campo.size()))
+    for indice, retangulo in enumerate(retangulos):
+        for outro in retangulos[indice + 1:]:
+            assert not retangulo.intersects(outro)
+    assert dialogo.grupo_comercial.height() >= 115
+
+
+def test_confirmacao_situacao_usa_botoes_largos_e_baixos(
+    pagina,
+    qtbot,
+) -> None:
+    produto = cadastrar(pagina.caminho_banco)
+    dialogo = DialogoConfirmacaoSituacaoProduto(produto, False, pagina)
+    qtbot.addWidget(dialogo)
+    dialogo.show()
+    qtbot.wait(20)
+
+    assert dialogo.botao_sim.text() == "Sim"
+    assert dialogo.botao_nao.text() == "Não"
+    assert dialogo.width() <= 500
+    assert dialogo.height() <= 190
+    assert "Deseja desativar" in dialogo.rotulo_pergunta.text()
+    for botao in (dialogo.botao_sim, dialogo.botao_nao):
+        assert 110 <= botao.width() <= 125
+        assert 30 <= botao.height() <= 34
+        assert botao.width() > botao.height() * 3
