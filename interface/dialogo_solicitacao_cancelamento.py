@@ -1,13 +1,12 @@
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QDialog,
     QFormLayout,
+    QFrame,
+    QHBoxLayout,
     QLabel,
     QPlainTextEdit,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
 )
 
@@ -27,19 +26,29 @@ class DialogoSolicitacaoCancelamento(QDialog):
         self._processando = False
         self.setModal(True)
         self.setWindowTitle("Solicitar cancelamento")
+        self.setObjectName("dialogo_solicitacao_cancelamento")
+        self.resize(560, 430)
+        self.setMinimumSize(480, 360)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+
         aviso = QLabel(
-            "Confirme o motivo para solicitar uma autorização administrativa "
-            "de uso único. A venda só será cancelada após a autorização."
+            "Informe o motivo e solicite autorização para cancelar esta venda."
         )
         aviso.setObjectName("aviso_autorizacao_cancelamento")
         aviso.setWordWrap(True)
         layout.addWidget(aviso)
 
         resumo = venda.resumo
-        formulario = QFormLayout()
-        self.rotulo_id = QLabel(f"#{resumo.venda_id:06d}")
+        painel_resumo = QFrame(self)
+        painel_resumo.setObjectName("resumo_solicitacao_cancelamento")
+        formulario = QFormLayout(painel_resumo)
+        formulario.setContentsMargins(12, 10, 12, 10)
+        formulario.setHorizontalSpacing(18)
+        formulario.setVerticalSpacing(5)
+        self.rotulo_id = QLabel(f"Venda nº {resumo.venda_id}")
         self.rotulo_id.setObjectName("id_solicitacao_cancelamento")
         self.rotulo_data = QLabel(
             resumo.registrada_em.astimezone(FUSO_SAO_PAULO).strftime(
@@ -52,83 +61,119 @@ class DialogoSolicitacaoCancelamento(QDialog):
         self.rotulo_status = QLabel(resumo.status)
         self.rotulo_status.setObjectName("status_solicitacao_cancelamento")
         self.rotulo_itens = QLabel(str(len(venda.itens)))
+        self.rotulo_itens.setObjectName("quantidade_itens_solicitacao")
         self.rotulo_pagamentos = QLabel(str(len(venda.pagamentos)))
+        self.rotulo_pagamentos.setObjectName(
+            "quantidade_pagamentos_solicitacao"
+        )
         formulario.addRow("Venda:", self.rotulo_id)
-        formulario.addRow("Registrada em:", self.rotulo_data)
+        formulario.addRow("Data/hora:", self.rotulo_data)
         formulario.addRow("Total:", self.rotulo_total)
-        formulario.addRow("Status:", self.rotulo_status)
-        formulario.addRow("Itens:", self.rotulo_itens)
-        formulario.addRow("Pagamentos:", self.rotulo_pagamentos)
-        layout.addLayout(formulario)
+        formulario.addRow("Situação:", self.rotulo_status)
+        formulario.addRow("Quantidade de itens:", self.rotulo_itens)
+        formulario.addRow("Quantidade de pagamentos:", self.rotulo_pagamentos)
+        layout.addWidget(painel_resumo)
 
-        layout.addWidget(QLabel("Itens originais:"))
-        self.tabela_itens = QTableWidget(len(venda.itens), 3)
-        self.tabela_itens.setObjectName("itens_solicitacao_cancelamento")
-        self.tabela_itens.setHorizontalHeaderLabels(
-            ["Posição", "Descrição", "Subtotal"]
-        )
-        self._configurar_tabela_somente_leitura(self.tabela_itens)
-        for linha, item_detalhado in enumerate(venda.itens):
-            item = item_detalhado.item
-            descricao = (
-                item.produto.nome
-                if item.produto is not None
-                else "Diversos" if item.tipo_item == "DIVERSOS" else "Item legado"
-            )
-            valores = (
-                str(item_detalhado.posicao + 1),
-                descricao,
-                formatar_centavos(item.subtotal_centavos),
-            )
-            for coluna, valor in enumerate(valores):
-                self.tabela_itens.setItem(linha, coluna, QTableWidgetItem(valor))
-        self.tabela_itens.horizontalHeader().setStretchLastSection(True)
-        layout.addWidget(self.tabela_itens)
-
-        layout.addWidget(QLabel("Pagamentos originais:"))
-        self.tabela_pagamentos = QTableWidget(len(venda.pagamentos), 2)
-        self.tabela_pagamentos.setObjectName(
-            "pagamentos_solicitacao_cancelamento"
-        )
-        self.tabela_pagamentos.setHorizontalHeaderLabels(
-            ["Modalidade", "Valor"]
-        )
-        self._configurar_tabela_somente_leitura(self.tabela_pagamentos)
-        for linha, pagamento in enumerate(venda.pagamentos):
-            self.tabela_pagamentos.setItem(
-                linha,
-                0,
-                QTableWidgetItem(pagamento.modalidade),
-            )
-            self.tabela_pagamentos.setItem(
-                linha,
-                1,
-                QTableWidgetItem(formatar_centavos(pagamento.valor_centavos)),
-            )
-        self.tabela_pagamentos.horizontalHeader().setStretchLastSection(True)
-        layout.addWidget(self.tabela_pagamentos)
-
-        layout.addWidget(QLabel("Motivo:"))
+        rotulo_motivo = QLabel("Motivo obrigatório:")
+        rotulo_motivo.setObjectName("rotulo_motivo_cancelamento")
+        layout.addWidget(rotulo_motivo)
         self.campo_motivo = QPlainTextEdit()
         self.campo_motivo.setObjectName("motivo_solicitacao_cancelamento")
         self.campo_motivo.setPlaceholderText(
             "Informe por que a venda deverá ser cancelada"
         )
+        self.campo_motivo.setMinimumHeight(72)
+        self.campo_motivo.setMaximumHeight(96)
         layout.addWidget(self.campo_motivo)
+
+        dependencia = QLabel(
+            "O cancelamento só será executado após autorização administrativa."
+        )
+        dependencia.setObjectName("dependencia_autorizacao_cancelamento")
+        dependencia.setWordWrap(True)
+        layout.addWidget(dependencia)
 
         self.rotulo_mensagem = QLabel("")
         self.rotulo_mensagem.setObjectName("mensagem_solicitacao_cancelamento")
         self.rotulo_mensagem.setWordWrap(True)
+        self.rotulo_mensagem.setMinimumHeight(20)
         layout.addWidget(self.rotulo_mensagem)
+        layout.addStretch(1)
 
         self.botao_prosseguir = QPushButton(
-            "Confirmar e solicitar autorização"
+            "Solicitar autorização administrativa"
         )
         self.botao_prosseguir.setObjectName("prosseguir_autorizacao_cancelamento")
         self.botao_fechar = QPushButton("Desistir")
         self.botao_fechar.setObjectName("fechar_solicitacao_cancelamento")
-        layout.addWidget(self.botao_prosseguir)
-        layout.addWidget(self.botao_fechar)
+        self.botao_prosseguir.setMinimumHeight(32)
+        self.botao_fechar.setMinimumHeight(32)
+        botoes = QHBoxLayout()
+        botoes.setSpacing(8)
+        botoes.addStretch(1)
+        botoes.addWidget(self.botao_fechar)
+        botoes.addWidget(self.botao_prosseguir)
+        layout.addLayout(botoes)
+
+        self.setStyleSheet(
+            """
+            QDialog#dialogo_solicitacao_cancelamento {
+                color: #e3e8ed;
+                background: #15191e;
+            }
+            QLabel { color: #e3e8ed; }
+            QLabel#aviso_autorizacao_cancelamento {
+                color: #f7fbff;
+                font-size: 15px;
+                font-weight: 700;
+            }
+            QFrame#resumo_solicitacao_cancelamento {
+                background: #20262c;
+                border: 1px solid #46515c;
+                border-radius: 6px;
+            }
+            QLabel#dependencia_autorizacao_cancelamento {
+                color: #f0c66c;
+                background: #352e20;
+                border: 1px solid #806a35;
+                border-radius: 5px;
+                padding: 7px 9px;
+            }
+            QLabel#mensagem_solicitacao_cancelamento { color: #ffb8b1; }
+            QPlainTextEdit {
+                color: #f5f7fa;
+                background: #23272e;
+                selection-color: #ffffff;
+                selection-background-color: #2f75a6;
+                border: 1px solid #5b6570;
+                border-radius: 5px;
+                padding: 6px;
+            }
+            QPlainTextEdit:focus { border: 2px solid #4aa3df; }
+            QPushButton {
+                color: #e8edf2;
+                background: #2a2f36;
+                border: 1px solid #525d68;
+                border-radius: 5px;
+                padding: 4px 12px;
+            }
+            QPushButton:hover:enabled {
+                background: #353c44;
+                border-color: #687684;
+            }
+            QPushButton#prosseguir_autorizacao_cancelamento {
+                color: #ffe6a6;
+                background: #46391f;
+                border-color: #b58a2b;
+                font-weight: 700;
+            }
+            QPushButton:disabled {
+                color: #929ba4;
+                background: #22262c;
+                border-color: #3e464e;
+            }
+            """
+        )
 
         self.botao_prosseguir.clicked.connect(self.preparar_solicitacao)
         self.botao_fechar.clicked.connect(self.reject)
@@ -160,8 +205,3 @@ class DialogoSolicitacaoCancelamento(QDialog):
         self.campo_motivo.setReadOnly(processando)
         self.botao_prosseguir.setEnabled(not processando)
         self.botao_fechar.setEnabled(not processando)
-
-    @staticmethod
-    def _configurar_tabela_somente_leitura(tabela: QTableWidget) -> None:
-        tabela.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        tabela.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)

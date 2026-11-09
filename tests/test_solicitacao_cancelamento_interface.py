@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QSignalSpy
+from PySide6.QtWidgets import QLabel, QTableWidget
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
@@ -131,12 +132,46 @@ def test_venda_ativa_disponibiliza_solicitacao_com_resumo_correto(
     pagina.abrir_solicitacao_cancelamento()
     dialogo = pagina.dialogo_cancelamento
 
-    assert dialogo.rotulo_id.text() == f"#{venda_id:06d}"
+    assert dialogo.rotulo_id.text() == f"Venda nº {venda_id}"
     assert dialogo.rotulo_data.text() == "05/11/2026 12:30:00"
     assert dialogo.rotulo_total.text() == "R$ 50,00"
     assert dialogo.rotulo_status.text() == "ATIVA"
     assert dialogo.rotulo_itens.text() == "1"
     assert dialogo.rotulo_pagamentos.text() == "2"
+
+
+def test_dialogo_compacto_resume_quantidades_sem_tabelas(
+    pagina,
+    qtbot,
+    banco_cancelamento_visual,
+) -> None:
+    venda_id = persistir_venda(banco_cancelamento_visual)
+    selecionar_venda(pagina, venda_id)
+    pagina.abrir_solicitacao_cancelamento()
+    dialogo = pagina.dialogo_cancelamento
+
+    assert dialogo.findChildren(QTableWidget) == []
+    assert dialogo.rotulo_itens.text() == "1"
+    assert dialogo.rotulo_pagamentos.text() == "2"
+    assert dialogo.minimumWidth() <= 480
+    assert dialogo.minimumHeight() <= 360
+    assert dialogo.botao_fechar.height() < 50
+    assert dialogo.botao_prosseguir.height() < 50
+    assert dialogo.botao_prosseguir.width() < dialogo.width()
+    dialogo.resize(480, 360)
+    qtbot.wait(20)
+    assert dialogo.rect().contains(
+        dialogo.botao_fechar.mapTo(dialogo, dialogo.botao_fechar.rect().topLeft())
+    )
+    assert dialogo.rect().contains(
+        dialogo.botao_prosseguir.mapTo(
+            dialogo,
+            dialogo.botao_prosseguir.rect().bottomRight(),
+        )
+    )
+    textos = [rotulo.text() for rotulo in dialogo.findChildren(QLabel)]
+    assert any("Informe o motivo" in texto for texto in textos)
+    assert any("autorização administrativa" in texto for texto in textos)
 
 
 def test_venda_cancelada_permanece_consultavel_sem_nova_solicitacao(
@@ -258,7 +293,7 @@ def test_historico_permanece_intacto_apos_preparacao_visual(
     assert pagina.detalhe_selecionado.status == "ATIVA"
     assert pagina.tabela_itens.rowCount() == 1
     assert pagina.tabela_pagamentos.rowCount() == 2
-    assert pagina.tabela_itens.item(0, 3).text() == "Picanha histórica"
+    assert pagina.tabela_itens.item(0, 0).text() == "Picanha histórica"
 
 
 def test_atendimento_e_pagamentos_sao_preservados_durante_solicitacao(

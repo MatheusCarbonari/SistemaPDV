@@ -4,7 +4,8 @@ import sqlite3
 
 import pytest
 from PySide6.QtCore import QDate, Qt
-from PySide6.QtWidgets import QAbstractItemView
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QAbstractItemView, QFrame, QHeaderView
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
@@ -84,6 +85,19 @@ def persistir_venda_rica(caminho_banco) -> int:
     return venda_id
 
 
+def persistir_venda_com_muitos_pagamentos(caminho_banco) -> int:
+    pagamentos = tuple(Pagamento("PIX", 500) for _ in range(11))
+    confirmacao = confirmar_venda(
+        VendaEmAndamento(itens=(criar_item_produto(5500),)),
+        PagamentosEmAndamento(5500, pagamentos),
+    )
+    return persistir_venda_confirmada_idempotente(
+        confirmacao,
+        gerar_identificador_tentativa(),
+        caminho_banco,
+    )
+
+
 def contar_registros(caminho_banco) -> tuple[int, int, int]:
     conexao = conectar(caminho_banco)
     try:
@@ -93,6 +107,25 @@ def contar_registros(caminho_banco) -> tuple[int, int, int]:
         )
     finally:
         conexao.close()
+
+
+def _luminancia_relativa(cor: QColor) -> float:
+    canais = []
+    for canal in (cor.redF(), cor.greenF(), cor.blueF()):
+        canais.append(
+            canal / 12.92
+            if canal <= 0.04045
+            else ((canal + 0.055) / 1.055) ** 2.4
+        )
+    return 0.2126 * canais[0] + 0.7152 * canais[1] + 0.0722 * canais[2]
+
+
+def _contraste(cor_a: QColor, cor_b: QColor) -> float:
+    mais_clara, mais_escura = sorted(
+        (_luminancia_relativa(cor_a), _luminancia_relativa(cor_b)),
+        reverse=True,
+    )
+    return (mais_clara + 0.05) / (mais_escura + 0.05)
 
 
 @pytest.fixture
@@ -180,7 +213,10 @@ def test_pesquisa_por_data_civil_de_sao_paulo(
     )
 
     assert pagina.tabela_vendas.rowCount() == 1
-    assert pagina.tabela_vendas.item(0, 0).text() == f"{venda_id:06d}"
+    assert pagina.tabela_vendas.item(0, 0).text() == f"Venda nº {venda_id}"
+    assert pagina.tabela_vendas.item(0, 0).data(
+        Qt.ItemDataRole.UserRole
+    ) == venda_id
     assert pagina.tabela_vendas.item(0, 1).text() == "04/11/2026 12:30:00"
     assert pagina.tabela_vendas.item(0, 2).text() == "R$ 55,00"
     assert pagina.tabela_vendas.item(0, 3).text() == "ATIVA"
@@ -202,20 +238,26 @@ def test_pesquisa_por_id_exibe_snapshots_quantidades_e_pagamentos(
 
     assert pagina.tabela_vendas.rowCount() == 1
     assert pagina.tabela_itens.rowCount() == 2
-    assert pagina.tabela_itens.item(0, 1).text() == "PRODUTO"
-    assert pagina.tabela_itens.item(0, 2).text() == "ANTIGO"
-    assert pagina.tabela_itens.item(0, 3).text() == "Produto histórico"
-    assert pagina.tabela_itens.item(0, 5).text() == "ETIQUETA"
-    assert pagina.tabela_itens.item(0, 6).text() == "0.625 kg (estimada)"
-    assert pagina.tabela_itens.item(0, 7).text() == "ESTIMADA"
-    assert pagina.tabela_itens.item(0, 8).text() == "R$ 79,90"
-    assert pagina.tabela_itens.item(0, 9).text() == "R$ 50,00"
-    assert pagina.tabela_itens.item(1, 1).text() == "DIVERSOS"
-    assert pagina.tabela_itens.item(1, 3).text() == "Diversos"
+    assert pagina.tabela_itens.item(0, 0).text() == "Produto histórico"
+    assert pagina.tabela_itens.item(0, 1).text() == "0.625 kg (estimada)"
+    assert pagina.tabela_itens.item(0, 2).text() == "R$ 79,90"
+    assert pagina.tabela_itens.item(0, 3).text() == "R$ 50,00"
+    assert pagina.tabela_itens.item(1, 0).text() == "Diversos"
+    assert pagina.tabela_itens.item(1, 1).text() == "Não informada"
+    assert not hasattr(pagina, "rotulo_detalhes_tecnicos")
+    assert pagina.findChild(QFrame, "detalhes_tecnicos_item") is None
     assert pagina.tabela_pagamentos.rowCount() == 3
-    assert pagina.tabela_pagamentos.item(0, 0).text() == "PIX"
-    assert pagina.tabela_pagamentos.item(1, 0).text() == "PIX"
-    assert pagina.tabela_pagamentos.item(2, 0).text() == "DINHEIRO"
+    assert [
+        pagina.tabela_pagamentos.item(linha, 0).text()
+        for linha in range(3)
+    ] == ["1", "2", "3"]
+    assert pagina.tabela_pagamentos.item(0, 1).text() == "PIX"
+    assert pagina.tabela_pagamentos.item(1, 1).text() == "PIX"
+    assert pagina.tabela_pagamentos.item(2, 1).text() == "DINHEIRO"
+    assert pagina.tabela_pagamentos.item(0, 2).text() == "R$ 25,00"
+    assert pagina.tabela_pagamentos.item(0, 2).textAlignment() & int(
+        Qt.AlignmentFlag.AlignRight
+    )
     assert pagina.tabela_itens.editTriggers() == (
         QAbstractItemView.EditTrigger.NoEditTriggers
     )
@@ -254,9 +296,246 @@ def test_venda_cancelada_exibe_metadados(
     )
 
     assert pagina.tabela_vendas.item(0, 3).text() == "CANCELADA"
+    assert pagina.rotulo_status_cancelamento.text() == "CANCELADA"
+    assert (
+        pagina.rotulo_status_cancelamento.property("statusVenda")
+        == "CANCELADA"
+    )
     assert pagina.rotulo_motivo_cancelamento.text() == "Erro operacional"
     assert pagina.rotulo_data_cancelamento.text() != "—"
     assert pagina.rotulo_autorizador_cancelamento.text() == "administrador"
+
+
+@pytest.mark.parametrize("largura,altura", [(1024, 720), (1280, 800)])
+def test_layout_usual_preserva_colunas_e_acoes_sem_cortes(
+    pagina,
+    qtbot,
+    banco_historico,
+    largura,
+    altura,
+) -> None:
+    venda_id = persistir_venda_rica(banco_historico)
+    pagina.campo_id.setText(str(venda_id))
+    qtbot.mouseClick(
+        pagina.botao_pesquisar_id,
+        Qt.MouseButton.LeftButton,
+    )
+    pagina.resize(largura, altura)
+    qtbot.wait(30)
+
+    assert not pagina._layout_detalhe_empilhado
+    assert not pagina.area_rolagem.horizontalScrollBar().isVisible()
+    qtbot.waitUntil(
+        lambda: not pagina.area_rolagem.verticalScrollBar().isVisible()
+    )
+    assert not pagina.tabela_itens.horizontalScrollBar().isVisible()
+
+    cabecalho_vendas = pagina.tabela_vendas.horizontalHeader()
+    assert cabecalho_vendas.sectionResizeMode(0) == (
+        QHeaderView.ResizeMode.Fixed
+    )
+    assert cabecalho_vendas.sectionResizeMode(1) == (
+        QHeaderView.ResizeMode.Fixed
+    )
+    assert cabecalho_vendas.sectionResizeMode(3) == (
+        QHeaderView.ResizeMode.Fixed
+    )
+    texto_data = pagina.tabela_vendas.item(0, 1).text()
+    assert pagina.tabela_vendas.columnWidth(1) >= (
+        pagina.tabela_vendas.fontMetrics().horizontalAdvance(texto_data) + 16
+    )
+    assert pagina.tabela_vendas.columnWidth(3) < (
+        pagina.tabela_vendas.columnWidth(1)
+    )
+    assert pagina.tabela_vendas.item(0, 1).textAlignment() & int(
+        Qt.AlignmentFlag.AlignHCenter
+    )
+    largura_vendas = pagina.tabela_vendas.viewport().width()
+    assert abs(
+        sum(pagina.tabela_vendas.columnWidth(coluna) for coluna in range(4))
+        - largura_vendas
+    ) <= 4
+    assert 0.30 <= (
+        pagina.tabela_vendas.columnWidth(1) / largura_vendas
+    ) <= 0.38
+
+    grade = pagina.layout_detalhes_principais
+    assert grade.getItemPosition(grade.indexOf(pagina.grupo_vendas)) == (
+        0,
+        0,
+        1,
+        1,
+    )
+    assert grade.getItemPosition(
+        grade.indexOf(pagina.painel_lateral_detalhe)
+    ) == (0, 1, 1, 1)
+    assert grade.getItemPosition(grade.indexOf(pagina.grupo_itens)) == (
+        1,
+        0,
+        1,
+        2,
+    )
+    proporcao_colunas = (
+        pagina.grupo_vendas.width() / pagina.painel_lateral_detalhe.width()
+    )
+    assert 0.85 <= proporcao_colunas <= 1.15
+    assert pagina.grupo_itens.width() > pagina.grupo_vendas.width() * 1.8
+
+    assert [
+        pagina.tabela_itens.horizontalHeaderItem(coluna).text()
+        for coluna in range(4)
+    ] == [
+        "Produto / descrição",
+        "Quantidade / peso",
+        "Preço de referência",
+        "Subtotal",
+    ]
+    assert pagina.tabela_itens.columnWidth(0) > (
+        pagina.tabela_itens.columnWidth(3)
+    )
+    assert pagina.botao_solicitar_cancelamento.width() == (
+        pagina.botao_solicitar_cancelamento.sizeHint().width()
+    )
+
+
+def test_layout_reduzido_empilha_detalhes_sem_rolagem_horizontal(
+    pagina,
+    qtbot,
+) -> None:
+    pagina.resize(700, 600)
+    qtbot.wait(30)
+
+    assert pagina._layout_detalhe_empilhado
+    assert pagina._layout_filtros_empilhado
+    assert pagina.area_rolagem.verticalScrollBar().isVisible()
+    assert not pagina.area_rolagem.horizontalScrollBar().isVisible()
+    assert pagina.botao_solicitar_cancelamento.isVisible()
+    grade = pagina.layout_detalhes_principais
+    assert grade.getItemPosition(grade.indexOf(pagina.grupo_vendas))[0] == 0
+    assert grade.getItemPosition(
+        grade.indexOf(pagina.painel_lateral_detalhe)
+    )[0] == 1
+    assert grade.getItemPosition(grade.indexOf(pagina.grupo_itens))[0] == 2
+
+
+def test_tabelas_historicas_usam_proporcoes_contraste_e_somente_leitura(
+    pagina,
+    qtbot,
+    banco_historico,
+) -> None:
+    venda_id = persistir_venda_rica(banco_historico)
+    pagina.campo_id.setText(str(venda_id))
+    qtbot.mouseClick(
+        pagina.botao_pesquisar_id,
+        Qt.MouseButton.LeftButton,
+    )
+    pagina.resize(1024, 720)
+    qtbot.wait(30)
+
+    cabecalho_pagamentos = pagina.tabela_pagamentos.horizontalHeader()
+    assert cabecalho_pagamentos.sectionResizeMode(0) == (
+        QHeaderView.ResizeMode.ResizeToContents
+    )
+    assert cabecalho_pagamentos.sectionResizeMode(1) == (
+        QHeaderView.ResizeMode.Stretch
+    )
+    assert abs(
+        pagina.tabela_pagamentos.columnWidth(1)
+        - pagina.tabela_pagamentos.columnWidth(2)
+    ) <= 2
+    assert pagina.tabela_pagamentos.columnWidth(0) < (
+        pagina.tabela_pagamentos.columnWidth(1)
+    )
+
+    for tabela in (
+        pagina.tabela_vendas,
+        pagina.tabela_itens,
+        pagina.tabela_pagamentos,
+    ):
+        assert tabela.editTriggers() == (
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        paleta = tabela.palette()
+        assert _contraste(
+            paleta.color(QPalette.ColorRole.Text),
+            paleta.color(QPalette.ColorRole.Base),
+        ) >= 4.5
+        assert _contraste(
+            paleta.color(QPalette.ColorRole.HighlightedText),
+            paleta.color(QPalette.ColorRole.Highlight),
+        ) >= 4.5
+
+    assert pagina.tabela_vendas.item(0, 3).foreground().color().name() == (
+        "#a8e6bd"
+    )
+
+
+def test_data_reserva_espaco_para_texto_e_seletor(pagina) -> None:
+    largura_texto = pagina.campo_data.fontMetrics().horizontalAdvance(
+        "88/88/8888"
+    )
+
+    assert pagina.campo_data.width() >= largura_texto + 50
+    assert "padding-right: 30px" in pagina.styleSheet()
+    assert "QDateEdit::drop-down" in pagina.styleSheet()
+
+
+def test_clique_no_campo_de_data_abre_calendario(pagina, qtbot) -> None:
+    qtbot.mouseClick(
+        pagina.campo_data,
+        Qt.MouseButton.LeftButton,
+        pos=pagina.campo_data.rect().center(),
+    )
+
+    qtbot.waitUntil(pagina.campo_data.calendarWidget().isVisible)
+    pagina.campo_data.calendarWidget().hide()
+
+
+def test_muitas_vendas_usam_rolagem_interna_sem_ampliar_pagina(
+    pagina,
+    qtbot,
+    banco_historico,
+) -> None:
+    for _ in range(9):
+        persistir_venda_rica(banco_historico)
+    pagina.campo_data.setDate(QDate(2026, 11, 4))
+    qtbot.mouseClick(
+        pagina.botao_pesquisar_data,
+        Qt.MouseButton.LeftButton,
+    )
+    pagina.resize(1024, 720)
+    qtbot.wait(30)
+
+    assert pagina.tabela_vendas.rowCount() == 9
+    assert pagina.tabela_vendas.verticalScrollBar().maximum() > 0
+    assert pagina.tabela_vendas.verticalScrollBar().isVisible()
+    assert not pagina.area_rolagem.verticalScrollBar().isVisible()
+
+
+def test_muitos_pagamentos_permanecem_separados_numerados_e_rolaveis(
+    pagina,
+    qtbot,
+    banco_historico,
+) -> None:
+    venda_id = persistir_venda_com_muitos_pagamentos(banco_historico)
+    pagina.campo_id.setText(str(venda_id))
+    qtbot.mouseClick(
+        pagina.botao_pesquisar_id,
+        Qt.MouseButton.LeftButton,
+    )
+    qtbot.wait(30)
+
+    assert pagina.tabela_pagamentos.rowCount() == 11
+    assert [
+        pagina.tabela_pagamentos.item(linha, 0).text()
+        for linha in range(11)
+    ] == [str(numero) for numero in range(1, 12)]
+    assert all(
+        pagina.tabela_pagamentos.item(linha, 1).text() == "PIX"
+        for linha in range(11)
+    )
+    assert pagina.tabela_pagamentos.verticalScrollBar().maximum() > 0
+    assert pagina.tabela_pagamentos.verticalScrollBar().isVisible()
 
 
 @pytest.mark.parametrize("texto", ["", "abc", "0", "-1", "1.5"])

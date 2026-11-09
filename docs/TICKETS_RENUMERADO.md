@@ -553,6 +553,46 @@ são empilhadas e o conteúdo usa somente rolagem vertical. O refino preserva os
 atalhos e contratos do COMP-M2-01, não implementa F1–F4 e não inicia o Visual 03.
 O Visual 02.1 foi validado com 1036 testes automatizados, incluindo 46 testes
 focados de pagamentos e confirmação, e simulação de fonte a 125%.
+**Andamento — Visual 03, Histórico de Vendas:** a página adotou a paleta escura
+da Frente de Caixa e separa consulta, lista e detalhe em blocos proporcionais.
+A lista apresenta `Venda nº N`, preservando o ID interno em dados da linha, com
+data/hora completa, total alinhado à direita e situação compacta e diferenciada.
+Os itens exibem como colunas principais descrição, quantidade ou peso, preço de
+referência e subtotal; posição, tipo, código, forma de venda, origem, origem da
+quantidade e código de barras permanecem disponíveis no painel técnico do item
+selecionado. Pagamentos usam colunas equilibradas e valores à direita, enquanto
+situação, motivo, data e autorizador do cancelamento ocupam uma área contextual
+com ação proporcional. Em 1024×720 e 1280×800 a página usa duas colunas sem
+rolagem; em larguras menores, filtros e detalhes são empilhados com rolagem
+vertical e sem rolagem horizontal. Consultas, snapshots, ordem, autorizações e
+tratamento de resultado incerto foram preservados. O Visual 03 foi validado com
+1040 testes automatizados e não inicia os Visuais 04 ou 05.
+**Refino — Visual 03.1, Histórico e Cancelamento:** a consulta reserva espaço
+próprio para o seletor do campo de data e mantém os quatro campos da lista de
+vendas compactos, inclusive a data/hora completa sem ocupar a largura restante.
+O Histórico remove da apresentação o painel técnico do item, sem alterar os
+dados persistidos, modelos ou serviços. Pagamentos repetidos continuam em linhas
+independentes, agora numeradas para apresentação, com mais linhas visíveis e
+rolagem vertical destacada quando necessária. O diálogo de solicitação foi
+reduzido ao resumo da venda, quantidades de itens e pagamentos, motivo obrigatório
+e aviso de dependência da autorização administrativa; as tabelas redundantes
+foram retiradas somente desse diálogo. O bloco de situação e cancelamento, o
+fluxo de capacidade administrativa e o tratamento de resultado incerto foram
+preservados. Esta etapa não inicia o Visual 04 nem altera regras comerciais.
+O Visual 03.1 foi validado com 1043 testes automatizados.
+**Refino — Visual 03.2, Reorganização do Histórico:** consulta e resumo compacto
+permanecem no topo; abaixo, Vendas encontradas ocupa a coluna esquerda e
+Pagamentos originais, seguido de Situação e cancelamento, ocupa a coluna direita,
+com larguras equivalentes. Produtos e itens vendidos passa a ocupar toda a faixa
+inferior. As colunas de vendas e itens são recalculadas proporcionalmente ao
+espaço disponível, priorizando a data/hora completa na lista e a descrição nos
+itens. Quantidades maiores usam rolagem dentro das tabelas, sem ampliar a página.
+Em 1024×720 e 1280×800, conteúdo moderado permanece visível sem rolagem geral;
+abaixo de 850 px, vendas, informações operacionais e produtos são empilhados com
+rolagem vertical. O campo de data abre o calendário ao ser clicado e mantém área
+reservada para o seletor. Tema, diálogo de cancelamento, autorizações, snapshots e
+regras comerciais foram preservados. Esta etapa não inicia o Visual 04.
+O Visual 03.2 foi validado com 1045 testes automatizados.
 
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 

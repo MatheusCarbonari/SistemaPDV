@@ -1,5 +1,5 @@
 import pytest
-from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog, QTableWidget
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
@@ -135,19 +135,19 @@ def test_cancelamento_valido_atualiza_lista_detalhe_e_preserva_venda(
     assert sessao_caixa.autenticada
 
 
-def test_dialogo_exibe_itens_e_pagamentos_originais(ambiente) -> None:
+def test_dialogo_resume_quantidades_sem_repetir_detalhes(ambiente) -> None:
     caminho, _, _, pagina = ambiente
     venda_id = persistir_venda(caminho)
     selecionar_venda(pagina, venda_id)
     pagina.abrir_solicitacao_cancelamento()
     dialogo = pagina.dialogo_cancelamento
 
-    assert dialogo.tabela_itens.rowCount() == 1
-    assert dialogo.tabela_itens.item(0, 1).text() == "Picanha histórica"
-    assert dialogo.tabela_itens.item(0, 2).text() == "R$ 50,00"
-    assert dialogo.tabela_pagamentos.rowCount() == 2
-    assert dialogo.tabela_pagamentos.item(0, 0).text() == "PIX"
-    assert dialogo.tabela_pagamentos.item(1, 0).text() == "DINHEIRO"
+    assert dialogo.rotulo_itens.text() == "1"
+    assert dialogo.rotulo_pagamentos.text() == "2"
+    assert dialogo.findChildren(QTableWidget) == []
+    assert pagina.tabela_itens.item(0, 0).text() == "Picanha histórica"
+    assert pagina.tabela_pagamentos.item(0, 1).text() == "PIX"
+    assert pagina.tabela_pagamentos.item(1, 1).text() == "DINHEIRO"
 
 
 def test_motivo_obrigatorio_nao_abre_autorizacao(ambiente) -> None:
