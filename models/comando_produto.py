@@ -54,6 +54,7 @@ class ComandoCadastroProduto:
 @dataclass(frozen=True)
 class ComandoEdicaoProduto:
     estado_base: EstadoBaseProduto
+    codigo: str
     nome: str
     categoria: CategoriaAprovada
     forma_venda: str

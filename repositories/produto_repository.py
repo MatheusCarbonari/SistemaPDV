@@ -18,6 +18,11 @@ class CategoriaProdutoIndisponivelError(ValueError):
 class ConflitoProdutoError(RuntimeError):
     pass
 
+
+class CodigoProdutoDuplicadoError(ValueError):
+    pass
+
+
 # Verifica se o código já pertence a algum produto cadastrado.
 def codigo_existe(codigo: str, caminho_banco=CAMINHO_BANCO) -> bool:
 
@@ -478,15 +483,30 @@ def editar_produto_comando_repository(
             ),
         )
 
+        codigo_em_uso = conexao.execute(
+            """
+            SELECT id
+            FROM produtos
+            WHERE codigo = ? AND id <> ?
+            LIMIT 1
+            """,
+            (comando.codigo, comando.estado_base.id),
+        ).fetchone()
+        if codigo_em_uso is not None:
+            raise CodigoProdutoDuplicadoError(
+                "Já existe outro produto com esse código."
+            )
+
         conexao.execute(
             """
             UPDATE produtos
-            SET nome = ?, categoria_id = ?, forma_venda = ?,
+            SET codigo = ?, nome = ?, categoria_id = ?, forma_venda = ?,
                 preco_venda_centavos = ?, origem = ?,
                 atualizado_em = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
             (
+                comando.codigo,
                 comando.nome,
                 comando.categoria.id,
                 comando.forma_venda,

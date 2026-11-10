@@ -659,6 +659,17 @@ em etapa futura, um ambiente isolado de homologação manual; ele não faz parte
 deste Visual 05. A etapa foi validada com 1066 testes automatizados e inspeção
 renderizada dos diálogos principais, inclusive com fonte simulada a 125%.
 
+**Correção Final 02 — Alteração do código do produto:** concluída. O código
+comercial pode ser alterado na edição por Administrador ou Caixa com autorização
+pontual. O ID interno permanece estável; o comando autorizado vincula os códigos
+anterior e novo, e a transação revalida tanto o estado-base quanto a unicidade
+global, incluindo produtos inativos. O código anterior fica disponível para
+reutilização e os snapshots de vendas permanecem inalterados. O formulário
+apresenta o aviso operacional sobre balança e etiquetas somente quando há troca
+efetiva do código. Alteração exclusiva de código não cria histórico de preço.
+Não houve alteração de schema nem criação de reserva ou histórico de códigos.
+A correção foi validada com 1078 testes automatizados.
+
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 
 ### T49 — Log estruturado

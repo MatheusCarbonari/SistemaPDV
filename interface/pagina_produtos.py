@@ -57,6 +57,11 @@ MENSAGEM_RESTRICAO_ATENDIMENTO = (
 MENSAGEM_FECHAMENTO_PENDENTE = (
     "Resolva o fechamento pendente antes de administrar produtos."
 )
+AVISO_ALTERACAO_CODIGO = (
+    "Ao alterar o código, atualize também o cadastro na balança. "
+    "Etiquetas antigas com esse código poderão identificar outro produto "
+    "caso ele seja reutilizado."
+)
 
 
 class DialogoProduto(QDialog):
@@ -107,6 +112,12 @@ class DialogoProduto(QDialog):
         formulario_identificacao.addWidget(self.bloco_nome, 0, 1)
         formulario_identificacao.setColumnStretch(2, 1)
         layout.addWidget(self.grupo_identificacao)
+
+        self.rotulo_aviso_codigo = QLabel(AVISO_ALTERACAO_CODIGO)
+        self.rotulo_aviso_codigo.setObjectName("aviso_alteracao_codigo")
+        self.rotulo_aviso_codigo.setWordWrap(True)
+        self.rotulo_aviso_codigo.setVisible(False)
+        layout.addWidget(self.rotulo_aviso_codigo)
 
         self.grupo_comercial = QGroupBox("Classificação e venda")
         formulario = QGridLayout(self.grupo_comercial)
@@ -176,7 +187,9 @@ class DialogoProduto(QDialog):
 
         if produto is not None:
             self.campo_codigo.setText(produto.codigo)
-            self.campo_codigo.setReadOnly(True)
+            self.campo_codigo.textChanged.connect(
+                self._atualizar_aviso_alteracao_codigo
+            )
             self.campo_nome.setText(produto.nome)
             for indice in range(self.campo_categoria.count()):
                 categoria = self.campo_categoria.itemData(indice)
@@ -188,6 +201,13 @@ class DialogoProduto(QDialog):
                 centavos_para_texto(produto.preco_venda_centavos)
             )
             self.combo_origem.setCurrentText(produto.origem)
+
+    def _atualizar_aviso_alteracao_codigo(self, codigo: str) -> None:
+        alterado = (
+            self.produto is not None
+            and codigo.strip() != self.produto.codigo
+        )
+        self.rotulo_aviso_codigo.setVisible(alterado)
 
     def confirmar(self) -> None:
         try:
@@ -235,6 +255,11 @@ class DialogoProduto(QDialog):
                 border-radius: 5px; padding: 8px 10px;
             }
             QLabel#mensagem_formulario_produto { color: #ffb8b1; }
+            QLabel#aviso_alteracao_codigo {
+                color: #ffd58a; background: #332b1d;
+                border: 1px solid #8c6b2d; border-radius: 5px;
+                padding: 7px 9px;
+            }
             QGroupBox {
                 color: #dce4ea; border: 1px solid #404850;
                 border-radius: 6px; margin-top: 9px; font-weight: 700;
@@ -752,7 +777,6 @@ class PaginaProdutos(QWidget):
             dialogo.mostrar_erros((self.rotulo_mensagem.text(),))
             return
         try:
-            dados = {**dados, "codigo": produto.codigo}
             comando, erros = preparar_comando_edicao_produto(
                 produto.id,
                 **dados,
@@ -888,6 +912,7 @@ class PaginaProdutos(QWidget):
         base = comando.estado_base
         return (
             f"Autorizar edição do produto {base.codigo}\n\n"
+            f"Código: {base.codigo} → {comando.codigo}\n"
             f"Nome: {base.nome} → {comando.nome}\n"
             f"Categoria: {base.categoria.nome} → {comando.categoria.nome}\n"
             f"Forma de venda: {base.forma_venda} → {comando.forma_venda}\n"

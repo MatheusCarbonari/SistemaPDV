@@ -10,6 +10,7 @@ from tests.helpers_identidade import (
     criar_sessao_admin_teste,
 )
 from interface.pagina_produtos import (
+    AVISO_ALTERACAO_CODIGO,
     DialogoConfirmacaoSituacaoProduto,
     PaginaProdutos,
 )
@@ -166,21 +167,40 @@ def test_listagem_pesquisa_codigo_nome_e_exibe_inativos(pagina) -> None:
     assert pagina.tabela_produtos.item(0, 0).text() == "101"
 
 
-def test_edicao_preserva_codigo_e_atualiza_campos(pagina) -> None:
+def test_edicao_permite_alterar_codigo_e_atualiza_lista(pagina) -> None:
     cadastrar(pagina.caminho_banco)
     pagina.carregar_produtos()
     pagina.tabela_produtos.selectRow(0)
     pagina.abrir_edicao()
     dialogo = pagina.dialogo_atual
-    assert dialogo.campo_codigo.isReadOnly()
+    assert not dialogo.campo_codigo.isReadOnly()
+    assert not dialogo.rotulo_aviso_codigo.isVisible()
+    dialogo.campo_codigo.setText("202")
+    assert dialogo.rotulo_aviso_codigo.isVisible()
+    assert dialogo.rotulo_aviso_codigo.text() == AVISO_ALTERACAO_CODIGO
     dialogo.campo_nome.setText("Picanha premium")
     dialogo.campo_preco.setText("84,90")
 
     dialogo.confirmar()
 
-    salvo = buscar_produto_por_codigo("101", pagina.caminho_banco)
+    assert buscar_produto_por_codigo("101", pagina.caminho_banco) is None
+    salvo = buscar_produto_por_codigo("202", pagina.caminho_banco)
     assert salvo.nome == "Picanha premium"
     assert salvo.preco_venda_centavos == 8490
+    assert pagina.tabela_produtos.item(0, 0).text() == "202"
+
+
+def test_aviso_de_codigo_some_quando_valor_original_e_restaurado(pagina) -> None:
+    cadastrar(pagina.caminho_banco)
+    pagina.carregar_produtos()
+    pagina.tabela_produtos.selectRow(0)
+    pagina.abrir_edicao()
+    dialogo = pagina.dialogo_atual
+
+    dialogo.campo_codigo.setText("202")
+    assert dialogo.rotulo_aviso_codigo.isVisible()
+    dialogo.campo_codigo.setText("101")
+    assert not dialogo.rotulo_aviso_codigo.isVisible()
 
 
 def test_ativacao_e_desativacao_atualizam_lista(

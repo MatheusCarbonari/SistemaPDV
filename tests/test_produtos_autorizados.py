@@ -10,6 +10,7 @@ from models.autorizacao_pontual import CapacidadeAutorizacao
 from models.produto import Produto
 from models.sessao_usuario import SessaoUsuario
 from repositories.produto_repository import (
+    CodigoProdutoDuplicadoError,
     ConflitoProdutoError,
     buscar_produto_por_codigo,
 )
@@ -34,6 +35,7 @@ from services.produto_service import (
     executar_edicao_produto,
     preparar_comando_cadastro_produto,
     preparar_comando_edicao_produto,
+    consultar_produto_por_codigo,
 )
 from services.usuario_service import criar_conta_caixa
 from tests.helpers_identidade import (
@@ -188,7 +190,7 @@ def test_edicao_caixa_preserva_historico_atomico(ambiente):
     produto = cadastrar_como_admin(ambiente)
     comando, erros = preparar_comando_edicao_produto(
         produto.id,
-        produto.codigo,
+        "202",
         "Picanha premium",
         categoria.nome,
         produto.forma_venda,
@@ -215,7 +217,154 @@ def test_edicao_caixa_preserva_historico_atomico(ambiente):
         ).fetchall()
 
     assert atualizado.nome == "Picanha premium"
+    assert atualizado.codigo == "202"
+    assert atualizado.id == produto.id
     assert [tuple(linha) for linha in historico] == [(7990, 8990)]
+
+
+def test_administrador_altera_codigo_preserva_snapshot_e_libera_anterior(
+    ambiente,
+):
+    caminho, _, _, admin, _, categoria = ambiente
+    produto = cadastrar_como_admin(ambiente)
+    with conectar(caminho) as conexao:
+        conexao.execute(
+            "INSERT INTO vendas (id, total_centavos) VALUES (1, 7990)"
+        )
+        conexao.execute(
+            """
+            INSERT INTO itens_venda (
+                venda_id, posicao, produto_id, codigo_snapshot,
+                nome_snapshot, forma_venda_snapshot,
+                preco_referencia_centavos, tipo_item, origem,
+                origem_quantidade, quantidade_decimal, codigo_barras,
+                subtotal_centavos
+            ) VALUES (
+                1, 0, ?, ?, ?, 'PESO', 7990, 'PRODUTO', 'MANUAL',
+                'NAO_INFORMADA', NULL, NULL, 7990
+            )
+            """,
+            (produto.id, produto.codigo, produto.nome),
+        )
+        conexao.commit()
+
+    comando, erros = preparar_comando_edicao_produto(
+        produto.id,
+        "202",
+        produto.nome,
+        categoria.nome,
+        produto.forma_venda,
+        produto.preco_venda_centavos,
+        produto.origem,
+        caminho,
+        categoria_id=categoria.id,
+    )
+    assert erros == []
+    atualizado = executar_edicao_produto(comando, admin, caminho)
+
+    antigo, erros_antigo = consultar_produto_por_codigo("101", caminho)
+    novo, erros_novo = consultar_produto_por_codigo("202", caminho)
+    with conectar(caminho) as conexao:
+        snapshot = conexao.execute(
+            "SELECT codigo_snapshot FROM itens_venda WHERE venda_id = 1"
+        ).fetchone()[0]
+        historico = conexao.execute(
+            "SELECT COUNT(*) FROM historico_precos_produtos"
+        ).fetchone()[0]
+    assert atualizado.id == produto.id
+    assert antigo is None and erros_antigo == ["Produto não encontrado."]
+    assert novo.id == produto.id and erros_novo == []
+    assert snapshot == "101"
+    assert historico == 0
+
+    reutilizado, erros = cadastrar_produto(
+        "101",
+        "Espetinho",
+        categoria.nome,
+        "UNIDADE",
+        1200,
+        "PRODUZIDO",
+        caminho,
+        categoria_id=categoria.id,
+        sessao_solicitante=admin,
+    )
+    assert erros == []
+    assert reutilizado.id != produto.id
+    assert consultar_produto_por_codigo("101", caminho)[0].nome == "Espetinho"
+
+
+def test_codigo_duplicado_inativo_e_codigo_invalido_sao_rejeitados(ambiente):
+    caminho, _, _, admin, _, categoria = ambiente
+    produto = cadastrar_como_admin(ambiente)
+    outro, erros = cadastrar_produto(
+        "202", "Outro", categoria.nome, "UNIDADE", 1000, "COMPRADO",
+        caminho, categoria_id=categoria.id, sessao_solicitante=admin,
+    )
+    assert erros == []
+    assert alterar_situacao_produto(
+        outro.id,
+        False,
+        caminho,
+        sessao_solicitante=admin,
+    )[1] == []
+
+    comando, erros = preparar_comando_edicao_produto(
+        produto.id, "202", produto.nome, categoria.nome,
+        produto.forma_venda, produto.preco_venda_centavos, produto.origem,
+        caminho, categoria_id=categoria.id,
+    )
+    assert comando is None
+    assert erros == ["Já existe outro produto com esse código."]
+
+    comando, erros = preparar_comando_edicao_produto(
+        produto.id, "ABC", produto.nome, categoria.nome,
+        produto.forma_venda, produto.preco_venda_centavos, produto.origem,
+        caminho, categoria_id=categoria.id,
+    )
+    assert comando is None
+    assert erros
+
+
+def test_unicidade_e_revalidada_na_transacao(ambiente):
+    caminho, _, _, admin, _, categoria = ambiente
+    produto = cadastrar_como_admin(ambiente)
+    comando, erros = preparar_comando_edicao_produto(
+        produto.id, "202", produto.nome, categoria.nome,
+        produto.forma_venda, produto.preco_venda_centavos, produto.origem,
+        caminho, categoria_id=categoria.id,
+    )
+    assert erros == []
+    concorrente, erros = cadastrar_produto(
+        "202", "Concorrente", categoria.nome, "UNIDADE", 1000, "COMPRADO",
+        caminho, categoria_id=categoria.id, sessao_solicitante=admin,
+    )
+    assert concorrente is not None and erros == []
+
+    with pytest.raises(CodigoProdutoDuplicadoError):
+        executar_edicao_produto(comando, admin, caminho)
+    assert buscar_produto_por_codigo("101", caminho).id == produto.id
+
+
+def test_codigo_faz_parte_do_comando_autorizado_e_do_resumo(ambiente):
+    caminho, _, gerenciador, _, caixa, categoria = ambiente
+    produto = cadastrar_como_admin(ambiente)
+    comando, erros = preparar_comando_edicao_produto(
+        produto.id, "202", produto.nome, categoria.nome,
+        produto.forma_venda, produto.preco_venda_centavos, produto.origem,
+        caminho, categoria_id=categoria.id,
+    )
+    assert erros == []
+    capacidade = emitir(ambiente, comando)
+    divergente = replace(comando, codigo="303")
+
+    with pytest.raises(AutorizacaoPontualInvalidaError):
+        executar_edicao_produto(
+            divergente, caixa, caminho, capacidade=capacidade,
+            gerenciador_autorizacoes=gerenciador,
+        )
+    resumo = PaginaProdutos._resumo_comando(object(), comando)
+    assert "Código: 101 → 202" in resumo
+    assert buscar_produto_por_codigo("101", caminho).id == produto.id
 
 
 def test_conflito_concorrente_nao_sobrescreve_produto(ambiente):

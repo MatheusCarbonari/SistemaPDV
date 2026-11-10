@@ -520,6 +520,7 @@ def preparar_comando_edicao_produto(
             origem=produto_atual["origem"],
             ativo=bool(produto_atual["ativo"]),
         ),
+        codigo=codigo_limpo,
         nome=nome_limpo,
         categoria=categoria_nova,
         forma_venda=forma_venda_limpa,

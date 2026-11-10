@@ -149,10 +149,20 @@
   sessão. Ativação, categorias e histórico de preços permanecem administrativos.
   O hash isolado não autoriza, não há elevação do Caixa nem persistência de
   capacidade. Falha após consumo exige nova autorização.
+- **DEC-042** — O código comercial do produto é editável sem alterar seu ID
+  interno. A edição usa o mesmo comando canônico e a mesma autorização pontual
+  do catálogo, incluindo no hash o código novo e, no estado-base, o anterior.
+  Sob `BEGIN IMMEDIATE`, produto, categoria e unicidade do código são
+  revalidados; produtos inativos também ocupam seus códigos. Após uma troca
+  confirmada, o código anterior pode ser reutilizado, sem reserva ou histórico
+  próprio. Vendas anteriores conservam seus snapshots e alteração exclusiva do
+  código não produz evento de preço. A interface alerta sobre a atualização da
+  balança e o risco de etiquetas antigas somente quando o código muda.
 
 ## Decisões que exigem cuidado
-- O código de produto existente é protegido contra edição pela interface; a
-  forma de venda pode ser alterada somente sem itens na venda em andamento.
+- O código do produto pode ser alterado somente sem itens na venda em andamento;
+  o mesmo bloqueio se aplica à forma de venda. A troca exige atenção ao cadastro
+  da balança e às etiquetas antigas caso o código anterior seja reutilizado.
 - Uma quantidade derivada do preço é **estimada**, nunca prova de pesagem. Quantidade informada manualmente não equivale a pesagem certificada.
 - Recuperação de acesso: os códigos são gerados somente após login administrativo
   e confirmação da senha, devem ser guardados fora do computador e não podem ser
