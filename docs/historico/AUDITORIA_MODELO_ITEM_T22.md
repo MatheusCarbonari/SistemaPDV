@@ -3,8 +3,9 @@
 ## Escopo e conclusão
 
 Foram comparados `ProdutoSnapshot`, `ItemVenda`, as fábricas de item de
-etiqueta, os serviços de venda em andamento e seus testes com `DECISOES.md`,
-`REVISOES.md`, `ESCOPO.md` e `TICKETS_RENUMERADO.md`.
+etiqueta, os serviços de venda em andamento e seus testes com
+`docs/DECISOES.md`, `docs/REVISOES.md`, `docs/ESCOPO.md` e
+`docs/TICKETS_RENUMERADO.md`.
 
 Não foi identificada lacuna funcional atual que exija alteração no código de
 produção. O núcleo implementado atende ao contrato aprovado para itens de

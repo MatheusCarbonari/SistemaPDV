@@ -1,6 +1,6 @@
 # Backlog de implementação — Sistema-PDV (sequência consolidada)
 
-**Revisão:** 02/11/2026 — versão para substituir `docs/TICKETS.md` após revisão.
+**Revisão:** 02/11/2026 — versão oficial que substituiu o backlog histórico preservado em `docs/historico/TICKETS.md`.
 
 **Política de numeração:** T01–T20 são o histórico executado e permanecem como T01–T20; T13 é deliberadamente omitido. A execução retoma em **T21** e continua sempre em ordem crescente. O Marco 1.5 recupera pendências do backlog original; os Marcos 2 e 3 são renumerados sem mudar os objetivos originais.
 

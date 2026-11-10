@@ -182,7 +182,7 @@ fechamento da janela para impedir perda silenciosa do atendimento.
 5. **INT-D2 — resolvida:** execução do cancelamento protegida por autorização pontual dos T45–T47.
 6. **INT-E — resolvida:** gestão básica de Caixa e troca segura pelo login único.
 7. Registrar ticket/entrega futura para visualização dos últimos 12 meses de preços e, se permanecer no escopo, categorias personalizáveis.
-8. Corrigir documentação operacional desatualizada, quando houver ticket de higiene: `docs/ESTADO_ATUAL.md` descreve um estágio antigo; não confundir com fonte de estado atual. O arquivo `.gitignore` já cobre `.venv`, `.pytest_cache`, `__pycache__`, `.vscode` e `data/*.db` — ignorar não remove arquivos já rastreados.
+8. Corrigir documentação operacional desatualizada, quando houver ticket de higiene: `docs/historico/ESTADO_ATUAL.md` descreve um estágio antigo; não confundir com fonte de estado atual. O arquivo `.gitignore` já cobre `.venv`, `.pytest_cache`, `__pycache__`, `.vscode` e `data/*.db` — ignorar não remove arquivos já rastreados.
 
 ## Critério de conclusão
 

@@ -1,6 +1,6 @@
 # Sistema-PDV — orientações de desenvolvimento
 
-Fonte de verdade do planejamento: `docs/README.md`, `docs/DECISOES.md`, `docs/REVISOES.md`, `docs/ESCOPO.md` e `docs/TICKETS.md`.
+Fonte de verdade do planejamento: `docs/README.md`, `docs/DECISOES.md`, `docs/REVISOES.md`, `docs/ESCOPO.md` e `docs/TICKETS_RENUMERADO.md`.
 O código legado deve ser examinado antes de qualquer alteração. Planejado NÃO significa implementado.
 
 ## Método de colaboração
