@@ -84,9 +84,12 @@
   Administrador revalidada e gerencia somente contas Caixa. Criar conta exige
   senha inicial individual; ativação e desativação não alteram credenciais, e a
   desativação revoga sessões e capacidades processuais do operador. Troca de
-  operador encerra a sessão e reutiliza o diálogo único de login, sendo recusada
-  quando itens, pagamentos ou fechamento poderiam ser descartados. Fechar a
-  janela também invalida a sessão e respeita o mesmo bloqueio comercial.
+  operador reutiliza o diálogo único de login e mantém a sessão atual válida até
+  a autenticação do próximo operador; cancelar, usar `Esc` ou fechar o diálogo
+  preserva a sessão anterior. Somente a troca confirmada encerra a sessão antiga
+  e revoga suas capacidades. A troca continua recusada quando itens, pagamentos
+  ou fechamento poderiam ser descartados. Fechar a janela também invalida a
+  sessão e respeita o mesmo bloqueio comercial.
 - **DEC-035** — Após INT-E e antes do T49 existe a fase Consolidação do Marco 2.
   A ordem aprovada é COR-M2-01 (revogação de autorizações), COR-M2-02
   (reconciliação de cancelamento incerto), detalhamento e execução de COMP-M2,

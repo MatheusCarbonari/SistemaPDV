@@ -401,18 +401,29 @@ criar bypass ou substituir a autorização pontual de operações críticas.
 para Administrador revalidado e permite listar, cadastrar, ativar e desativar
 exclusivamente contas Caixa. Senha inicial individual segue a política vigente,
 é ocultada na interface e persistida somente como hash. Desativação revoga
-sessões e capacidades processuais do operador. “Trocar operador” invalida a
-sessão atual e retorna ao mesmo diálogo de login, mas é bloqueado quando houver
-itens, pagamentos, confirmação ou fechamento pendente; commit incerto também
-bloqueia navegação e encerramento. Fechar a janela invalida a sessão e não pode
-descartar atendimento aberto. INT-E encerra as integrações funcionais previstas
-antes da homologação manual do Marco 2.
+sessões e capacidades processuais do operador. “Trocar operador” reutiliza o
+diálogo de login e preserva a sessão atual durante a tentativa; somente uma nova
+autenticação confirmada invalida a sessão anterior e suas capacidades. A troca
+é bloqueada quando houver itens, pagamentos, confirmação ou fechamento pendente;
+commit incerto também bloqueia navegação e encerramento. Fechar a janela invalida
+a sessão e não pode descartar atendimento aberto. INT-E encerra as integrações
+funcionais previstas antes da homologação manual do Marco 2.
 
 ## Consolidação do Marco 2
 
 Esta fase ocorre após a INT-E e antes do T49. Seu objetivo é encerrar os
 achados da auditoria final e as lacunas funcionais ainda sem ticket próprio,
 sem antecipar o Marco 3.
+
+### Correção Final 01 — Troca de Operador
+**Entrega verificável:** cancelar a autenticação do próximo operador retorna ao
+PDV sem encerrar a aplicação nem invalidar a sessão anterior. Botão Cancelar,
+`Esc` e fechamento pelo `X` possuem o mesmo comportamento. Em troca confirmada,
+a nova sessão é revalidada antes de substituir a atual; em seguida, a sessão
+anterior e suas capacidades são invalidadas e as permissões das páginas são
+atualizadas conforme o novo perfil. Atendimento em andamento e fechamento
+incerto continuam bloqueando a abertura do fluxo. O primeiro login permanece
+distinto: cancelá-lo encerra normalmente quando não existe sessão a restaurar.
 
 ### COR-M2-01 — Revogação de autorizações
 **Entrega verificável:** capacidades pontuais guardam o ID estável do

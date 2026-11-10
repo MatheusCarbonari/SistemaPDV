@@ -282,7 +282,7 @@ def test_sessao_fabricada_e_rejeitada(banco_autenticacao) -> None:
         )
 
 
-def test_logout_grafico_fecha_janela_e_preserva_banco(
+def test_cancelar_troca_preserva_janela_sessao_e_banco(
     qtbot,
     banco_autenticacao,
 ) -> None:
@@ -291,8 +291,11 @@ def test_logout_grafico_fecha_janela_e_preserva_banco(
     qtbot.addWidget(janela)
     janela.show()
     janela.solicitar_logout()
-    assert not sessao.autenticada
-    assert not janela.isVisible()
+    dialogo = janela.dialogo_atual
+    dialogo.reject()
+    qtbot.waitUntil(lambda: janela.dialogo_atual is None)
+    assert sessao.autenticada
+    assert janela.isVisible()
     conexao = conectar(banco_autenticacao)
     try:
         assert conexao.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0] == 1

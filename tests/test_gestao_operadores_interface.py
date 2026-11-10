@@ -2,7 +2,13 @@ import pytest
 import sqlite3
 from threading import Event, Thread
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QDialog, QHeaderView, QLineEdit
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QHeaderView,
+    QLineEdit,
+)
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
@@ -11,6 +17,7 @@ from interface.dialogo_login import DialogoLogin
 from interface.dialogo_redefinicao_senha import DialogoRedefinicaoSenha
 from interface.janela_principal import JanelaPrincipal
 from models.item_venda import ItemVenda
+from models.pagamento import PagamentosEmAndamento
 from models.sessao_usuario import SessaoUsuario
 from repositories.usuario_repository import buscar_usuario_para_autenticacao
 from services.administrador_inicial_service import criar_administrador_inicial
@@ -24,6 +31,7 @@ from services.autenticacao_service import (
     autorizar_sessao,
 )
 from services.autorizacao_pontual_service import (
+    GERENCIADOR_AUTORIZACOES,
     OPERACAO_CANCELAR_VENDA,
     AutorizacaoPontualConsumidaError,
     GerenciadorAutorizacoesPontuais,
@@ -654,16 +662,169 @@ def test_desativacao_revoga_sessao_e_autorizacao_do_caixa(ambiente) -> None:
         )
 
 
-def test_logout_sem_atendimento_invalida_sessao(ambiente) -> None:
+def test_cancelar_troca_mantem_sessao_e_janela(ambiente, qtbot) -> None:
     _, sessao, janela = ambiente
     eventos = []
     janela.logout_realizado.connect(lambda: eventos.append(True))
 
     janela.solicitar_logout()
+    dialogo = janela.dialogo_atual
+    qtbot.waitUntil(dialogo.isVisible)
 
-    assert not sessao.autenticada
-    assert eventos == [True]
-    assert not janela.isVisible()
+    assert dialogo.botoes.button(QDialogButtonBox.StandardButton.Cancel).text() == (
+        "Cancelar"
+    )
+    dialogo.reject()
+    qtbot.waitUntil(lambda: janela.dialogo_atual is None)
+
+    assert sessao.autenticada
+    assert janela.sessao is sessao
+    assert eventos == []
+    assert janela.isVisible()
+    assert janela.rotulo_usuario.text() == "administrador (ADMINISTRADOR)"
+
+
+@pytest.mark.parametrize("forma_cancelamento", ["escape", "x"])
+def test_cancelar_troca_por_escape_ou_x_preserva_caixa(
+    ambiente,
+    qtbot,
+    forma_cancelamento,
+) -> None:
+    caminho, sessao_admin, janela_admin = ambiente
+    cadastrar_caixa(caminho, sessao_admin)
+    janela_admin.close()
+    sessao_caixa = autenticar_usuario("caixa01", SENHA_CAIXA, caminho)
+    janela = JanelaPrincipal(caminho, sessao_caixa)
+    qtbot.addWidget(janela)
+    janela.show()
+
+    janela.solicitar_logout()
+    dialogo = janela.dialogo_atual
+    qtbot.waitUntil(dialogo.isVisible)
+    if forma_cancelamento == "escape":
+        qtbot.keyPress(dialogo, Qt.Key.Key_Escape)
+    else:
+        dialogo.close()
+    qtbot.waitUntil(lambda: janela.dialogo_atual is None)
+
+    assert sessao_caixa.autenticada
+    assert janela.sessao is sessao_caixa
+    assert janela.isVisible()
+    assert janela.rotulo_usuario.text() == "caixa01 (CAIXA)"
+    assert not janela.botao_navegar_administracao.isEnabled()
+
+
+def test_login_invalido_seguido_de_cancelamento_mantem_operador(
+    ambiente,
+    qtbot,
+) -> None:
+    _, sessao_admin, janela = ambiente
+    janela.solicitar_logout()
+    dialogo = janela.dialogo_atual
+    qtbot.waitUntil(dialogo.isVisible)
+    dialogo.campo_identificacao.setText("administrador")
+    dialogo.campo_senha.setText("senha incorreta para troca")
+
+    dialogo.entrar()
+
+    assert dialogo.isVisible()
+    assert dialogo.sessao is None
+    assert sessao_admin.autenticada
+    assert "inválida" in dialogo.rotulo_mensagem.text()
+    dialogo.reject()
+    qtbot.waitUntil(lambda: janela.dialogo_atual is None)
+    assert janela.sessao is sessao_admin
+    assert janela.isVisible()
+
+
+def test_troca_administrador_para_caixa_atualiza_permissoes(
+    ambiente,
+    qtbot,
+) -> None:
+    caminho, sessao_admin, janela = ambiente
+    cadastrar_caixa(caminho, sessao_admin)
+    eventos = []
+    janela.operador_trocado.connect(eventos.append)
+    janela.solicitar_logout()
+    dialogo = janela.dialogo_atual
+    qtbot.waitUntil(dialogo.isVisible)
+    dialogo.campo_identificacao.setText("caixa01")
+    dialogo.campo_senha.setText(SENHA_CAIXA)
+
+    dialogo.entrar()
+    qtbot.waitUntil(lambda: janela.dialogo_atual is None)
+
+    assert not sessao_admin.autenticada
+    assert janela.sessao.perfil == "CAIXA"
+    assert janela.sessao.autenticada
+    assert eventos == [janela.sessao]
+    assert janela.rotulo_usuario.text() == "caixa01 (CAIXA)"
+    assert not janela.botao_navegar_administracao.isEnabled()
+    assert not janela.botao_codigos_recuperacao.isVisible()
+    assert janela.pagina_historico.sessao_solicitante is janela.sessao
+    assert janela.pagina_produtos.sessao_administrativa is janela.sessao
+    assert janela.pagina_administracao.sessao_administrativa is janela.sessao
+
+
+def test_troca_caixa_para_administrador_atualiza_permissoes(
+    ambiente,
+    qtbot,
+) -> None:
+    caminho, sessao_admin_inicial, janela_admin = ambiente
+    cadastrar_caixa(caminho, sessao_admin_inicial)
+    janela_admin.close()
+    sessao_caixa = autenticar_usuario("caixa01", SENHA_CAIXA, caminho)
+    janela = JanelaPrincipal(caminho, sessao_caixa)
+    qtbot.addWidget(janela)
+    janela.show()
+    janela.solicitar_logout()
+    dialogo = janela.dialogo_atual
+    qtbot.waitUntil(dialogo.isVisible)
+    dialogo.campo_identificacao.setText("administrador")
+    dialogo.campo_senha.setText(SENHA_ADMIN)
+
+    dialogo.entrar()
+    qtbot.waitUntil(lambda: janela.dialogo_atual is None)
+
+    assert not sessao_caixa.autenticada
+    assert janela.sessao.perfil == "ADMINISTRADOR"
+    assert janela.sessao.autenticada
+    assert janela.rotulo_usuario.text() == "administrador (ADMINISTRADOR)"
+    assert janela.botao_navegar_administracao.isEnabled()
+    assert janela.botao_codigos_recuperacao.isVisible()
+
+
+def test_troca_concluida_revoga_capacidade_da_sessao_anterior(
+    ambiente,
+    qtbot,
+) -> None:
+    caminho, sessao_admin, janela = ambiente
+    cadastrar_caixa(caminho, sessao_admin)
+    capacidade = GERENCIADOR_AUTORIZACOES.emitir(
+        sessao_admin,
+        OPERACAO_CANCELAR_VENDA,
+        912,
+        "administrador",
+        SENHA_ADMIN,
+        caminho,
+        limitador=LimitadorTentativasLogin(),
+    )
+    janela.solicitar_logout()
+    dialogo = janela.dialogo_atual
+    qtbot.waitUntil(dialogo.isVisible)
+    dialogo.campo_identificacao.setText("caixa01")
+    dialogo.campo_senha.setText(SENHA_CAIXA)
+    dialogo.entrar()
+    qtbot.waitUntil(lambda: janela.dialogo_atual is None)
+
+    with pytest.raises(AutorizacaoPontualConsumidaError):
+        GERENCIADOR_AUTORIZACOES.consumir(
+            capacidade,
+            sessao_admin,
+            OPERACAO_CANCELAR_VENDA,
+            912,
+            caminho,
+        )
 
 
 def test_logout_e_fechamento_da_janela_bloqueiam_atendimento_pendente(
@@ -683,9 +844,24 @@ def test_logout_e_fechamento_da_janela_bloqueiam_atendimento_pendente(
 
     assert sessao.autenticada
     assert janela.isVisible()
+    assert janela.dialogo_atual is None
     assert "Finalize ou esvazie" in janela.rotulo_status.text()
     assert not janela.close()
     assert sessao.autenticada
+
+
+def test_troca_bloqueada_preserva_composicao_de_pagamentos(ambiente) -> None:
+    _, sessao, janela = ambiente
+    composicao = PagamentosEmAndamento(total_venda_centavos=1000)
+    janela.composicao_pagamentos = composicao
+
+    janela.solicitar_logout()
+
+    assert janela.dialogo_atual is None
+    assert janela.composicao_pagamentos is composicao
+    assert janela.sessao is sessao
+    assert sessao.autenticada
+    assert "Finalize ou esvazie" in janela.rotulo_status.text()
 
 
 def test_commit_incerto_bloqueia_logout_e_administracao(ambiente) -> None:
@@ -697,6 +873,7 @@ def test_commit_incerto_bloqueia_logout_e_administracao(ambiente) -> None:
     janela.mostrar_administracao()
 
     assert sessao.autenticada
+    assert janela.dialogo_atual is None
     assert janela.paginas.currentWidget() is janela.pagina_frente_caixa
     assert not janela.botao_navegar_administracao.isEnabled()
     assert "fechamento pendente" in janela.rotulo_status.text()
@@ -732,7 +909,7 @@ def test_navegacao_preserva_frente_historico_produtos_e_administracao(
     assert janela.paginas.currentWidget() is janela.pagina_frente_caixa
 
 
-def test_bootstrap_reabre_login_apos_logout(qapp, tmp_path, monkeypatch) -> None:
+def test_bootstrap_usa_login_inicial_uma_unica_vez(qapp, tmp_path, monkeypatch) -> None:
     caminho = tmp_path / "troca_operador.db"
     criar_tabelas(caminho)
     administrador, erros = criar_administrador_inicial(
@@ -742,51 +919,37 @@ def test_bootstrap_reabre_login_apos_logout(qapp, tmp_path, monkeypatch) -> None
         caminho,
     )
     assert administrador is not None and erros == []
-    sessoes = (object(), object())
+    sessao = object()
     logins = []
 
     class LoginSequencial:
         def __init__(self, caminho_banco):
-            self.sessao = sessoes[len(logins)]
+            self.sessao = sessao
             logins.append(self)
 
         def exec(self):
             return QDialog.DialogCode.Accepted
-
-    class Sinal:
-        def __init__(self):
-            self._callbacks = []
-
-        def connect(self, callback):
-            self._callbacks.append(callback)
-
-        def emit(self):
-            for callback in self._callbacks:
-                callback()
 
     janelas = []
 
     class JanelaFalsa:
         def __init__(self, sessao):
             self.sessao = sessao
-            self.logout_realizado = Sinal()
 
         def show(self):
-            if not janelas.index(self):
-                self.logout_realizado.emit()
+            pass
 
     def criar_janela(caminho_banco, sessao):
         janela = JanelaFalsa(sessao)
         janelas.append(janela)
         return janela
 
-    resultados_exec = iter((0, 37))
     monkeypatch.setattr(aplicacao_module, "DialogoLogin", LoginSequencial)
     monkeypatch.setattr(aplicacao_module, "criar_janela_principal", criar_janela)
-    monkeypatch.setattr(QApplication, "exec", lambda self: next(resultados_exec))
+    monkeypatch.setattr(QApplication, "exec", lambda self: 37)
 
     resultado = aplicacao_module.executar_aplicacao([], caminho)
 
     assert resultado == 37
-    assert len(logins) == 2
-    assert [janela.sessao for janela in janelas] == list(sessoes)
+    assert len(logins) == 1
+    assert [janela.sessao for janela in janelas] == [sessao]

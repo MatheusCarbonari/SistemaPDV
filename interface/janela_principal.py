@@ -28,6 +28,7 @@ from interface.dialogos_entrada import (
 )
 from interface.dialogo_confirmacao_venda import DialogoConfirmacaoVenda
 from interface.dialogo_codigos_recuperacao import DialogoCodigosRecuperacao
+from interface.dialogo_login import DialogoLogin
 from interface.dialogo_pagamentos import DialogoPagamentos
 from interface.formatacao import formatar_centavos
 from interface.pagina_historico import PaginaHistorico
@@ -63,6 +64,7 @@ class JanelaPrincipal(QMainWindow):
     venda_confirmada = Signal(object)
     venda_persistida = Signal(int)
     logout_realizado = Signal()
+    operador_trocado = Signal(object)
 
     def __init__(
         self,
@@ -1023,10 +1025,82 @@ class JanelaPrincipal(QMainWindow):
                 "alerta",
             )
             return
-        self._encerramento_autorizado = True
-        encerrar_sessao(self.sessao)
+        if self.dialogo_atual is not None:
+            return
+
+        dialogo = DialogoLogin(
+            self.caminho_banco,
+            self,
+            troca_operador=True,
+        )
+        self.dialogo_atual = dialogo
+        dialogo.finished.connect(
+            lambda resultado: self._finalizar_troca_operador(
+                dialogo,
+                resultado,
+            )
+        )
+        dialogo.open()
+
+    def _finalizar_troca_operador(
+        self,
+        dialogo: DialogoLogin,
+        resultado: int,
+    ) -> None:
+        if self.dialogo_atual is dialogo:
+            self.dialogo_atual = None
+
+        nova_sessao = dialogo.sessao
+        dialogo.deleteLater()
+        if resultado != QDialog.DialogCode.Accepted or nova_sessao is None:
+            self._definir_status(
+                "Troca de operador cancelada. A sessão atual foi mantida."
+            )
+            self._restaurar_foco_entrada()
+            return
+
+        try:
+            autorizar_sessao(
+                nova_sessao,
+                ("ADMINISTRADOR", "CAIXA"),
+                self.caminho_banco,
+            )
+        except Exception:
+            encerrar_sessao(nova_sessao)
+            self._definir_status(
+                "A nova sessão não pôde ser validada. "
+                "O operador atual foi mantido.",
+                "erro",
+            )
+            self._restaurar_foco_entrada()
+            return
+
+        sessao_anterior = self.sessao
+        self.sessao = nova_sessao
+        self.pagina_historico.sessao_solicitante = nova_sessao
+        self.pagina_produtos.sessao_administrativa = nova_sessao
+        self.pagina_administracao.sessao_administrativa = nova_sessao
+        encerrar_sessao(sessao_anterior)
+
+        self.rotulo_usuario.setText(
+            f"{nova_sessao.identificacao_acesso} ({nova_sessao.perfil})"
+        )
+        self.botao_codigos_recuperacao.setVisible(
+            nova_sessao.perfil == "ADMINISTRADOR"
+        )
+        if (
+            nova_sessao.perfil != "ADMINISTRADOR"
+            and self.paginas.currentWidget() is self.pagina_administracao
+        ):
+            self.mostrar_frente_caixa()
+        self.pagina_produtos._atualizar_acoes_selecao()
+        self._atualizar_venda_exibida()
+        self._definir_status(
+            f"Operador {nova_sessao.identificacao_acesso} autenticado."
+        )
         self.logout_realizado.emit()
-        self.close()
+        self.operador_trocado.emit(nova_sessao)
+        self._restaurar_foco_entrada()
 
     def closeEvent(self, evento) -> None:
         if self._encerramento_autorizado:

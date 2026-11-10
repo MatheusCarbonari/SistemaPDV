@@ -33,6 +33,7 @@ class DialogoLogin(QDialog):
         caminho_banco=CAMINHO_BANCO,
         parent=None,
         *,
+        troca_operador: bool = False,
         limitador=LIMITADOR_LOGIN_PADRAO,
         limitador_recuperacao=LIMITADOR_RECUPERACAO_PADRAO,
     ) -> None:
@@ -40,10 +41,13 @@ class DialogoLogin(QDialog):
         self.caminho_banco = caminho_banco
         self.limitador = limitador
         self.limitador_recuperacao = limitador_recuperacao
+        self.troca_operador = troca_operador
         self.sessao = None
         self.dialogo_recuperacao = None
         self.setModal(True)
-        self.setWindowTitle("Entrar no Sistema-PDV")
+        self.setWindowTitle(
+            "Trocar operador" if troca_operador else "Entrar no Sistema-PDV"
+        )
         aplicar_padrao_dialogo(
             self,
             nome="dialogo_login",
@@ -54,10 +58,16 @@ class DialogoLogin(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(22, 20, 22, 20)
         layout.setSpacing(12)
-        titulo = QLabel("Acessar o Sistema-PDV")
+        titulo = QLabel(
+            "Trocar operador" if troca_operador else "Acessar o Sistema-PDV"
+        )
         titulo.setProperty("papelVisual", "titulo")
         layout.addWidget(titulo)
-        instrucao = QLabel("Informe a identificação e a senha do operador.")
+        instrucao = QLabel(
+            "Autentique o próximo operador. Cancelar mantém a sessão atual."
+            if troca_operador
+            else "Informe a identificação e a senha do operador."
+        )
         instrucao.setProperty("papelVisual", "instrucao")
         layout.addWidget(instrucao)
         grupo = QGroupBox("Credenciais")
@@ -99,7 +109,9 @@ class DialogoLogin(QDialog):
             | QDialogButtonBox.StandardButton.Cancel
         )
         self.botoes.button(QDialogButtonBox.StandardButton.Ok).setText("Entrar")
-        self.botoes.button(QDialogButtonBox.StandardButton.Cancel).setText("Sair")
+        self.botoes.button(QDialogButtonBox.StandardButton.Cancel).setText(
+            "Cancelar" if troca_operador else "Sair"
+        )
         self.botoes.accepted.connect(self.entrar)
         self.botoes.rejected.connect(self.reject)
         self.botoes.button(QDialogButtonBox.StandardButton.Ok).setDefault(True)

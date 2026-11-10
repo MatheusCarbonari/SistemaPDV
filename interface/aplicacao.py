@@ -11,7 +11,7 @@ from interface.janela_principal import JanelaPrincipal
 from models.sessao_usuario import SessaoUsuario
 from repositories.usuario_repository import EstadoIdentidadeInconsistenteError
 from services.administrador_inicial_service import obter_estado_primeiro_acesso
-from services.autenticacao_service import autorizar_sessao
+from services.autenticacao_service import autorizar_sessao, encerrar_sessao
 from services.inicializacao_banco_service import (
     InicializacaoBancoError,
     preparar_banco_para_operacao,
@@ -109,38 +109,31 @@ def executar_aplicacao(
             "iniciar uma sessão autenticada.",
         )
 
-    while True:
-        dialogo_login = DialogoLogin(caminho_banco)
-        if dialogo_login.exec() != QDialog.DialogCode.Accepted:
-            return 0
-        if dialogo_login.sessao is None:
-            QMessageBox.critical(
-                None,
-                "Falha ao iniciar sessão",
-                "O login foi concluído sem uma sessão válida. "
-                "A operação foi bloqueada.",
-            )
-            return 1
-
-        try:
-            janela = criar_janela_principal(
-                caminho_banco,
-                dialogo_login.sessao,
-            )
-        except Exception:
-            dialogo_login.sessao.encerrar()
-            QMessageBox.critical(
-                None,
-                "Falha ao abrir a operação",
-                "Não foi possível validar a sessão. A operação foi bloqueada.",
-            )
-            return 1
-
-        troca_operador = {"solicitada": False}
-        janela.logout_realizado.connect(
-            lambda: troca_operador.__setitem__("solicitada", True)
+    dialogo_login = DialogoLogin(caminho_banco)
+    if dialogo_login.exec() != QDialog.DialogCode.Accepted:
+        return 0
+    if dialogo_login.sessao is None:
+        QMessageBox.critical(
+            None,
+            "Falha ao iniciar sessão",
+            "O login foi concluído sem uma sessão válida. "
+            "A operação foi bloqueada.",
         )
-        janela.show()
-        resultado = aplicacao.exec()
-        if not troca_operador["solicitada"]:
-            return resultado
+        return 1
+
+    try:
+        janela = criar_janela_principal(
+            caminho_banco,
+            dialogo_login.sessao,
+        )
+    except Exception:
+        encerrar_sessao(dialogo_login.sessao)
+        QMessageBox.critical(
+            None,
+            "Falha ao abrir a operação",
+            "Não foi possível validar a sessão. A operação foi bloqueada.",
+        )
+        return 1
+
+    janela.show()
+    return aplicacao.exec()
