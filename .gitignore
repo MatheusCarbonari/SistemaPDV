@@ -15,17 +15,36 @@ __pycache__/
 coverage.xml
 htmlcov/
 
-# Bancos de dados locais e arquivos auxiliares do SQLite
-data/*.db
-tests/*.db
+# Bancos de dados e dados locais (inclusive homologação e backups aninhados)
+data/**
+!data/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
 *.db-journal
 *.db-shm
 *.db-wal
+*.db-backup
+*.db-bak
+
+# Arquivos temporários locais e resultados avulsos de testes
+tmp/
+temp/
+test-results/
+*.tmp
+*.temp
+*.log
 
 # Variáveis de ambiente e segredos locais
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.local.*
+secrets.local.*
 
 # Ferramentas de análise Python
 .mypy_cache/

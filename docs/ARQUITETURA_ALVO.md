@@ -13,18 +13,22 @@ A aplicação mantém uma única janela principal com menu horizontal persistent
 e páginas internas em `QStackedWidget`. A Frente de Caixa conserva venda e
 pagamentos em memória durante a navegação. Histórico consome somente os serviços
 de consulta e não contém SQL. Produtos administra o catálogo por serviços, sem
-SQL no widget. Caixa não acessa Produtos; a página somente é habilitada para
-Administrador com sessão revalidada. Administração lista e gerencia somente
-contas Caixa por serviços protegidos; visibilidade de botão nunca substitui a
-autorização na camada de aplicação.
+SQL no widget. Administrador e Caixa autenticados podem consultar Produtos; o
+Administrador grava diretamente e o Caixa somente cadastra ou edita mediante
+capacidade administrativa vinculada ao comando. Situação do produto, categorias
+e histórico de preços permanecem exclusivos do Administrador. Administração
+lista e gerencia somente contas Caixa por serviços protegidos; visibilidade de
+botão nunca substitui a autorização na camada de aplicação.
 Resultado de commit incerto fixa a operação na Frente de Caixa até verificação
 ou recuperação controlada.
 
-“Trocar operador” invalida a sessão atual, fecha a janela e retorna ao diálogo
-único de login. A operação é recusada enquanto itens, pagamentos, confirmação
-ou fechamento estiverem pendentes. Fechar a janela pelo sistema invalida a
-sessão sem iniciar outra automaticamente e respeita o mesmo bloqueio para não
-descartar um atendimento em memória.
+“Trocar operador” mantém a sessão atual válida enquanto autentica o próximo
+operador no diálogo de login. Cancelar, usar `Esc` ou fechar o diálogo preserva
+a sessão anterior; somente uma autenticação confirmada instala a nova sessão e
+invalida a anterior e suas capacidades. A operação é recusada enquanto itens,
+pagamentos, confirmação ou fechamento estiverem pendentes. Fechar a janela pelo
+sistema invalida a sessão sem iniciar outra automaticamente e respeita o mesmo
+bloqueio para não descartar um atendimento em memória.
 
 O Histórico solicita o cancelamento de venda ativa exibindo os dados comerciais
 originais e validando o motivo, sem criar estado intermediário persistente. A
@@ -48,14 +52,18 @@ SQL e só atualiza lista e detalhe depois do sucesso comprovado.
   normalização Unicode determinística; inativação preserva os produtos já
   vinculados, enquanto novas associações são validadas dentro da transação.
   Vendas e snapshots históricos permanecem independentes do nome atual.
-- `id` técnico não é `codigo` operacional. ID de venda persistente e único; usar identificador separado por tentativa para idempotência.
+- `id` técnico não é `codigo` operacional. O código comercial do produto pode
+  mudar com autorização e unicidade revalidada; o ID e os snapshots históricos
+  permanecem estáveis. ID de venda é persistente e único; usar identificador
+  separado por tentativa para idempotência.
 - Snapshot de cada item para não depender de mudanças no cadastro; `produto_id` opcional para Diversos.
 - Preços monetários em centavos; multiplicação de kg usa Decimal e política explícita de arredondamento.
 - Guardar forma de entrada e procedência da quantidade, especialmente se estimada por valor/preço.
 - Durante venda com itens, novos produtos podem ser cadastrados, mas produtos
   existentes não podem ser editados, ativados ou desativados. O bloqueio é
   validado na execução da operação, e snapshots já lançados permanecem intactos.
-- No futuro, categorias em tabela editável; não impor enumeração rígida.
+- Categorias são entidades administráveis da versão 10, sem exclusão física;
+  novas associações exigem categoria ativa.
 
 ## Falhas
 Falha de gravação não prova ausência de commit. Nova tentativa deve reutilizar identificador estável e verificar resultado quando possível. Enquanto o resultado estiver incerto, itens e pagamentos permanecem em memória e a interface bloqueia um novo atendimento. Após sucesso comprovado, o ID definitivo é apresentado e a venda em memória é reiniciada. Se banco indisponível, modo de cálculo pode usar catálogo em memória; em reinício com banco indisponível não há garantia de recuperação. Sem persistência alternativa na V1.
@@ -127,7 +135,15 @@ mantém a operação bloqueada.
 Binário Windows empacotado, arquivos de dados fora da instalação; instalador atualiza só programa e executa migrador quando necessário; backup válido e migração segura, sem retrocesso automático de banco em falha. A inicialização operacional recusa versões futuras e, para banco existente desatualizado, só migra depois de criar e verificar uma cópia única em `backups/pre_migracao` ao lado do arquivo SQLite. Compatibilidade/licença PySide6 deve ser avaliada em entrega comercial.
 
 ## Riscos e validações ainda necessários
-- Verificar padrão real de todas as etiquetas de balança, dígito verificador e semântica dos campos.
-- Inspecionar scripts, dependências, base real e testes do ZIP antes de reaproveitar/refatorar.
-- Definir limites precisos de precisão/arredondamento e política de cadastro código/forma de venda antes de implementar.
-- Testar o leitor físico, lock SQLite, transações incertas, restauração e metas de latência no equipamento alvo.
+- Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
+  semântica dos campos e comportamento do leitor físico.
+- Validar no T61/T62 lock SQLite, transações incertas, escala do Windows e metas
+  de latência no equipamento alvo.
+- Concluir nos T55–T57 backup periódico e externo, permissões dos arquivos e
+  restauração assistida; o Marco 2 cobre somente o backup pré-migração.
+- Definir no T54 a recuperação do UUID de fechamento após encerramento do
+  processo e o protocolo operacional de contingência.
+- Sessões, capacidades e bloqueios de credencial são locais ao processo; antes
+  da produção, adotar instância única ou decidir coordenação entre processos.
+- O cancelamento não possui identificador persistente por tentativa; resultado
+  ambíguo permanece fail-closed até consulta e decisão operacional.

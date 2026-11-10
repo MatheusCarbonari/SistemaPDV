@@ -191,6 +191,13 @@ duplicação quando o leitor enviar Enter; (2) leituras consecutivas e repetidas
 
 ## Marco 2 — Operação comercial (T32–T48)
 
+**Status do marco:** **CONCLUÍDO em 10/11/2026.** O responsável confirmou a
+homologação manual final com 13/13 cenários aprovados, incluindo a Revisão Visual
+01–05 e as Correções Finais 01/02. O Codex verificou diretamente a suíte com
+1.078 testes e a migração v9→v10 em banco temporário isolado. O encerramento do
+marco não representa prontidão para produção nem homologação no equipamento do
+cliente; essas dependências permanecem no Marco 3.
+
 ### T32 — Esquema de vendas
 **Origem:** backlog original T21.
 **Entrega verificável:** Criar tabela vendas e migração testada.
@@ -424,6 +431,9 @@ anterior e suas capacidades são invalidadas e as permissões das páginas são
 atualizadas conforme o novo perfil. Atendimento em andamento e fechamento
 incerto continuam bloqueando a abertura do fluxo. O primeiro login permanece
 distinto: cancelá-lo encerra normalmente quando não existe sessão a restaurar.
+**Status:** concluída e validada por regressão automatizada. Cancelar por botão,
+`Esc` ou `X` preserva a sessão anterior; troca confirmada instala a nova sessão
+antes de invalidar a antiga e suas capacidades.
 
 ### COR-M2-01 — Revogação de autorizações
 **Entrega verificável:** capacidades pontuais guardam o ID estável do
@@ -514,6 +524,10 @@ testes.
 fluxos por teclado e produtividade das páginas e diálogos integrados, incluindo
 o diálogo de pagamentos, sem alterar regras comerciais. Ao final, repetir a
 homologação manual, suíte completa e auditoria do Marco 2 antes do T49.
+**Status funcional e visual:** implementação concluída pelos Visuais 01 a 05 e
+respectivos ajustes. A suíte final possui 1.078 testes aprovados pelo Codex. O
+responsável confirmou a homologação manual final com 13/13 cenários e aprovou a
+Revisão Visual 01–05. O COMP-M2-05 está concluído; isso não antecipa o Marco 3.
 **Andamento — Visual 01, Frente de Caixa:** reorganização visual iniciada sem
 novo identificador de ticket. O leitor de códigos foi compactado, retorno da
 última operação recebeu distinção entre sucesso, alerta e erro, a tabela passou
@@ -701,6 +715,10 @@ A correção foi validada com 1078 testes automatizados.
 **Origem:** backlog original T43.
 **Entrega verificável:** Resumo, alerta, confirmação e liberação sem falsa persistência.
 **Conceito a estudar:** Recuperação operacional.
+**Pendências vinculadas do Marco 2:** recuperar ou reconciliar o UUID de
+fechamento após encerramento do processo; definir o procedimento para
+cancelamento com commit incerto, reconhecendo que o schema atual não identifica
+de forma persistente a tentativa que produziu uma venda `CANCELADA`.
 
 ### T55 — Backup SQLite local
 **Origem:** backlog original T44.
@@ -731,6 +749,9 @@ A correção foi validada com 1078 testes automatizados.
 **Origem:** backlog original T49.
 **Entrega verificável:** Instalar/atualizar mantendo banco e configurações.
 **Conceito a estudar:** Distribuição.
+**Pendência vinculada do Marco 2:** definir e impor instância única da aplicação
+ou introduzir coordenação entre processos para sessões, capacidades e bloqueios
+de credencial antes da liberação operacional.
 
 ### T61 — Teste de performance
 **Origem:** backlog original T50.
@@ -741,13 +762,24 @@ A correção foi validada com 1078 testes automatizados.
 **Origem:** backlog original T51.
 **Entrega verificável:** Scanner, pagamentos simulados, falhas, backups e checklist release.
 **Conceito a estudar:** Aceitação e regressão.
+**Pendências vinculadas do Marco 2:** homologar leitor físico, foco e Enter do
+scanner, escala real do Windows e comportamento completo no equipamento alvo.
+Preparar um ambiente durável e isolado para futuras homologações manuais, sem
+usar nem apagar o banco operacional.
 
-## Pendências de planejamento posterior
+## Registros de usabilidade consolidados
+
+### Melhoria não bloqueante — aviso de alteração do código do produto
+
+O aviso operacional da Correção Final 02 está funcional e informa a necessidade
+de atualizar a balança e o risco de etiquetas antigas. Permanece um pequeno
+ajuste de apresentação visual para etapa futura. A melhoria não altera o comando
+autorizado, a validação, a persistência ou o encerramento do Marco 2.
 
 ### Revisão de layout e usabilidade operacional do PDV
 
-Executar após a implementação e validação do fluxo completo de vendas, antes do
-acabamento visual definitivo.
+**Situação:** absorvida pelos Visuais 01 a 05 do COMP-M2-05. O texto abaixo é
+preservado como origem dos critérios de revisão, não como ticket pendente.
 
 **Escopo:** revisar a distribuição da tela, reduzir espaçamentos excessivos,
 avaliar o posicionamento e o destaque do total, melhorar a legibilidade da
@@ -756,8 +788,9 @@ mouse. Esta pendência não autoriza mudanças visuais antes dessa etapa.
 
 ### Revisão funcional e de usabilidade do diálogo de pagamentos
 
-Comportamentos funcionais concluídos no COMP-M2-01. Refinamento visual amplo
-permanece reservado ao COMP-M2-05.
+**Situação:** comportamentos concluídos no COMP-M2-01 e refinamento executado nos
+Visuais 02 e 02.1 do COMP-M2-05. O texto abaixo permanece como registro dos
+critérios aprovados.
 
 **Separação entre Adicionar e Concluir:** Enter adiciona o pagamento ou
 confirma a edição; zerar o saldo não fecha automaticamente o diálogo; concluir
@@ -782,10 +815,12 @@ manuais, manter consistência com o saldo real.
 
 ## Regras de acompanhamento daqui em diante
 
-- O próximo ticket executável é **COMP-M2-05**. Considerar COMP-M2-01 a 04 e
-  COMP-M2-06 já concluídos;
-  T49 inicia somente após essas entregas, homologação e auditoria final da
-  Consolidação do Marco 2.
+- O Marco 2 está formalmente concluído. COMP-M2-01 a 06, Visuais 01 a 05 e
+  Correções Finais 01/02 estão implementados e aprovados no escopo do marco.
+- **T49** é o próximo ticket numerado. As limitações de contingência, backups,
+  restauração, empacotamento, desempenho e validação física permanecem nos
+  T54–T62 e não devem ser
+  antecipadas apenas para encerrar o marco.
 - Antes de elaborar cada prompt Codex, conferir **este arquivo**, o relatório do último ticket e eventuais dependências já resolvidas. Não redefinir informalmente o objetivo numerado.
 - Marcar como concluído somente após relatório, testes e revisão. Mantenha os títulos e origens dos tickets para rastreabilidade.
 - Se um ticket estiver parcialmente pronto, implementar somente o restante e incluir testes de regressão; não duplicar código.

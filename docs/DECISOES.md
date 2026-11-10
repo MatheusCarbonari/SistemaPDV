@@ -20,7 +20,10 @@
 - **DEC-016** — Cancelamento interno integral, com motivo/data, preservando histórico; sem estorno automático financeiro/fiscal.
 - **DEC-017** — ID de venda inteiro crescente, não reaproveitado; exibição com zeros à esquerda; pesquisa ID/data.
 - **DEC-018** — Pagamentos 1:N, modalidades repetíveis, sugestão de saldo restante, divisão igual em centavos; sem controle de troco/caixa.
-- **DEC-019** — Cadastro e edição permitidos durante venda; snapshot preserva itens; registrar histórico de alteração de preços com consulta aos 12 meses, sem exclusão automática.
+- **DEC-019** — Cadastro e edição foram inicialmente permitidos durante venda;
+  o bloqueio posterior da edição de produtos existentes foi aprovado na
+  **DEC-027**. Snapshot preserva itens; registrar histórico de alteração de
+  preços com consulta aos 12 meses, sem exclusão automática.
 - **DEC-020** — Login inicial; contas básicas Administrador e Caixa; autorização por operação crítica, sem sessão administrativa permanente; preparado para usuários individuais.
 - **DEC-021** — Logs, modo de cálculo degradado quando possível; sem fila durável na V1; nova tentativa idempotente e protocolo manual para persistência incerta.
 - **DEC-022** — Backup automático local e externo, integridade e restauração testada; falha em backup externo não bloqueia caixa.
@@ -37,8 +40,9 @@
   implementadas. Commit incerto bloqueia a saída da Frente de Caixa.
 - **DEC-027** — A página Produtos permite novos cadastros durante uma venda em
   andamento, mas bloqueia edição e ativação/inativação de produtos existentes
-  enquanto houver itens lançados. O código fica somente leitura na edição;
-  categorias continuam textuais e snapshots já lançados não são alterados.
+  enquanto houver itens lançados. Snapshots já lançados não são alterados. As
+  cláusulas originais de código somente leitura e categorias textuais foram
+  substituídas, respectivamente, pelas **DEC-042** e **DEC-040**.
 - **DEC-028** — O cancelamento gráfico é dividido em INT-D1 e INT-D2. A INT-D1
   apenas apresenta a venda e valida o motivo, sem persistir, criar identidade ou
   chamar o serviço de cancelamento. A INT-D2 conecta esse pedido à autorização

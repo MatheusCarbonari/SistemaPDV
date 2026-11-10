@@ -1,113 +1,284 @@
-# Sistema-PDV — Auditoria técnica do Marco 2
+# Sistema-PDV — Auditoria Final do Marco 2
 
-**Referência:** `SistemaPDV-Marco2.zip` enviado em 06/11/2026.  
-**Método:** inspeção estática dos módulos, documentos ativos e testes; extração isolada apenas de arquivos de código/documentação; execução de pytest sem PySide6; reprodução isolada de um cenário de revogação de autorização em banco SQLite temporário. Nenhum arquivo do projeto original foi modificado.
+**Data:** 10/11/2026
 
-**Atualização de 06/11/2026:** COR-M2-01 e COR-M2-02 foram aplicadas no
-repositório de desenvolvimento e validadas pela suíte completa. O P2 de
-cancelamento incerto foi corrigido; os demais achados P2 e P3 abaixo permanecem
-pendentes.
+**Commit auditado:** `17c0899 fix: permite alterar codigo do produto`
 
-## Síntese
+**Escopo:** implementação, testes e documentação do Marco 2, integrações,
+consolidação e correções finais.
 
-**Parecer atualizado:** Marco 2 aprovado na homologação funcional manual
-informada pelo responsável (27/27 cenários), com a falha P1 de revogação
-corrigida pela COR-M2-01, mas **ainda não recomendado para encerramento técnico
-definitivo** antes da revisão dos riscos operacionais P2 e das demais entregas
-da Consolidação do Marco 2. Não equivale à certificação de segurança para
+**Restrições respeitadas:** nenhuma regra ou migração foi alterada; nenhum banco
+em `data/` foi aberto ou modificado; nenhum commit foi criado.
+
+## 1. Parecer executivo
+
+**Parecer: APTO E CONCLUÍDO para o encerramento formal do Marco 2.**
+
+Não foi encontrada falha funcional nos testes automatizados: a suíte completa
+passou em uma única execução, sem repetição e sem aviso Qt/COM. O código apresenta
+cobertura consistente de schema, vendas, pagamentos, identidade, autorização,
+cancelamento, produtos, categorias e interface.
+
+O bloqueio de aceite foi removido pela confirmação do responsável de que a
+homologação manual final aprovou **13 de 13 cenários**, já após a Revisão Visual
+01–05 e as Correções Finais 01 e 02. As contradições documentais e a proteção de
+artefatos apontadas originalmente também foram corrigidas. Não permanece achado
+P1 aberto no escopo do Marco 2.
+
+Este parecer não significa que o sistema esteja pronto para produção. Scanner,
+desempenho, backup periódico, restauração, empacotamento e contingência durável
+continuam pertencendo ao Marco 3.
+
+## 2. Método e resultados
+
+### Comandos executados
+
+- `python -m pytest -q`: **1078 testes aprovados em 286,51 s** (`4m46s`).
+- `python -m compileall -q .`: aprovado, sem saída de erro.
+- `git diff --check`: aprovado.
+- `git status --short`: somente `?? data/` antes da atualização deste relatório.
+
+A suíte foi executada uma vez, integralmente, sem repetição de casos falhos. Não
+houve indício de teste instável nesta rodada. Os testes que criam SQLite usam
+`tmp_path` ou caminhos temporários explícitos; não foram encontradas chamadas de
+teste aos caminhos padrão do banco operacional.
+
+### Evidências consolidadas e origem
+
+**Verificadas diretamente pelo Codex:** suíte integral com **1.078 testes
+aprovados**; compilação; verificações do Git; inspeção de código e documentos; e
+migração real v9→v10 em pasta temporária isolada. A migração preservou 4
+produtos, 2 vendas, 4 itens, 3 pagamentos, 3 registros de histórico de preços,
+2 usuários, estado de identidade e recuperação. IDs e relacionamentos foram
+preservados; `PRAGMA integrity_check` retornou `ok`, `foreign_key_check` não
+retornou linhas, o backup v9 foi criado e validado, e a aplicação offscreen leu
+os registros migrados. Os arquivos temporários foram removidos ao final.
+
+**Informadas e aprovadas pelo responsável:** homologação manual final com
+**13/13 cenários aprovados**, aprovação da Revisão Visual 01–05 e aprovação das
+Correções Finais 01 e 02. O Codex registra essa confirmação como evidência de
+aceite, sem apresentá-la como execução manual independente própria.
+
+### Qt e `0x8001010d`
+
+O aviso `0x8001010d` não ocorreu nesta auditoria. O código corresponde a
+`RPC_E_CANTCALLOUT_ININPUTSYNCCALL`: o Windows recusou uma chamada COM de saída
+enquanto processava uma chamada síncrona de entrada. A classificação atual é
+**P3, ambiental/intermitente sob observação**, porque não foi reproduzido, não
+afetou os 1.078 testes e não há evidência de falha comercial associada. Se surgir
+na aplicação real com perda de foco, travamento ou operação incompleta, deve ser
+reclassificado e reproduzido com o contexto do evento Qt. Referência:
+[Microsoft — HRESULT Values](https://learn.microsoft.com/openspecs/windows_protocols/ms-erref/705fb797-2175-4a90-b5a3-3918024b10b8).
+
+## 3. Evidências por área
+
+### Banco de dados
+
+- `VERSAO_ESQUEMA = 10`; migrações sequenciais v0→v10 e recusa de versão futura.
+- A migração representativa v9→v10 preserva IDs e atributos de produtos,
+  referências de itens, histórico de preços e integridade referencial.
+- A falha injetada na migração v10 restaura produtos, categorias e
+  `user_version = 9`.
+- `PRAGMA foreign_keys = ON` é aplicado a cada conexão; a migração executa
+  `foreign_key_check` antes do commit.
+- Índices de tentativa idempotente, histórico de vendas, histórico de preços,
+  recuperação e categoria foram conferidos no schema e nos testes.
+- Banco legado em WAL é copiado pela API de backup do SQLite, validado por
+  `PRAGMA integrity_check = ok` e somente então migrado. Falhas de backup e de
+  integridade interrompem antes da migração; falha de migração preserva a cópia.
+- Banco novo e banco atualizado não criam backup desnecessário.
+- Não houve acesso ao banco operacional durante esta auditoria.
+
+### Vendas e pagamentos
+
+- Leitura simulada de etiquetas documentadas, códigos manuais, produtos por
+  peso/unidade e Diversos está coberta até a lista gráfica.
+- Dinheiro permanece inteiro em centavos; quantidades usam `Decimal` e os testes
+  cobrem arredondamento, diferenças de um centavo e divisão exata.
+- Inclusão, edição, remoção, modalidades repetidas, sugestão de divisão e
+  atalhos de pagamento foram exercitados.
+- Confirmação separada, transação venda+itens+pagamentos, rollback e FKs foram
+  validados.
+- UUID idempotente, repetição compatível, colisão incompatível e commit incerto
+  possuem testes de falha antes, durante e depois do commit.
+- Snapshots históricos permanecem independentes do cadastro atual.
+
+### Segurança e usuários
+
+- Primeiro acesso fail-closed, login, logout, troca cancelada e troca confirmada
+  estão cobertos.
+- Sessões fabricadas, expiradas, encerradas ou de conta inativa são recusadas.
+- Redefinição e recuperação de senha revogam sessões e capacidades conforme o
+  contrato processual.
+- Autorizações T47 são opacas, vinculadas a sessão/operação/recurso/dados,
+  expiram e têm consumo único protegido por bloqueio.
+- Cadastro e edição de Produtos pelo Caixa exigem capacidade vinculada ao hash
+  do comando; serviços públicos de gravação revalidam a sessão.
+- Cancelamento exige capacidade real, usa `BEGIN IMMEDIATE`, preserva itens e
+  pagamentos e distingue falha comprovada de resultado incerto.
+- Testes de concorrência cobrem consumo, revogação, alteração de credencial,
+  categorias, produtos e cancelamento dentro de uma instância do processo.
+
+### Produtos e categorias
+
+- Cadastro, edição, ativação/inativação, categorias ativas/inativas e histórico
+  de preços estão cobertos.
+- Alteração de código preserva ID, rejeita duplicidade inclusive de inativo,
+  libera código anterior, atualiza a leitura atual e mantém snapshots antigos.
+- Alteração exclusiva de código não cria histórico de preço.
+- Estado-base e unicidade são revalidados dentro da transação.
+
+### Interface
+
+- pytest-qt cobre Frente de Caixa, Pagamentos, Histórico, Produtos,
+  Administração, primeiro acesso, login, autorizações e confirmações.
+- Há verificações de foco, Enter/Esc/Tab/Ctrl+Enter, seleção, bloqueios e
+  preservação de estado.
+- Layouts possuem testes em 1024×720 e 1280×800; Pagamentos também em 900×700 e
+  640×480; formulários possuem simulação de fonte a 125%.
+- Esses testes não substituem a homologação renderizada no Windows real com
+  escala do sistema, tema, fontes e hardware do estabelecimento.
+
+## 4. Achados classificados
+
+### P1 — bloqueia encerramento
+
+Nenhum achado P1 permanece aberto.
+
+#### P1-01 — Homologação manual final após as últimas mudanças — resolvido
+
+O responsável confirmou **13/13 cenários aprovados** após a Revisão Visual 01–05
+e as Correções Finais 01/02. Essa confirmação satisfaz o aceite do Marco 2. Ela
+não equivale à homologação física no equipamento do cliente, que permanece no
+Marco 3.
+
+### P2 — decisões explícitas e achados resolvidos
+
+#### P2-01 — Documentos ativos possuíam contratos contraditórios — resolvido
+
+- A arquitetura dizia que Caixa não acessava Produtos e que trocar operador
+  invalidava imediatamente a sessão e fechava a janela.
+- A DEC-027 dizia que o código era somente leitura e que categorias permaneciam
+  textuais; decisões posteriores alteraram ambos os contratos.
+- O backlog indicava COMP-M2-05 como próximo ticket apesar de sua implementação.
+- Riscos já implementados, como categorias, ainda apareciam como futuros.
+
+**Resolução:** `ARQUITETURA_ALVO.md` foi alinhado ao comportamento implementado;
+as DEC-019/027 registram quais cláusulas foram substituídas pelas decisões mais
+recentes; o backlog registra COMP-M2-05 e as correções finais como implementados,
+sem marcar o Marco 2 como encerrado. O histórico e a numeração foram preservados.
+
+#### P2-02 — UUID de fechamento incerto não sobrevive ao processo
+
+A idempotência funciona enquanto o UUID permanece em memória. Encerramento ou
+queda após resultado incerto perde a correlação automática. A pendência já está
+ligada ao T54. O adiamento está documentado e não autoriza liberação operacional
+antes do protocolo de contingência.
+
+#### P2-03 — Cancelamento incerto não identifica persistentemente a tentativa
+
+Após erro de commit, venda `CANCELADA` comprova o estado, mas não a autoria da
+tentativa atual. O comportamento fail-closed está correto; a limitação permanece
+por ausência deliberada de UUID de cancelamento. A pendência foi vinculada ao
+T54, sem criar migração apenas para encerrar o Marco 2.
+
+#### P2-04 — Sessões, capacidades e coordenação são locais ao processo
+
+As garantias concorrentes valem em uma instância. Duas instâncias podem ter
+registros independentes de sessão/capacidade e bloqueios de credencial distintos.
+Antes do uso real, deve existir instância única ou coordenação entre processos;
+essa decisão foi vinculada ao T60. Não ampliar automaticamente o Marco 2.
+
+#### P2-05 — Scanner físico e medição real não foram homologados
+
+O T31 registra validação simulada, mas não foi encontrada instrumentação de
+latência no código nem medição com leitor físico. O T61/T62 prevê desempenho e
+validação operacional. Essa validação permanece explicitamente destinada aos
+T61/T62 do Marco 3 e não é apresentada como concluída.
+
+#### P2-06 — Artefatos locais e regra insuficiente de ignore — resolvido
+
+Foram identificados, apenas por caminho, três backups pré-migração não rastreados
+em `data/backups/pre_migracao/`; nenhum conteúdo foi aberto. O `.gitignore` agora
+protege todo `data/**`, bancos `.db`/`.sqlite`/`.sqlite3` em subdiretórios,
+journals/WAL, backups, temporários, logs e credenciais locais. Os arquivos
+existentes não foram removidos ou modificados.
+
+#### P2-07 — Segurança e ciclo completo dos backups pertencem ao Marco 3
+
+O backup pré-migração está implementado e verificado. Rotação, destino externo,
+permissões do diretório, restauração assistida e teste periódico permanecem nos
+T55–T57. O adiamento é coerente, mas impede considerar o sistema pronto para
 produção.
 
-- **730 testes aprovados** nesta auditoria em 30 arquivos de testes sem dependência gráfica (Python 3.13.5, pytest 9.0.2). Não foram executados os arquivos que importam PySide6, que não está disponível no ambiente. A tentativa inicial de suite ampla deu erros de *coleta* por falta da biblioteca, não por falhas lógicas verificadas.
-- **961 testes aprovados** são o último resultado relatado pelo Codex no ambiente Windows do usuário; não foram independentemente repetidos por completo nesta auditoria.
-- **966 testes aprovados** em 06/11/2026 no ambiente Windows do usuário após a
-  COR-M2-01, incluindo T47, T48, INT-D2 e os novos cenários de revogação.
-- **973 testes aprovados** em 06/11/2026 no ambiente Windows do usuário após a
-  COR-M2-02, incluindo sucesso, falha confirmada, resultado incerto,
-  concorrência e integração gráfica.
-- O ZIP contém `data/sistema_acougue.db` e **dois backups pré-migração**. Esses arquivos não foram abertos ou usados nos testes. Como podem conter vendas, usuários e hashes, devem ser excluídos de futuros pacotes de revisão, salvo pedido específico de auditoria dos próprios dados.
-- Requisitos encontrados no `requirements.txt`: PySide6, pytest, pytest-qt, tzdata.
+### P3 — não bloqueante
 
-## Achados por prioridade
+- `0x8001010d`: não reproduzido; monitorar em homologação real.
+- Dependências de `requirements.txt` não estão fixadas por versão; tratar na
+  preparação de build/release do Marco 3.
+- Escala a 125% foi simulada em testes, mas deve ser confirmada no Windows real.
+- Metas de latência e desempenho permanecem para T61.
+- O aviso apresentado ao alterar o código comercial do produto possui pequeno
+  ajuste visual pendente. A mensagem e a proteção operacional estão funcionais;
+  o refinamento é melhoria de apresentação não bloqueante.
 
-### P1 — Revogação incompleta das autorizações emitidas pelo administrador (corrigido pela COR-M2-01)
+## 5. Pendências por destino
 
-**Código:** `services/autorizacao_pontual_service.py`, `_EstadoAutorizacao`, `GerenciadorAutorizacoesPontuais.emitir`, `consumir` e `invalidar_usuario`; `services/recuperacao_acesso_service.py`, `recuperar_acesso_administrativo`.
+### Critérios de encerramento atendidos
 
-O estado de cada capacidade guarda a identidade do administrador que **autorizou**, mas `invalidar_usuario(usuario_id)` revoga somente capacidades cuja **sessão solicitante** pertence ao usuário indicado. Ao recuperar a senha administrativa, T48 chama a invalidação pelo ID do administrador; isso revoga suas sessões e capacidades solicitadas por ele, **mas não** as capacidades que ele emitiu para sessões Caixa.
+1. Homologação manual final: 13/13 cenários aprovados pelo responsável.
+2. Suíte automatizada final: 1.078 testes aprovados pelo Codex.
+3. Migração v9→v10: aprovada pelo Codex em banco temporário isolado.
+4. Revisão Visual 01–05 e Correções Finais 01/02: aprovadas pelo responsável.
+5. Documentos ativos e proteção de artefatos: revisados, sem P1 aberto.
 
-**Reprodução independente:** com banco temporário, foram criados administrador e Caixa, emitida uma capacidade para o Caixa cancelar a venda fictícia `17`, gerado e consumido um código de recuperação para trocar a senha do administrador; a sessão do administrador passou a `autenticada=False`, **mas `GerenciadorAutorizacoesPontuais.consumir` ainda aceitou a capacidade antiga** e retornou a identidade administrativa. Nenhuma venda foi cancelada neste teste, e o banco real não foi acessado. A capacidade tem duração padrão de 60 segundos, limitando a janela, mas não eliminando a inconsistência de revogação.
+### Preservadas para o Marco 3
 
-**Correção proposta:** vincular explicitamente a capacidade também ao ID do administrador que a autorizou; revogar pelo ID tanto na qualidade de solicitante quanto de autorizador; testar recuperação de senha após autorização de um Caixa, bloqueando uso posterior. Avaliar revalidação do autorizador no consumo, com custo proporcional. Não substituir por perfil textual, token forjável ou senha no contexto.
+- Recuperação durável de UUID e protocolo de contingência: T54.
+- Scanner físico, escala real, desempenho e lock no equipamento: T61/T62.
+- Backup periódico/externo e restauração: T55–T57.
+- Migrações de distribuição, empacotamento e instalador: T58–T60.
+- Coordenação entre processos ou política de instância única.
+- Identificador persistente de tentativa de cancelamento, se priorizado.
+- Ambiente durável e isolado para futuras homologações manuais.
+- Pequeno refinamento visual do aviso de alteração do código do produto.
 
-**Correção validada:** `_EstadoAutorizacao` passou a conservar privadamente o
-ID estável do Administrador autorizador, mantendo a identificação textual usada
-pela auditoria comercial. `invalidar_usuario()` agora revoga capacidades em que
-a identidade seja solicitante ou autorizadora. Emissão, consumo e revogação são
-serializados pelo mesmo bloqueio; a recuperação administrativa já existente
-aciona essa invalidação. Testes cobrem recuperação após concessão a Caixa,
-solicitação pelo próprio Administrador, isolamento entre dois Administradores,
-revogação concorrente e consumo único. A sessão Caixa permaneceu Caixa.
+## 6. Registro da homologação manual final
 
-### P2 — Cancelamento pode ser confirmado no SQLite e comunicado como não concluído se o commit falhar de modo ambíguo (corrigido pela COR-M2-02)
+O responsável confirmou **13/13 cenários aprovados**, a Revisão Visual 01–05 e
+as Correções Finais 01/02. A confirmação foi informada pelo responsável e não
+reproduzida como auditoria manual independente pelo Codex. A migração v9→v10 foi
+verificada separadamente pelo Codex em banco temporário.
 
-**Código:** `services/cancelamento_venda_service.py` e `interface/pagina_historico.py`, `_finalizar_autorizacao`.
+Esse aceite não inclui leitor físico, desempenho no equipamento do cliente,
+backup operacional completo nem restauração. Futuras homologações devem usar
+ambiente durável e isolado, nunca apagar ou reutilizar `data/`, e executar o
+checklist operacional previsto no T62.
 
-O serviço chama `conexao.commit()` e trata qualquer exceção com rollback e propagação. Em casos excepcionais de falha após o commit ser aceito pelo banco, o aplicativo pode desconhecer se o cancelamento aconteceu; a interface exibe erro e nova tentativa sem reconciliação explícita. Diferentemente da persistência de venda, o cancelamento não possui protocolo de *commit incerto*.
+## 7. Git e organização proposta
 
-**Correção proposta:** em erro ambíguo de cancelamento, reler o status e os metadados por ID em uma conexão nova, apresentar estado comprovado ou marcar resultado incerto e orientar reconciliação, sem afirmar que a venda permanece ativa. Testar com injeção de falha pós-commit. Não alterar a garantia de consumo único da autorização.
+- HEAD auditado: `17c0899`.
+- Nenhum arquivo SQLite está rastreado.
+- Os caminhos dos backups locais foram identificados para validar o ignore;
+  nenhum banco operacional foi aberto ou alterado.
+- O estado atual contém somente `.gitignore` e os quatro documentos ativos
+  modificados por esta organização; `data/` não aparece mais como pendência.
+- Não há arquivo preparado na área de stage nem credencial, chave ou banco
+  rastreado entre as alterações propostas.
 
-**Correção validada:** somente exceções no commit iniciam reconciliação por nova
-conexão. Venda ainda `ATIVA` confirma falha; venda `CANCELADA`, com metadados
-iguais ou incompatíveis, permanece resultado incerto porque o esquema não
-identifica a tentativa de cancelamento. Falha na própria consulta também
-preserva a incerteza. A interface atualiza o Histórico quando possível, não
-repete o cancelamento, não reutiliza a autorização e exige consulta expressa
-antes de liberar nova solicitação para uma venda ainda ativa. Foram injetadas
-falhas antes, durante e depois do commit, inclusive rollback falho e
-cancelamento concorrente, sem alterar itens, pagamentos ou UUID do fechamento.
+Proposta, sem executar commits:
 
-### P2 — Recuperação de fechamento incerto após reinicialização permanece em aberto (limitação conhecida)
+1. Após revisão do responsável, um commit documental pode reunir o relatório,
+   o alinhamento dos documentos ativos e o `.gitignore`:
+   `docs: encerra formalmente o marco 2`.
+2. Eventuais falhas da homologação devem gerar commits próprios por correção;
+   não misturar com o relatório nem com o Marco 3.
 
-**Código:** `interface/janela_principal.py`, estado `identificador_tentativa_fechamento` e `_fechamento_incerto` somente em memória; T40/INT-A.
+## 8. Parecer final
 
-A proteção idempotente durante o processo funciona, mas uma queda de energia/encerramento durante o resultado incerto perde o UUID da tentativa. O papel com etiquetas permite remontar itens, porém não permite identificar automaticamente a tentativa antiga.
-
-**Ação:** definir procedimento operacional de reconciliação e critério de recuperação antes de liberar uso real. Vincular explicitamente à cobertura do T54 (protocolo de contingência) ou criar pendência com critério de aceite próprio. Não propor salvar todo o carrinho sem decisão do responsável.
-
-### P2 — Dados operacionais no ZIP
-
-O arquivo traz banco e backups na pasta `data/`. Embora o `.gitignore` cubra `data/*.db`, isso não protege backups em subpastas contra inclusão em ZIP, nem exclui material já rastreado no Git. **Não reutilizar esse pacote como anexo público.** Inspecionar a composição antes de compartilhar e atualizar orientações de envio.
-
-### P3 — Lacunas de produto/planejamento ainda não convertidas em tickets executáveis
-
-1. **Consulta gráfica do histórico de preços por 12 meses**: adiada pelo T44, sem ticket numerado exclusivo identificado em T49–T62.
-2. **Gestão de categorias personalizáveis**: indicada na arquitetura futura, mas sem ticket executável próprio na sequência atual.
-3. **Recuperação/alteração de senha de conta Caixa**: INT-E criou e ativa/desativa contas, mas não oferece redefinição; necessário procedimento administrativo, com autorização e revogação de sessões.
-4. **Revisão da produtividade no diálogo de pagamentos** e **refinamento de layout**: documentados em seção de pendências do backlog, mas ainda sem data/ticket formal. Incluem persistência da divisão sugerida e atalho de conclusão independente.
-5. **Homologação física do leitor**: explicitamente pendente, adequadamente situada na validação operacional T62.
-
-### P3 — Backlog possui orientação de sequenciamento obsoleta
-
-Ao final de `docs/TICKETS_RENUMERADO.md`, a seção «Regras de acompanhamento daqui em diante» ainda declara «O próximo ticket executável é T21». Essa orientação é incompatível com a conclusão relatada até T48/INT-E. Corrigir apenas o documento ativo, sem reescrever documentação legada.
-
-## Áreas verificadas com resultado positivo
-
-- Domínio e persistência separados da GUI; repositórios SQLite centralizados.
-- Banco versionado até v9, backup pré-migração e verificação de integridade no serviço de inicialização; testes com `tmp_path`.
-- T43: cancelamento transacional e histórico preservado, sem SQL de cancelamento na interface.
-- T47: capacidades aleatórias, consumo único sob `Lock`, recurso/operação/sessão vinculados, sem elevação de sessão Caixa; **ressalva da revogação do autorizador acima**.
-- T48: códigos de recuperação de alta entropia armazenados por verificador; consumo e troca de senha em transação; sem login automático.
-- Interface com `QStackedWidget`, Frente de Caixa, Histórico, Produtos e Administração, com proteções de sessão de acordo com o código inspecionado.
-- `tzdata` consta das dependências, resolvendo a falha de Windows anteriormente relatada.
-
-## Ordem de ação sugerida
-
-1. **Correção curta antes do encerramento do Marco 2:** revogação de capacidades emitidas por administrador após recuperação de sua senha; novo teste de regressão.
-2. **Concluído pela COR-M2-02:** cancelamento incerto tratado sem comunicar
-   certeza indevida e sem atribuir autoria por metadados coincidentes.
-3. **Registrar formalmente** a estratégia para recuperação de UUID perdido pós-crash, possivelmente ligada ao T54; não necessariamente implementar já.
-4. **Criar tickets/pendências explícitas** para senhas de Caixa, consulta gráfica de preços e categorias; manter ajustes de pagamentos/layout nas respectivas entregas de UX, antes de validação final.
-5. **Corrigir instrução T21 obsoleta** no backlog e retirar bancos/backups de futuros ZIPs.
-6. Rodar a suite completa no Windows (`python -m pytest -q`) após correções, complementar com testes manuais de autorização/cancelamento e repetir auditoria rápida antes do Marco 3.
-
-**Nota metodológica:** os apontamentos P1 foram demonstrados por execução isolada; P2 relativos a commit incerto são análise de risco fundamentada no tratamento de exceções, não prova de ocorrência real; demais lacunas vêm do cotejo do código e backlog. Nenhuma alteração foi aplicada ao projeto fornecido.
+O **Marco 2 está formalmente concluído**. A homologação final foi aprovada pelo
+responsável, as verificações automatizadas e a migração isolada foram aprovadas
+pelo Codex, e não há achado P1 aberto. Este parecer encerra o marco de
+desenvolvimento; **não declara o sistema pronto para produção nem homologado no
+equipamento do cliente**. A liberação operacional depende das entregas de
+confiabilidade e validação física preservadas no Marco 3.
