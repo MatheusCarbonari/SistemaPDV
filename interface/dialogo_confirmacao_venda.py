@@ -4,6 +4,8 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
     QLabel,
     QTableWidget,
     QTableWidgetItem,
@@ -11,6 +13,10 @@ from PySide6.QtWidgets import (
 )
 
 from interface.formatacao import formatar_centavos
+from interface.estilo_dialogos import (
+    aplicar_padrao_dialogo,
+    atualizar_apresentacao_mensagem,
+)
 from models.pagamento import PagamentosEmAndamento
 from models.venda_em_andamento import VendaEmAndamento
 from services.confirmacao_venda_service import (
@@ -36,16 +42,39 @@ class DialogoConfirmacaoVenda(QDialog):
         self._confirmacao_em_processamento = False
         self.setWindowTitle("Confirmar venda")
         self.setModal(True)
+        aplicar_padrao_dialogo(
+            self,
+            nome="dialogo_confirmacao_venda",
+            tamanho=(620, 500),
+            minimo=(540, 430),
+        )
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Revise os dados antes de confirmar a venda."))
+        layout.setContentsMargins(22, 20, 22, 20)
+        layout.setSpacing(12)
+        titulo = QLabel("Confirmar venda")
+        titulo.setProperty("papelVisual", "titulo")
+        layout.addWidget(titulo)
+        instrucao = QLabel(
+            "Revise o total e os pagamentos. A venda será registrada somente "
+            "após esta confirmação."
+        )
+        instrucao.setWordWrap(True)
+        instrucao.setProperty("papelVisual", "instrucao")
+        layout.addWidget(instrucao)
 
-        resumo = QFormLayout()
+        grupo_total = QGroupBox("Resumo financeiro")
+        resumo = QFormLayout(grupo_total)
+        resumo.setContentsMargins(14, 18, 14, 12)
         self.rotulo_total = QLabel(formatar_centavos(calcular_total(venda)))
         self.rotulo_total.setObjectName("total_confirmacao_venda")
+        self.rotulo_total.setProperty("papelVisual", "destaque")
         resumo.addRow("Total da venda:", self.rotulo_total)
-        layout.addLayout(resumo)
+        layout.addWidget(grupo_total)
 
+        grupo_pagamentos = QGroupBox("Pagamentos confirmados")
+        layout_pagamentos = QVBoxLayout(grupo_pagamentos)
+        layout_pagamentos.setContentsMargins(10, 16, 10, 10)
         self.tabela_pagamentos = QTableWidget(
             len(pagamentos.pagamentos),
             2,
@@ -60,22 +89,36 @@ class DialogoConfirmacaoVenda(QDialog):
         self.tabela_pagamentos.setSelectionMode(
             QAbstractItemView.SelectionMode.NoSelection
         )
-        self.tabela_pagamentos.horizontalHeader().setStretchLastSection(True)
+        cabecalho = self.tabela_pagamentos.horizontalHeader()
+        cabecalho.setStretchLastSection(False)
+        cabecalho.setSectionResizeMode(0, cabecalho.ResizeMode.Stretch)
+        cabecalho.setSectionResizeMode(1, cabecalho.ResizeMode.ResizeToContents)
+        self.tabela_pagamentos.setMinimumHeight(120)
         for linha, pagamento in enumerate(pagamentos.pagamentos):
             self.tabela_pagamentos.setItem(
                 linha,
                 0,
                 QTableWidgetItem(pagamento.modalidade),
             )
+            valor_item = QTableWidgetItem(
+                formatar_centavos(pagamento.valor_centavos)
+            )
+            valor_item.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
             self.tabela_pagamentos.setItem(
                 linha,
                 1,
-                QTableWidgetItem(formatar_centavos(pagamento.valor_centavos)),
+                valor_item,
             )
-        layout.addWidget(self.tabela_pagamentos)
+        layout_pagamentos.addWidget(self.tabela_pagamentos)
+        layout.addWidget(grupo_pagamentos, 1)
 
         self.rotulo_erro = QLabel("")
         self.rotulo_erro.setObjectName("erro_confirmacao_venda")
+        self.rotulo_erro.setWordWrap(True)
+        self.rotulo_erro.setProperty("papelVisual", "mensagem")
+        self.rotulo_erro.setProperty("semMensagem", True)
         layout.addWidget(self.rotulo_erro)
 
         self.botoes = QDialogButtonBox(
@@ -95,7 +138,11 @@ class DialogoConfirmacaoVenda(QDialog):
         botao_cancelar.setText("Cancelar")
         self.botoes.accepted.connect(self.accept)
         self.botoes.rejected.connect(self.reject)
-        layout.addWidget(self.botoes)
+        self.botao_confirmar.setProperty("papelVisual", "principal")
+        linha_botoes = QHBoxLayout()
+        linha_botoes.addStretch()
+        linha_botoes.addWidget(self.botoes)
+        layout.addLayout(linha_botoes)
 
     def keyPressEvent(self, evento) -> None:
         if evento.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -115,7 +162,7 @@ class DialogoConfirmacaoVenda(QDialog):
         except (TypeError, ValueError) as erro:
             self._confirmacao_em_processamento = False
             self.botao_confirmar.setEnabled(True)
-            self.rotulo_erro.setText(str(erro))
+            atualizar_apresentacao_mensagem(self.rotulo_erro, str(erro))
             return
 
         self.venda_confirmada.emit(resultado)

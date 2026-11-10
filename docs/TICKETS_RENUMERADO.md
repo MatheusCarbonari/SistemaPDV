@@ -632,6 +632,21 @@ inspecionadas em 1024×720, 1280×800 e fonte a 125%. Regras, permissões, servi
 persistência permanecem inalterados. Esta etapa não inicia o Visual 05.
 O Visual 04.2 foi validado com 1060 testes automatizados e capturas renderizadas
 dos estados vazio, preenchido, confirmação, resoluções-alvo e fonte a 125%.
+**Andamento — Visual 05, Diálogos e mensagens:** primeiro acesso, login,
+recuperação administrativa, emissão de códigos, autorização pontual e
+confirmação da venda compartilham a paleta escura, campos compactos, grupos
+semânticos, ações proporcionais e mensagens corrigíveis junto ao contexto. A
+autorização preserva a descrição e o hash do comando, mas organiza os dados em
+linhas legíveis e destaca alterações de categoria e preço. A confirmação da
+venda separa resumo financeiro e pagamentos, mantendo `Enter`, `Esc` e a
+proteção contra acionamento duplicado. Mensagens operacionais simples continuam
+no contexto da página; falha, sucesso e resultado incerto mantêm textos distintos,
+sem afirmar um desfecho quando ele não foi comprovado. Pagamentos e Solicitar
+cancelamento permanecem visualmente inalterados. Schema, serviços, contratos de
+segurança e banco operacional não foram modificados. Permanece pendente criar,
+em etapa futura, um ambiente isolado de homologação manual; ele não faz parte
+deste Visual 05. A etapa foi validada com 1066 testes automatizados e inspeção
+renderizada dos diálogos principais, inclusive com fonte simulada a 125%.
 
 ## Marco 3 — Produção e confiabilidade (T49–T62)
 

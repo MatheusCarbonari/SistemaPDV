@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from database.conexao import CAMINHO_BANCO
 from interface.dialogo_login import DialogoLogin
 from interface.dialogo_primeiro_acesso import DialogoPrimeiroAcesso
+from interface.estilo_dialogos import aplicar_tema_mensagens
 from interface.janela_principal import JanelaPrincipal
 from models.sessao_usuario import SessaoUsuario
 from repositories.usuario_repository import EstadoIdentidadeInconsistenteError
@@ -28,6 +29,8 @@ def obter_aplicacao(argumentos: Sequence[str] | None = None) -> QApplication:
     if aplicacao is None:
         argumentos_qt = list(argumentos) if argumentos is not None else sys.argv
         aplicacao = QApplication(argumentos_qt)
+
+    aplicar_tema_mensagens(aplicacao)
 
     return aplicacao
 

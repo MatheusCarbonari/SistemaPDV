@@ -2,12 +2,19 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QVBoxLayout,
 )
 
 from database.conexao import CAMINHO_BANCO
+from interface.estilo_dialogos import (
+    aplicar_padrao_dialogo,
+    configurar_campo_texto,
+    atualizar_apresentacao_mensagem,
+)
 from repositories.usuario_repository import (
     AdministradorJaConfiguradoError,
     EstadoIdentidadeInconsistenteError,
@@ -24,41 +31,63 @@ class DialogoPrimeiroAcesso(QDialog):
         self.administrador_criado = None
         self.setModal(True)
         self.setWindowTitle("Configuração inicial do administrador")
+        aplicar_padrao_dialogo(
+            self,
+            nome="dialogo_primeiro_acesso",
+            tamanho=(570, 430),
+            minimo=(500, 390),
+        )
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(22, 20, 22, 20)
+        layout.setSpacing(12)
+        titulo = QLabel("Primeiro acesso")
+        titulo.setProperty("papelVisual", "titulo")
+        layout.addWidget(titulo)
         explicacao = QLabel(
             "Crie o administrador inicial. Não existe senha padrão. Após esta "
             "configuração, será necessário autenticar a conta para abrir o PDV."
         )
         explicacao.setWordWrap(True)
         explicacao.setObjectName("aviso_primeiro_acesso")
+        explicacao.setProperty("papelVisual", "instrucao")
         layout.addWidget(explicacao)
 
-        formulario = QFormLayout()
+        grupo = QGroupBox("Conta administradora")
+        formulario = QFormLayout(grupo)
+        formulario.setContentsMargins(14, 18, 14, 12)
+        formulario.setHorizontalSpacing(16)
+        formulario.setVerticalSpacing(9)
         self.campo_identificacao = QLineEdit()
         self.campo_identificacao.setObjectName("identificacao_administrador")
         self.campo_identificacao.setPlaceholderText("administrador")
+        configurar_campo_texto(self.campo_identificacao)
         self.campo_senha = QLineEdit()
         self.campo_senha.setObjectName("senha_administrador")
         self.campo_senha.setEchoMode(QLineEdit.EchoMode.Password)
+        configurar_campo_texto(self.campo_senha)
         self.campo_confirmacao = QLineEdit()
         self.campo_confirmacao.setObjectName("confirmacao_senha_administrador")
         self.campo_confirmacao.setEchoMode(QLineEdit.EchoMode.Password)
+        configurar_campo_texto(self.campo_confirmacao)
         formulario.addRow("Identificação de acesso:", self.campo_identificacao)
         formulario.addRow("Senha:", self.campo_senha)
         formulario.addRow("Confirmar senha:", self.campo_confirmacao)
-        layout.addLayout(formulario)
+        layout.addWidget(grupo)
 
         politica = QLabel(
             "Use de 12 a 128 caracteres. Frases-senha e caracteres Unicode "
             "são permitidos."
         )
         politica.setWordWrap(True)
+        politica.setProperty("papelVisual", "instrucao")
         layout.addWidget(politica)
 
         self.rotulo_mensagem = QLabel("")
         self.rotulo_mensagem.setObjectName("mensagem_primeiro_acesso")
         self.rotulo_mensagem.setWordWrap(True)
+        self.rotulo_mensagem.setProperty("papelVisual", "mensagem")
+        self.rotulo_mensagem.setProperty("semMensagem", True)
         layout.addWidget(self.rotulo_mensagem)
 
         self.botoes = QDialogButtonBox(
@@ -73,7 +102,14 @@ class DialogoPrimeiroAcesso(QDialog):
         )
         self.botoes.accepted.connect(self.criar_administrador)
         self.botoes.rejected.connect(self.reject)
-        layout.addWidget(self.botoes)
+        linha_botoes = QHBoxLayout()
+        linha_botoes.addStretch()
+        linha_botoes.addWidget(self.botoes)
+        layout.addLayout(linha_botoes)
+        self.botoes.button(QDialogButtonBox.StandardButton.Save).setDefault(True)
+        self.botoes.button(QDialogButtonBox.StandardButton.Save).setProperty(
+            "papelVisual", "principal"
+        )
 
     def criar_administrador(self) -> None:
         try:
@@ -87,17 +123,17 @@ class DialogoPrimeiroAcesso(QDialog):
             AdministradorJaConfiguradoError,
             EstadoIdentidadeInconsistenteError,
         ) as erro:
-            self.rotulo_mensagem.setText(str(erro))
+            atualizar_apresentacao_mensagem(self.rotulo_mensagem, str(erro))
             return
         except Exception:
-            self.rotulo_mensagem.setText(
+            atualizar_apresentacao_mensagem(self.rotulo_mensagem,
                 "Não foi possível concluir a configuração inicial. "
                 "Nenhuma credencial foi registrada parcialmente."
             )
             return
 
         if erros:
-            self.rotulo_mensagem.setText("\n".join(erros))
+            atualizar_apresentacao_mensagem(self.rotulo_mensagem, "\n".join(erros))
             return
 
         self.administrador_criado = usuario
