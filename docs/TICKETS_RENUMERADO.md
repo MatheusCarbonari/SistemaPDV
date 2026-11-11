@@ -759,6 +759,26 @@ temporário continua sendo removido quando a geração ou finalização falha.
 **Origem:** backlog original T41.
 **Entrega verificável:** Cache essencial para leitura em banco degradado.
 **Conceito a estudar:** Cache, consistência.
+**Andamento:** implementação preparada para revisão independente. O SQLite
+permanece como fonte oficial; uma leitura integral de ativos e inativos publica
+um snapshot imutável apenas após validação completa. A carga inicial ocorre
+depois da autenticação e mutações de produto provocam recarga integral. Falha de
+carga ou atualização deixa o catálogo explicitamente indisponível, sem snapshot
+parcial ou antigo. A consulta em memória é explícita e preserva os contratos de
+etiqueta e cálculo, mas não habilita modo degradado automático, fechamento,
+cancelamento ou persistência alternativa. Validação local: 194 testes
+específicos de catálogo, produtos, etiquetas e itens; 139 regressões de
+inicialização, interfaces, autenticação, persistência e cancelamentos; e suíte
+completa com 1.157 testes aprovados. A revisão independente ainda é necessária
+antes de considerar o ticket aprovado.
+
+**Ajuste da revisão:** cada catálogo agora se vincula privadamente a um único
+banco por identidade de caminho resolvido/normalizado e identidade do arquivo
+quando disponível. Outra origem é rejeitada antes de leitura ou gravação, sem
+invalidar o snapshot existente nem expor caminhos. Caminhos equivalentes do
+mesmo banco são aceitos. Cadastro, edição e situação integrados validam essa
+origem; chamadas externas sem `catalogo_produtos` não têm sincronização
+automática. A revisão independente final permanece pendente.
 
 ### T53 — Modo cálculo
 **Origem:** backlog original T42.

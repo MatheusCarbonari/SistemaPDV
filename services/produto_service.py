@@ -22,6 +22,7 @@ from repositories.produto_repository import (
     editar_produto_comando_repository,
 )
 from services.autenticacao_service import autorizar_sessao
+from services.catalogo_memoria_service import CatalogoProdutosMemoria
 from services.autorizacao_pontual_service import (
     GERENCIADOR_AUTORIZACOES,
     GerenciadorAutorizacoesPontuais,
@@ -103,6 +104,7 @@ def cadastrar_produto(
     gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
         GERENCIADOR_AUTORIZACOES
     ),
+    catalogo_produtos: CatalogoProdutosMemoria | None = None,
 ):
     comando, erros = preparar_comando_cadastro_produto(
         codigo,
@@ -122,6 +124,7 @@ def cadastrar_produto(
         caminho_banco,
         capacidade=capacidade,
         gerenciador_autorizacoes=gerenciador_autorizacoes,
+        catalogo_produtos=catalogo_produtos,
     ), []
 
 
@@ -174,9 +177,11 @@ def executar_cadastro_produto(
     gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
         GERENCIADOR_AUTORIZACOES
     ),
+    catalogo_produtos: CatalogoProdutosMemoria | None = None,
 ) -> Produto:
     if not isinstance(comando, ComandoCadastroProduto):
         raise TypeError("O comando de cadastro de produto é inválido.")
+    _validar_catalogo_produtos(catalogo_produtos, caminho_banco)
     _autorizar_comando_produto(
         comando,
         sessao_solicitante,
@@ -184,7 +189,9 @@ def executar_cadastro_produto(
         caminho_banco,
         gerenciador_autorizacoes,
     )
-    return cadastrar_produto_comando_repository(comando, caminho_banco)
+    produto = cadastrar_produto_comando_repository(comando, caminho_banco)
+    _sincronizar_catalogo_produtos(catalogo_produtos, caminho_banco)
+    return produto
 
 
 # Prepara os filtros e solicita ao repository a listagem de produtos.
@@ -230,7 +237,9 @@ def alterar_situacao_produto(
     caminho_banco=CAMINHO_BANCO,
     *,
     sessao_solicitante: SessaoUsuario,
+    catalogo_produtos: CatalogoProdutosMemoria | None = None,
 ):
+    _validar_catalogo_produtos(catalogo_produtos, caminho_banco)
     autorizar_sessao(
         sessao_solicitante,
         ("ADMINISTRADOR",),
@@ -260,6 +269,7 @@ def alterar_situacao_produto(
     if not foi_atualizado:
         return False, ["Produto não encontrado."]
 
+    _sincronizar_catalogo_produtos(catalogo_produtos, caminho_banco)
     return foi_atualizado, [] ####### devolver produto? para mostrar ao cliente.
 
 
@@ -544,6 +554,7 @@ def atualizar_produto(
     gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
         GERENCIADOR_AUTORIZACOES
     ),
+    catalogo_produtos: CatalogoProdutosMemoria | None = None,
 ):
     comando, erros = preparar_comando_edicao_produto(
         produto_id,
@@ -564,6 +575,7 @@ def atualizar_produto(
         caminho_banco,
         capacidade=capacidade,
         gerenciador_autorizacoes=gerenciador_autorizacoes,
+        catalogo_produtos=catalogo_produtos,
     ), []
 
 
@@ -576,9 +588,11 @@ def executar_edicao_produto(
     gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
         GERENCIADOR_AUTORIZACOES
     ),
+    catalogo_produtos: CatalogoProdutosMemoria | None = None,
 ) -> Produto:
     if not isinstance(comando, ComandoEdicaoProduto):
         raise TypeError("O comando de edição de produto é inválido.")
+    _validar_catalogo_produtos(catalogo_produtos, caminho_banco)
     _autorizar_comando_produto(
         comando,
         sessao_solicitante,
@@ -586,7 +600,30 @@ def executar_edicao_produto(
         caminho_banco,
         gerenciador_autorizacoes,
     )
-    return editar_produto_comando_repository(comando, caminho_banco)
+    produto = editar_produto_comando_repository(comando, caminho_banco)
+    _sincronizar_catalogo_produtos(catalogo_produtos, caminho_banco)
+    return produto
+
+
+def _validar_catalogo_produtos(
+    catalogo_produtos: CatalogoProdutosMemoria | None,
+    caminho_banco=None,
+) -> None:
+    if catalogo_produtos is not None and not isinstance(
+        catalogo_produtos,
+        CatalogoProdutosMemoria,
+    ):
+        raise TypeError("O catálogo em memória informado é inválido.")
+    if catalogo_produtos is not None and caminho_banco is not None:
+        catalogo_produtos.vincular_ou_validar_banco(caminho_banco)
+
+
+def _sincronizar_catalogo_produtos(
+    catalogo_produtos: CatalogoProdutosMemoria | None,
+    caminho_banco,
+) -> None:
+    if catalogo_produtos is not None:
+        catalogo_produtos.atualizar_apos_mutacao(caminho_banco)
 
 
 def _categoria_aprovada(categoria_id, caminho_banco):
@@ -648,3 +685,23 @@ def consultar_produto_por_codigo(
         return None, ["Produto não encontrado."]
 
     return produto_buscado, []
+
+
+def consultar_produto_no_catalogo(
+    codigo,
+    catalogo_produtos: CatalogoProdutosMemoria,
+):
+    """Consulta explicitamente o snapshot usando as mesmas regras de código."""
+    _validar_catalogo_produtos(catalogo_produtos)
+    if catalogo_produtos is None:
+        raise TypeError("O catálogo em memória é obrigatório para a consulta.")
+
+    codigo_limpo = limpar_codigo(codigo)
+    erros_codigo = validar_codigo(codigo_limpo)
+    if erros_codigo:
+        return None, erros_codigo
+
+    produto = catalogo_produtos.consultar_produto(codigo_limpo)
+    if produto is None:
+        return None, ["Produto não encontrado."]
+    return produto, []

@@ -87,6 +87,21 @@ operadores, IDs de venda ou credenciais. A coleta possui limites de tamanho e
 quantidade, e logs ausentes ou corrompidos são declarados sem bloquear vendas.
 Por segurança, a sessão administrativa é revalidada no momento da exportação.
 
+## Catálogo essencial em memória
+
+Após autenticar a operação, a aplicação prepara um snapshot imutável dos dados
+essenciais de produtos. O SQLite continua sendo a fonte oficial; alterações de
+produto recarregam todo o snapshot e falhas o tornam indisponível, sem reutilizar
+silenciosamente dados antigos.
+
+Cada instância fica vinculada a um único arquivo SQLite. Representações
+equivalentes do mesmo caminho são aceitas, mas outro banco é recusado sem expor
+seu caminho nem substituir o snapshot já carregado.
+
+O T52 fornece apenas a base de leitura controlada. O fluxo normal continua no
+SQLite e ainda não existe liberação automática de operação degradada, fechamento
+ou cancelamento sem banco; essas decisões pertencem aos T53 e T54.
+
 ## Testes
 
 ```powershell

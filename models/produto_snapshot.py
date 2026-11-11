@@ -1,6 +1,13 @@
 from dataclasses import dataclass
+from typing import Protocol
 
-from models.produto import Produto
+
+class ProdutoParaSnapshot(Protocol):
+    id: int | None
+    codigo: str
+    nome: str
+    forma_venda: str
+    preco_venda_centavos: int
 
 
 @dataclass(frozen=True)
@@ -12,7 +19,7 @@ class ProdutoSnapshot:
     preco_referencia_centavos: int
 
 
-def criar_snapshot_produto(produto: Produto) -> ProdutoSnapshot:
+def criar_snapshot_produto(produto: ProdutoParaSnapshot) -> ProdutoSnapshot:
     """Copia os dados comerciais atuais do produto para um valor imutável."""
     return ProdutoSnapshot(
         produto_id=produto.id,

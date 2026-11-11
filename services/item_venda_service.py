@@ -3,12 +3,14 @@ from decimal import Decimal, ROUND_HALF_UP
 from models.item_venda import ItemVenda
 from models.produto import Produto
 from models.produto_snapshot import criar_snapshot_produto
+from services.catalogo_memoria_service import ProdutoCatalogo
 from services.estimativa_peso import estimar_peso
 from services.estimativa_unidades import estimar_unidades
 from services.produto_etiqueta import ProdutoEtiqueta
 
 
 CENTAVO_INTEIRO = Decimal("1")
+ProdutoLeitura = Produto | ProdutoCatalogo
 
 
 def criar_item_diversos(valor_centavos: int) -> ItemVenda:
@@ -31,7 +33,7 @@ def criar_item_diversos(valor_centavos: int) -> ItemVenda:
 
 
 def criar_item_manual_unidade(
-    produto: Produto,
+    produto: ProdutoLeitura,
     quantidade: Decimal,
 ) -> ItemVenda:
     """Cria um item manual por unidade com quantidade informada."""
@@ -50,7 +52,7 @@ def criar_item_manual_unidade(
 
 
 def criar_item_manual_peso_por_quantidade(
-    produto: Produto,
+    produto: ProdutoLeitura,
     quantidade: Decimal,
 ) -> ItemVenda:
     """Cria item de PESO usando os quilogramas como informação principal."""
@@ -72,7 +74,7 @@ def criar_item_manual_peso_por_quantidade(
 
 
 def criar_item_manual_peso_por_valor(
-    produto: Produto,
+    produto: ProdutoLeitura,
     subtotal_centavos: int,
 ) -> ItemVenda:
     """Cria item de PESO preservando o subtotal como informação principal."""
@@ -104,12 +106,14 @@ def criar_item_manual_peso_por_valor(
 
 
 def _validar_produto_manual(
-    produto: Produto,
+    produto: ProdutoLeitura,
     forma_venda: str,
     descricao_preco: str,
 ) -> None:
-    if not isinstance(produto, Produto):
-        raise TypeError("O produto deve ser uma instância de Produto.")
+    if not isinstance(produto, (Produto, ProdutoCatalogo)):
+        raise TypeError(
+            "O produto deve ser uma instância de Produto ou entrada de catálogo."
+        )
 
     if produto.ativo is not True:
         raise ValueError("O produto deve estar ativo.")
@@ -153,7 +157,7 @@ def _arredondar_centavos(valor_centavos: Decimal) -> int:
 
 
 def _criar_item_manual(
-    produto: Produto,
+    produto: ProdutoLeitura,
     quantidade: Decimal,
     subtotal_centavos: int,
     origem_quantidade: str,

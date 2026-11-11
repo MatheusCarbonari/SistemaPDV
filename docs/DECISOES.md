@@ -197,6 +197,25 @@
   instalado handler
   global de mensagens Qt, pois isso seria invasivo e não prova cobertura segura
   de exceções comerciais já tratadas.
+- **DEC-046** — O T52 mantém, por processo, um snapshot imutável do catálogo
+  essencial com ID, código, nome, forma de venda, preço em centavos e situação.
+  A carga usa uma única listagem SQLite de produtos ativos e inativos e só é
+  publicada após validação integral. A janela tenta a carga após autenticação;
+  cadastro, edição e mudança de situação provocam recarga completa. Antes da
+  recarga o snapshot é invalidado, e qualquer falha mantém estado explícito
+  `INDISPONIVEL`, sem conservar silenciosamente uma versão antiga. O acesso
+  degradado é uma API explícita, não um fallback automático. O T52 não autoriza
+  fechamento, cancelamento ou persistência alternativa sem SQLite; estado
+  operacional e protocolo de contingência continuam nos T53 e T54.
+- **DEC-047** — Cada instância do catálogo do T52 é vinculada ao primeiro banco
+  informado. A identidade é privada, baseada em caminho absoluto resolvido e
+  normalizado, com confirmação por identidade do arquivo quando disponível;
+  nenhum caminho entra no estado público, interface ou logs. Recarga,
+  atualização ou mutação integrada com outro banco é rejeitada antes de leitura,
+  autorização ou gravação, preservando snapshot e estado anteriores. Caminhos
+  equivalentes para o mesmo arquivo são aceitos. Chamadas externas aos serviços
+  de produto que omitam o catálogo continuam válidas, mas não oferecem
+  sincronização automática; o PDV integrado sempre fornece a instância vinculada.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

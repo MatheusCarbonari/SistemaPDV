@@ -209,6 +209,36 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   ser revalidada, a exportação é recusada; essa é uma limitação deliberada de
   segurança.
 
+## Catálogo essencial em memória (T52)
+
+- `services/catalogo_memoria_service.py` mantém um snapshot local por janela,
+  sem persistência adicional e sem credenciais ou dados de venda.
+- Cada entrada é imutável e contém somente ID, código, nome, forma de venda,
+  preço em centavos e situação. O mapa interno não é entregue à interface.
+- A origem é uma única listagem consistente do SQLite, incluindo ativos e
+  inativos. A construção ocorre fora do estado publicado e a troca do snapshot
+  acontece integralmente sob bloqueio; carga vazia é válida, carga parcial não.
+- A carga inicial ocorre depois da autenticação, durante a construção da janela.
+  Cadastro, edição de código/preço e ativação/desativação recarregam o conjunto
+  completo. A atualização invalida primeiro o snapshot; se a releitura falhar,
+  o estado permanece `INDISPONIVEL` e nenhuma versão antiga é consultável.
+- Consultas degradadas exigem chamada explícita ao serviço. O fluxo normal ainda
+  consulta SQLite e não alterna silenciosamente para o snapshot. A entrada
+  imutável é aceita pelos contratos existentes de etiqueta, estimativa e item,
+  mantendo o valor total da etiqueta como subtotal oficial.
+- Não há gravação no catálogo, fila de venda, fechamento ou cancelamento sem
+  SQLite. Exibição do modo degradado pertence ao T53 e liberação/protocolo
+  operacional pertencem ao T54.
+- Cada instância fica vinculada internamente a um único arquivo SQLite. A
+  comparação resolve e normaliza caminhos e, quando possível, confirma a
+  identidade do arquivo, aceitando formas relativas/absolutas equivalentes.
+  Uma origem diferente é recusada antes de ler, invalidar ou gravar; o caminho
+  não é exposto no estado público, na interface ou em logs.
+- Os fluxos integrados de cadastro, edição e situação validam a origem antes da
+  autorização/transação e recarregam depois do sucesso. Chamadas externas que
+  não recebem `catalogo_produtos` não sincronizam snapshots automaticamente;
+  essa limitação evita um registro global ou ampliação arquitetural no T52.
+
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.

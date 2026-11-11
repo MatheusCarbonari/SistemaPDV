@@ -51,6 +51,7 @@ from services.autenticacao_service import (
     autorizar_sessao,
     encerrar_sessao,
 )
+from services.catalogo_memoria_service import CatalogoProdutosMemoria
 from services.item_venda_service import criar_item_de_etiqueta_com_estimativa
 from services.produto_etiqueta import associar_etiqueta_ao_produto
 from services.produto_service import consultar_produto_por_codigo
@@ -75,6 +76,7 @@ class JanelaPrincipal(QMainWindow):
         self,
         caminho_banco=CAMINHO_BANCO,
         sessao: SessaoUsuario | None = None,
+        catalogo_produtos: CatalogoProdutosMemoria | None = None,
     ) -> None:
         super().__init__()
         self.caminho_banco = caminho_banco
@@ -84,6 +86,23 @@ class JanelaPrincipal(QMainWindow):
             self.caminho_banco,
         )
         self.sessao = sessao
+        if catalogo_produtos is not None and not isinstance(
+            catalogo_produtos,
+            CatalogoProdutosMemoria,
+        ):
+            raise TypeError("O catálogo em memória informado é inválido.")
+        self.catalogo_produtos = (
+            catalogo_produtos
+            if catalogo_produtos is not None
+            else CatalogoProdutosMemoria()
+        )
+        self.catalogo_produtos.vincular_ou_validar_banco(self.caminho_banco)
+        try:
+            self.catalogo_produtos.carregar(self.caminho_banco)
+        except Exception:
+            # O estado INDISPONIVEL é mantido pelo serviço. O T52 não libera
+            # operação degradada nem deve impedir o fluxo normal com SQLite.
+            pass
         self.dialogo_atual: QDialog | None = None
         self.estado_venda = EstadoVenda(venda=VendaEmAndamento())
         self.composicao_pagamentos: PagamentosEmAndamento | None = None
@@ -529,6 +548,7 @@ class JanelaPrincipal(QMainWindow):
             alteracao_permitida=self._usuario_pode_operar,
             sessao_administrativa=self.sessao,
             parent=self.paginas,
+            catalogo_produtos=self.catalogo_produtos,
         )
         self.pagina_administracao = PaginaAdministracao(
             self.sessao,
