@@ -16,6 +16,7 @@ from services.autorizacao_pontual_service import (
     OPERACAO_CANCELAR_VENDA,
     GerenciadorAutorizacoesPontuais,
 )
+from services.logging_service import registrar_evento
 
 
 FORMATO_DATA_SQLITE = "%Y-%m-%d %H:%M:%S"
@@ -123,6 +124,13 @@ def cancelar_venda(
         try:
             conexao.commit()
         except Exception as erro_commit:
+            registrar_evento(
+                "commit_cancelamento_exigiu_verificacao",
+                identificador_operacao=f"venda:{venda_id}",
+                venda_id=venda_id,
+                erro_tipo=type(erro_commit).__name__,
+                resultado="em_verificacao",
+            )
             _rollback_seguro(conexao)
             _fechar_conexao(conexao)
             conexao = None
@@ -156,6 +164,13 @@ def _reconciliar_apos_falha_commit(
             cancelamento.venda_id,
         )
     except Exception as erro_verificacao:
+        registrar_evento(
+            "resultado_cancelamento_incerto",
+            identificador_operacao=f"venda:{cancelamento.venda_id}",
+            venda_id=cancelamento.venda_id,
+            erro_tipo=type(erro_verificacao).__name__,
+            resultado="incerto",
+        )
         raise CancelamentoVendaIncertoError(
             cancelamento.venda_id,
         ) from erro_verificacao
@@ -164,11 +179,25 @@ def _reconciliar_apos_falha_commit(
             _fechar_conexao(conexao_verificacao)
 
     if estado is not None and estado[0] == "ATIVA":
+        registrar_evento(
+            "cancelamento_nao_persistido",
+            identificador_operacao=f"venda:{cancelamento.venda_id}",
+            venda_id=cancelamento.venda_id,
+            erro_tipo=type(erro_original).__name__,
+            resultado="nao_persistido",
+        )
         raise CancelamentoVendaNaoPersistidoError(
             cancelamento.venda_id,
         ) from erro_original
 
     if estado is None:
+        registrar_evento(
+            "resultado_cancelamento_incerto",
+            identificador_operacao=f"venda:{cancelamento.venda_id}",
+            venda_id=cancelamento.venda_id,
+            erro_tipo=type(erro_original).__name__,
+            resultado="incerto",
+        )
         raise CancelamentoVendaIncertoError(
             cancelamento.venda_id,
         ) from erro_original
@@ -180,6 +209,13 @@ def _reconciliar_apos_falha_commit(
     )
     # Mesmo metadados iguais não identificam a tentativa sem um UUID
     # persistente. A leitura comprova o estado comercial, não sua autoria.
+    registrar_evento(
+        "resultado_cancelamento_incerto",
+        identificador_operacao=f"venda:{cancelamento.venda_id}",
+        venda_id=cancelamento.venda_id,
+        erro_tipo=type(erro_original).__name__,
+        resultado="incerto",
+    )
     raise CancelamentoVendaIncertoError(
         cancelamento.venda_id,
         estado_observado=estado[0],

@@ -16,6 +16,11 @@ from services.inicializacao_banco_service import (
     InicializacaoBancoError,
     preparar_banco_para_operacao,
 )
+from services.logging_service import (
+    configurar_logging,
+    instalar_tratamento_erros_nao_tratados,
+    registrar_evento,
+)
 
 
 class PrimeiroAcessoNecessarioError(RuntimeError):
@@ -55,20 +60,43 @@ def executar_aplicacao(
     caminho_banco=CAMINHO_BANCO,
 ) -> int:
     """Exibe a janela principal e inicia o event loop do Qt."""
+    configurar_logging()
+    instalar_tratamento_erros_nao_tratados()
+    registrar_evento(
+        "inicializacao_iniciada",
+    )
     aplicacao = obter_aplicacao(argumentos)
     try:
-        preparar_banco_para_operacao(caminho_banco)
+        resultado_banco = preparar_banco_para_operacao(caminho_banco)
     except InicializacaoBancoError as erro:
+        registrar_evento(
+            "preparacao_banco_falhou",
+            erro_tipo=type(erro).__name__,
+            resultado="bloqueado",
+        )
         QMessageBox.critical(
             None,
             "Falha ao iniciar o Sistema-PDV",
             str(erro),
         )
         return 1
+    registrar_evento(
+        "preparacao_banco_concluida",
+        banco_novo=resultado_banco.banco_novo,
+        versao_inicial=resultado_banco.versao_inicial,
+        versao_final=resultado_banco.versao_final,
+        backup_criado=resultado_banco.caminho_backup is not None,
+        resultado="sucesso",
+    )
 
     try:
         estado = obter_estado_primeiro_acesso(caminho_banco)
-    except EstadoIdentidadeInconsistenteError:
+    except EstadoIdentidadeInconsistenteError as erro:
+        registrar_evento(
+            "identidade_inconsistente",
+            erro_tipo=type(erro).__name__,
+            resultado="bloqueado",
+        )
         QMessageBox.critical(
             None,
             "Configuração de identidade inconsistente",
@@ -76,7 +104,12 @@ def executar_aplicacao(
             "foi bloqueada e o primeiro acesso não pode ser recriado.",
         )
         return 1
-    except Exception:
+    except Exception as erro:
+        registrar_evento(
+            "verificacao_identidade_falhou",
+            erro_tipo=type(erro).__name__,
+            resultado="bloqueado",
+        )
         QMessageBox.critical(
             None,
             "Falha ao verificar identidade",
@@ -88,12 +121,20 @@ def executar_aplicacao(
     if estado == "NAO_CONFIGURADO":
         dialogo = DialogoPrimeiroAcesso(caminho_banco)
         if dialogo.exec() != QDialog.DialogCode.Accepted:
+            registrar_evento(
+                "primeiro_acesso_cancelado",
+                codigo_saida=1,
+            )
             return 1
         try:
             estado = obter_estado_primeiro_acesso(caminho_banco)
         except EstadoIdentidadeInconsistenteError:
             estado = "INCONSISTENTE"
         if estado != "CONFIGURADO":
+            registrar_evento(
+                "primeiro_acesso_incompleto",
+                resultado="bloqueado",
+            )
             QMessageBox.critical(
                 None,
                 "Configuração inicial incompleta",
@@ -101,6 +142,11 @@ def executar_aplicacao(
                 "A operação continuará bloqueada.",
             )
             return 1
+
+        registrar_evento(
+            "primeiro_acesso_concluido",
+            resultado="sucesso",
+        )
 
         QMessageBox.information(
             None,
@@ -111,8 +157,16 @@ def executar_aplicacao(
 
     dialogo_login = DialogoLogin(caminho_banco)
     if dialogo_login.exec() != QDialog.DialogCode.Accepted:
+        registrar_evento(
+            "inicializacao_cancelada",
+            codigo_saida=0,
+        )
         return 0
     if dialogo_login.sessao is None:
+        registrar_evento(
+            "sessao_ausente_apos_login",
+            resultado="bloqueado",
+        )
         QMessageBox.critical(
             None,
             "Falha ao iniciar sessão",
@@ -126,7 +180,12 @@ def executar_aplicacao(
             caminho_banco,
             dialogo_login.sessao,
         )
-    except Exception:
+    except Exception as erro:
+        registrar_evento(
+            "abertura_operacao_falhou",
+            erro_tipo=type(erro).__name__,
+            resultado="bloqueado",
+        )
         encerrar_sessao(dialogo_login.sessao)
         QMessageBox.critical(
             None,
@@ -136,4 +195,13 @@ def executar_aplicacao(
         return 1
 
     janela.show()
-    return aplicacao.exec()
+    registrar_evento(
+        "operacao_iniciada",
+        resultado="sucesso",
+    )
+    codigo_saida = aplicacao.exec()
+    registrar_evento(
+        "aplicacao_encerrada",
+        codigo_saida=codigo_saida,
+    )
+    return codigo_saida

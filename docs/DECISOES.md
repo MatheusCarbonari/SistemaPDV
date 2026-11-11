@@ -162,6 +162,16 @@
   próprio. Vendas anteriores conservam seus snapshots e alteração exclusiva do
   código não produz evento de preço. A interface alerta sobre a atualização da
   balança e o risco de etiquetas antigas somente quando o código muda.
+- **DEC-043** — O T49 usa `logging` da biblioteca padrão e registros JSON por
+  linha em arquivo local rotativo. O destino padrão é
+  `%LOCALAPPDATA%\Sistema-PDV\logs` no Windows e pode ser substituído por
+  `SISTEMA_PDV_LOG_DIR`; isso não altera o caminho do SQLite. Cada arquivo tem
+  até 5 MiB e são conservados no máximo cinco arquivos anteriores. Eventos
+  usam esquema fechado e campos explicitamente permitidos; senhas, hashes,
+  salts, códigos de recuperação, credenciais, tokens, capacidades, SQL e
+  objetos comerciais não são serializados. Mascaramento textual é apenas
+  defesa adicional. Falha ao criar, rotacionar ou escrever o log não altera o
+  resultado comercial nem substitui as mensagens existentes da interface.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

@@ -11,6 +11,7 @@ from repositories.venda_repository import (
     venda_persistida_compativel,
 )
 from services.confirmacao_venda_service import validar_confirmacao_venda
+from services.logging_service import registrar_evento
 
 
 class IdentificadorTentativaInvalidoError(ValueError):
@@ -62,8 +63,13 @@ def persistir_venda_confirmada(
         venda_id = inserir_venda_confirmada(conexao, venda_confirmada)
         conexao.commit()
         return venda_id
-    except Exception:
+    except Exception as erro:
         conexao.rollback()
+        registrar_evento(
+            "persistencia_venda_falhou",
+            erro_tipo=type(erro).__name__,
+            resultado="falha",
+        )
         raise
     finally:
         conexao.close()
@@ -120,6 +126,12 @@ def persistir_venda_confirmada_idempotente(
         try:
             conexao.commit()
         except Exception as erro:
+            registrar_evento(
+                "commit_venda_exigiu_verificacao",
+                identificador_operacao=identificador,
+                erro_tipo=type(erro).__name__,
+                resultado="em_verificacao",
+            )
             _rollback_seguro(conexao)
             _fechar_conexao(conexao)
             conexao = None
@@ -204,6 +216,12 @@ def _verificar_apos_falha(
     except TentativaFechamentoIncompativelError:
         raise
     except Exception as erro_verificacao:
+        registrar_evento(
+            "resultado_fechamento_incerto",
+            identificador_operacao=identificador_tentativa,
+            erro_tipo=type(erro_verificacao).__name__,
+            resultado="incerto",
+        )
         raise CommitVendaIncertoError(
             identificador_tentativa
         ) from erro_verificacao
@@ -212,6 +230,12 @@ def _verificar_apos_falha(
             _fechar_conexao(conexao_verificacao)
 
     if venda_id is None:
+        registrar_evento(
+            "venda_nao_persistida_apos_falha",
+            identificador_operacao=identificador_tentativa,
+            erro_tipo=type(erro_original).__name__,
+            resultado="nao_persistido",
+        )
         raise erro_original
 
     return resultado

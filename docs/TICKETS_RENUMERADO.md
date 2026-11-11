@@ -690,6 +690,23 @@ A correção foi validada com 1078 testes automatizados.
 **Origem:** backlog original T38.
 **Entrega verificável:** Registros locais, rotação e mensagens de erro; sem segredos.
 **Conceito a estudar:** Observabilidade.
+**Status:** concluído. O mecanismo central usa `logging` padrão, JSON por
+linha, diretório local configurável, rotação de 5 MiB e retenção de cinco
+arquivos anteriores. Inicialização, preparação do banco, falhas de persistência,
+resultados incertos de fechamento e cancelamento e erros não tratados possuem
+eventos com esquema fechado. Senhas, hashes, salts, códigos de recuperação,
+credenciais, tokens, capacidades, SQL e objetos comerciais não são
+serializados. Falha do logging não altera operações nem mensagens existentes.
+O ticket foi validado com 8 testes específicos e a suíte completa de 1.086
+testes. T50 e T51 permanecem pendentes.
+**Revisão de segurança complementar:** implementação preparada para revisão
+independente. O contrato de eventos, componentes, níveis, mensagens e campos foi
+centralizado; mensagens livres e chamadas não catalogadas são neutralizadas;
+identificadores e campos técnicos são validados por formato; e
+`backup_count=0` passou a ser recusado. A correção foi validada com 25 testes
+específicos, 73 regressões de inicialização, vendas e cancelamentos e a suíte
+completa de 1.103 testes. Esses resultados não substituem a revisão independente
+nem representam sua aprovação definitiva. T50 não foi iniciado.
 
 ### T50 — Informações de versão
 **Origem:** backlog original T39.
@@ -700,6 +717,10 @@ A correção foi validada com 1078 testes automatizados.
 **Origem:** backlog original T40.
 **Entrega verificável:** Pacote técnico limitado, com revisão de dados sensíveis.
 **Conceito a estudar:** Suporte.
+**Pendências vinculadas do T49:** disponibilizar uma forma segura de identificar
+falha ou indisponibilidade do logging sem interromper a operação comercial;
+avaliar captura complementar de exceções em threads e pontos específicos do Qt;
+definir como comunicar e exportar essas informações sem expor dados sensíveis.
 
 ### T52 — Catálogo em memória
 **Origem:** backlog original T41.
@@ -752,6 +773,11 @@ de forma persistente a tentativa que produziu uma venda `CANCELADA`.
 **Pendência vinculada do Marco 2:** definir e impor instância única da aplicação
 ou introduzir coordenação entre processos para sessões, capacidades e bloqueios
 de credencial antes da liberação operacional.
+**Pendências vinculadas do T49:** considerar que `RotatingFileHandler` não
+coordena rotação entre processos; impedir que duas instâncias escrevam ou
+rotacionem simultaneamente o mesmo conjunto de logs sem proteção adequada; e
+avaliar diretórios distintos para produção e homologação quando esses perfis
+forem implementados.
 
 ### T61 — Teste de performance
 **Origem:** backlog original T50.
@@ -817,7 +843,7 @@ manuais, manter consistência com o saldo real.
 
 - O Marco 2 está formalmente concluído. COMP-M2-01 a 06, Visuais 01 a 05 e
   Correções Finais 01/02 estão implementados e aprovados no escopo do marco.
-- **T49** é o próximo ticket numerado. As limitações de contingência, backups,
+- **T49** está concluído e **T50** é o próximo ticket numerado. As limitações de contingência, backups,
   restauração, empacotamento, desempenho e validação física permanecem nos
   T54–T62 e não devem ser
   antecipadas apenas para encerrar o marco.

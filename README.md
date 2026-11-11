@@ -53,6 +53,16 @@ python main.py
 
 No primeiro uso de um banco novo, a aplicação conduz a criação do Administrador inicial. O banco e seus backups são dados locais e não devem ser adicionados ao Git.
 
+## Logs locais
+
+A aplicação registra eventos técnicos em formato JSON Lines. No Windows, o
+destino padrão é `%LOCALAPPDATA%\Sistema-PDV\logs\sistema-pdv.log`. Para usar
+outro diretório, defina `SISTEMA_PDV_LOG_DIR` antes de iniciar o programa. Os
+arquivos possuem rotação e não devem conter senhas, hashes, códigos de
+recuperação, credenciais ou capacidades de autorização. Consulte a
+[arquitetura-alvo](docs/ARQUITETURA_ALVO.md#logs-locais-t49) para a política
+completa.
+
 ## Testes
 
 ```powershell

@@ -134,6 +134,27 @@ mantém a operação bloqueada.
 ## Distribuição
 Binário Windows empacotado, arquivos de dados fora da instalação; instalador atualiza só programa e executa migrador quando necessário; backup válido e migração segura, sem retrocesso automático de banco em falha. A inicialização operacional recusa versões futuras e, para banco existente desatualizado, só migra depois de criar e verificar uma cópia única em `backups/pre_migracao` ao lado do arquivo SQLite. Compatibilidade/licença PySide6 deve ser avaliada em entrega comercial.
 
+## Logs locais (T49)
+
+- `services/logging_service.py` centraliza o `logging` da aplicação e grava
+  JSON por linha em `sistema-pdv.log`.
+- No Windows, o diretório padrão é
+  `%LOCALAPPDATA%\Sistema-PDV\logs`. A variável `SISTEMA_PDV_LOG_DIR` permite
+  definir outro destino, inclusive um diretório temporário nos testes.
+- A rotação ocorre ao atingir 5 MiB e conserva cinco arquivos anteriores. O
+  arquivo atual e os rotacionados podem ser consultados com editor de texto ou
+  ferramenta que leia JSON Lines.
+- São registrados inicialização e encerramento, preparação técnica do banco,
+  falhas relevantes de persistência, resultados incertos de fechamento e
+  cancelamento e erros não tratados que chegam ao runtime Python.
+- O esquema não aceita senhas, hashes, salts, códigos de recuperação, tokens,
+  capacidades, credenciais, SQL, objetos de sessão ou comandos comerciais.
+  Exceções são identificadas somente pelo tipo, sem mensagem ou argumentos.
+- Logging é auxiliar: falha de diretório ou escrita não altera transações,
+  resultados comerciais ou os avisos apresentados ao operador.
+- T49 não inclui metadados de versão nem gera pacote de suporte. Essas
+  integrações permanecem, respectivamente, nos T50 e T51.
+
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.
