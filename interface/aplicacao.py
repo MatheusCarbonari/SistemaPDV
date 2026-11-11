@@ -21,10 +21,24 @@ from services.logging_service import (
     instalar_tratamento_erros_nao_tratados,
     registrar_evento,
 )
+from services.version_service import (
+    IdentificacaoAplicativo,
+    obter_identificacao_aplicativo,
+)
 
 
 class PrimeiroAcessoNecessarioError(RuntimeError):
     pass
+
+
+def registrar_identificacao_aplicativo() -> IdentificacaoAplicativo:
+    """Registra os metadados técnicos embutidos sem consultar Git ou rede."""
+    identificacao = obter_identificacao_aplicativo()
+    registrar_evento(
+        "aplicacao_identificada",
+        **identificacao.dados_diagnostico(),
+    )
+    return identificacao
 
 
 def obter_aplicacao(argumentos: Sequence[str] | None = None) -> QApplication:
@@ -65,6 +79,7 @@ def executar_aplicacao(
     registrar_evento(
         "inicializacao_iniciada",
     )
+    registrar_identificacao_aplicativo()
     aplicacao = obter_aplicacao(argumentos)
     try:
         resultado_banco = preparar_banco_para_operacao(caminho_banco)

@@ -25,11 +25,15 @@ _CAMPOS_PERMITIDOS = frozenset(
     {
         "backup_criado",
         "banco_novo",
+        "build_id",
         "codigo_saida",
+        "commit_git",
         "erro_tipo",
+        "nome_aplicativo",
         "resultado",
         "status",
         "venda_id",
+        "versao_aplicativo",
         "versao_final",
         "versao_inicial",
     }
@@ -38,6 +42,13 @@ _RESULTADOS_PERMITIDOS = frozenset(
     {"bloqueado", "em_verificacao", "falha", "incerto", "nao_persistido", "sucesso"}
 )
 _NOME_TECNICO_SEGURO = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]{0,127}$")
+_VERSAO_APLICATIVO_SEGURA = re.compile(
+    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
+_BUILD_ID_SEGURO = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_COMMIT_GIT_SEGURO = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
 _CHAVES_SENSIVEIS = re.compile(
     r"senha|password|hash|salt|token|capacidade|credencial|recupera(?:cao|ção)",
     re.IGNORECASE,
@@ -69,6 +80,14 @@ _EVENTOS_COM_VENDA_ID = frozenset(
 
 # evento: (componente, nivel, mensagem tecnica, campos admitidos)
 _CATALOGO_EVENTOS: dict[str, tuple[str, int, str, frozenset[str]]] = {
+    "aplicacao_identificada": (
+        "aplicacao",
+        logging.INFO,
+        "A versão e a origem do build foram identificadas.",
+        frozenset(
+            {"build_id", "commit_git", "nome_aplicativo", "versao_aplicativo"}
+        ),
+    ),
     "inicializacao_iniciada": (
         "aplicacao",
         logging.INFO,
@@ -436,6 +455,20 @@ def _valor_campo_valido(chave: str, valor: Any) -> bool:
         return isinstance(valor, str) and bool(_NOME_TECNICO_SEGURO.fullmatch(valor))
     if chave == "resultado":
         return isinstance(valor, str) and valor in _RESULTADOS_PERMITIDOS
+    if chave == "nome_aplicativo":
+        return valor == "Sistema-PDV"
+    if chave == "versao_aplicativo":
+        return isinstance(valor, str) and bool(
+            _VERSAO_APLICATIVO_SEGURA.fullmatch(valor)
+        )
+    if chave == "build_id":
+        return valor == "desconhecido" or (
+            isinstance(valor, str) and bool(_BUILD_ID_SEGURO.fullmatch(valor))
+        )
+    if chave == "commit_git":
+        return valor == "desconhecido" or (
+            isinstance(valor, str) and bool(_COMMIT_GIT_SEGURO.fullmatch(valor))
+        )
     if chave == "status":
         return isinstance(valor, str) and bool(_NOME_TECNICO_SEGURO.fullmatch(valor))
     return False

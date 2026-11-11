@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
@@ -54,6 +55,10 @@ from services.item_venda_service import criar_item_de_etiqueta_com_estimativa
 from services.produto_etiqueta import associar_etiqueta_ao_produto
 from services.produto_service import consultar_produto_por_codigo
 from services.venda_em_andamento_service import calcular_total
+from services.version_service import (
+    formatar_informacoes_sobre,
+    obter_identificacao_aplicativo,
+)
 
 
 class JanelaPrincipal(QMainWindow):
@@ -193,6 +198,8 @@ class JanelaPrincipal(QMainWindow):
         self.rotulo_usuario.setObjectName("usuario_autenticado")
         self.botao_logout = QPushButton("Trocar operador")
         self.botao_logout.setObjectName("encerrar_sessao")
+        self.botao_sobre = QPushButton("Sobre")
+        self.botao_sobre.setObjectName("abrir_sobre")
         self.botao_codigos_recuperacao = QPushButton("Códigos de recuperação")
         self.botao_codigos_recuperacao.setObjectName(
             "abrir_codigos_recuperacao"
@@ -201,6 +208,7 @@ class JanelaPrincipal(QMainWindow):
             self.sessao.perfil == "ADMINISTRADOR"
         )
         layout_menu.addWidget(self.rotulo_usuario)
+        layout_menu.addWidget(self.botao_sobre)
         layout_menu.addWidget(self.botao_codigos_recuperacao)
         layout_menu.addWidget(self.botao_logout)
         layout_principal.addWidget(menu_superior)
@@ -540,6 +548,7 @@ class JanelaPrincipal(QMainWindow):
             self.mostrar_administracao
         )
         self.botao_logout.clicked.connect(self.solicitar_logout)
+        self.botao_sobre.clicked.connect(self.exibir_sobre)
         self.botao_codigos_recuperacao.clicked.connect(
             self.abrir_codigos_recuperacao
         )
@@ -553,6 +562,14 @@ class JanelaPrincipal(QMainWindow):
             self.verificar_fechamento_pendente
         )
         self._atualizar_venda_exibida()
+
+    def exibir_sobre(self) -> None:
+        identificacao = obter_identificacao_aplicativo()
+        QMessageBox.information(
+            self,
+            f"Sobre o {identificacao.nome}",
+            formatar_informacoes_sobre(identificacao),
+        )
 
     def showEvent(self, evento) -> None:
         super().showEvent(evento)

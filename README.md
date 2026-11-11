@@ -19,6 +19,7 @@ Sistema de ponto de venda desenvolvido para operação local em açougues. A apl
 - Autorizações pontuais de uso único para operações críticas.
 - Recuperação administrativa por códigos offline.
 - Migração versionada do SQLite com backup verificado antes da atualização.
+- Identificação offline da versão do aplicativo e da origem do build.
 
 ## Tecnologias
 
@@ -62,6 +63,18 @@ arquivos possuem rotação e não devem conter senhas, hashes, códigos de
 recuperação, credenciais ou capacidades de autorização. Consulte a
 [arquitetura-alvo](docs/ARQUITETURA_ALVO.md#logs-locais-t49) para a política
 completa.
+
+## Versão e origem do build
+
+A fonte oficial da identificação do aplicativo é
+`services/version_service.py`. A versão atual é `0.1.0` e não corresponde à
+versão do schema SQLite. A opção **Sobre** da janela principal apresenta versão,
+identificador do build e commit Git; valores ainda não incorporados aparecem
+como `desconhecido`.
+
+A inicialização não executa Git e funciona sem pasta `.git` ou internet. O
+futuro empacotamento do T59 deverá preencher build e commit em uma cópia do
+módulo antes de gerar o executável. Essa automação ainda não está implementada.
 
 ## Testes
 

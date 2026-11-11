@@ -698,7 +698,7 @@ eventos com esquema fechado. Senhas, hashes, salts, códigos de recuperação,
 credenciais, tokens, capacidades, SQL e objetos comerciais não são
 serializados. Falha do logging não altera operações nem mensagens existentes.
 O ticket foi validado com 8 testes específicos e a suíte completa de 1.086
-testes. T50 e T51 permanecem pendentes.
+testes. Na conclusão do T49, T50 e T51 permaneciam pendentes.
 **Revisão de segurança complementar:** implementação preparada para revisão
 independente. O contrato de eventos, componentes, níveis, mensagens e campos foi
 centralizado; mensagens livres e chamadas não catalogadas são neutralizadas;
@@ -706,12 +706,25 @@ identificadores e campos técnicos são validados por formato; e
 `backup_count=0` passou a ser recusado. A correção foi validada com 25 testes
 específicos, 73 regressões de inicialização, vendas e cancelamentos e a suíte
 completa de 1.103 testes. Esses resultados não substituem a revisão independente
-nem representam sua aprovação definitiva. T50 não foi iniciado.
+nem representam sua aprovação definitiva. A revisão ocorreu antes do início do
+T50.
 
 ### T50 — Informações de versão
 **Origem:** backlog original T39.
 **Entrega verificável:** Versão/commit no Sobre e diagnóstico.
 **Conceito a estudar:** Build metadata.
+**Andamento:** implementação preparada para revisão independente. Nome e versão
+oficial `0.1.0`, build opcional e commit opcional possuem fonte única offline;
+ausências são declaradas como `desconhecido`, sem consultar Git, `.git`, rede,
+SQLite ou versão do schema. A janela principal inclui Sobre compacto e a
+inicialização emite evento catalogado com campos técnicos validados. O contrato
+para o T59 preencher metadados em uma cópia de build está documentado, mas o
+empacotamento não foi implementado. O acesso programático aos mesmos quatro
+campos prepara o diagnóstico sem antecipar a exportação do T51. Testes e revisão
+independente ainda são necessários antes de considerar o ticket aprovado. A
+implementação foi validada com 36 testes específicos, 102 testes nas regressões
+selecionadas de logging, inicialização e interface, e a suíte completa de 1.114
+testes. Esses resultados não substituem a revisão independente.
 
 ### T51 — Exportação de diagnóstico
 **Origem:** backlog original T40.
@@ -843,7 +856,8 @@ manuais, manter consistência com o saldo real.
 
 - O Marco 2 está formalmente concluído. COMP-M2-01 a 06, Visuais 01 a 05 e
   Correções Finais 01/02 estão implementados e aprovados no escopo do marco.
-- **T49** está concluído e **T50** é o próximo ticket numerado. As limitações de contingência, backups,
+- **T49** está concluído e a implementação do **T50** aguarda revisão
+  independente. As limitações de contingência, backups,
   restauração, empacotamento, desempenho e validação física permanecem nos
   T54–T62 e não devem ser
   antecipadas apenas para encerrar o marco.

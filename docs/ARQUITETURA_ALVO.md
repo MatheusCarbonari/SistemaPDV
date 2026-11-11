@@ -152,8 +152,28 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   Exceções são identificadas somente pelo tipo, sem mensagem ou argumentos.
 - Logging é auxiliar: falha de diretório ou escrita não altera transações,
   resultados comerciais ou os avisos apresentados ao operador.
-- T49 não inclui metadados de versão nem gera pacote de suporte. Essas
-  integrações permanecem, respectivamente, nos T50 e T51.
+- T49 não incluía metadados de versão nem gera pacote de suporte. O T50 adiciona
+  a identificação técnica descrita abaixo; a exportação continua no T51.
+
+## Versão e origem do build (T50)
+
+- `services/version_service.py` é a fonte única do nome e da versão oficial do
+  aplicativo e dos metadados opcionais de build e commit Git.
+- A versão inicial do aplicativo é `0.1.0`; ela não deriva de
+  `database.schema.VERSAO_ESQUEMA` e não identifica a versão do banco.
+- A leitura é integralmente offline e não executa Git, não inspeciona `.git` e
+  não depende de rede, SQLite ou diretório de trabalho.
+- Metadados ausentes ou inválidos são normalizados para ausência e exibidos como
+  `desconhecido`, sem fabricar identificadores.
+- A janela principal oferece um Sobre discreto. A inicialização registra o
+  evento catalogado `aplicacao_identificada`, limitado aos quatro campos
+  técnicos validados; o mesmo objeto oferece esses dados para diagnóstico
+  futuro, sem implementar a exportação do T51.
+- No T59, o processo de build deverá preencher
+  `IDENTIFICADOR_BUILD_EMBUTIDO` e `COMMIT_GIT_EMBUTIDO` em uma cópia temporária
+  do módulo antes de empacotar. Como o módulo Python é importado normalmente,
+  seus valores serão incorporados ao executável sem exigir Git na máquina do
+  estabelecimento. O roteiro e a automação desse passo ainda não existem.
 
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,

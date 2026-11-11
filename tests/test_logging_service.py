@@ -46,6 +46,7 @@ def test_catalogo_define_nivel_componente_mensagem_e_campos(tmp_path) -> None:
 
 def test_catalogo_preserva_eventos_e_componentes_instrumentados() -> None:
     esperados = {
+        "aplicacao_identificada": "aplicacao",
         "inicializacao_iniciada": "aplicacao",
         "preparacao_banco_falhou": "banco",
         "identidade_inconsistente": "identidade",
@@ -60,6 +61,39 @@ def test_catalogo_preserva_eventos_e_componentes_instrumentados() -> None:
         evento: logging_service._CATALOGO_EVENTOS[evento][0]
         for evento in esperados
     } == esperados
+
+
+def test_evento_identificacao_aceita_somente_metadados_tecnicos_validos(
+    tmp_path,
+) -> None:
+    caminho = logging_service.configurar_logging(tmp_path)
+    logging_service.registrar_evento(
+        "aplicacao_identificada",
+        nome_aplicativo="Sistema-PDV",
+        versao_aplicativo="0.1.0",
+        build_id="windows-x64.42",
+        commit_git="abcdef1",
+    )
+    logging_service.registrar_evento(
+        "aplicacao_identificada",
+        nome_aplicativo="Aplicativo forjado",
+        versao_aplicativo="schema-10",
+        build_id="build com espaços",
+        commit_git="não-hexadecimal",
+    )
+
+    documentos = _ler_documentos(caminho)
+    assert documentos[0]["nome_aplicativo"] == "Sistema-PDV"
+    assert documentos[0]["versao_aplicativo"] == "0.1.0"
+    assert documentos[0]["build_id"] == "windows-x64.42"
+    assert documentos[0]["commit_git"] == "abcdef1"
+    assert set(documentos[1]) == {
+        "timestamp",
+        "level",
+        "component",
+        "event",
+        "message",
+    }
 
 
 def test_mensagem_arbitraria_em_evento_controlado_e_ignorada(tmp_path) -> None:

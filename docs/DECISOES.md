@@ -172,6 +172,15 @@
   objetos comerciais não são serializados. Mascaramento textual é apenas
   defesa adicional. Falha ao criar, rotacionar ou escrever o log não altera o
   resultado comercial nem substitui as mensagens existentes da interface.
+- **DEC-044** — A versão inicial oficial do aplicativo é `0.1.0` e permanece
+  independente da versão do schema SQLite. Nome, versão, identificador de build
+  e commit Git são centralizados em `services/version_service.py`; build e
+  commit ausentes são apresentados como `desconhecido`. A aplicação não consulta
+  Git, `.git`, rede ou banco para obter esses valores. O T59 deverá preencher os
+  metadados embutidos em uma cópia de build antes do empacotamento, sem alterar
+  o banco nem usar o schema como versão. O Sobre e o evento seguro de
+  inicialização consomem a mesma identificação; a exportação de pacote continua
+  pertencendo ao T51.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;
