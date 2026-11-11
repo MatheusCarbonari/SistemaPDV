@@ -1,5 +1,6 @@
 import json
 import logging
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -220,6 +221,8 @@ def test_configuracao_padrao_preserva_limites_de_rotacao(tmp_path) -> None:
     )
     assert handler.maxBytes == 5 * 1024 * 1024
     assert handler.backupCount == 5
+    assert logging_service.obter_estado_logging().status == "DISPONIVEL"
+    assert logging_service.obter_diretorio_logs_autorizado() == tmp_path
 
 
 def test_rotacao_limita_quantidade_de_arquivos(tmp_path) -> None:
@@ -257,6 +260,10 @@ def test_falha_ao_criar_log_nao_interrompe_operacao(tmp_path) -> None:
 
     assert resultado is None
     assert valor_comercial == 30
+    assert (
+        logging_service.obter_estado_logging().status
+        == "FALHA_INICIALIZACAO"
+    )
 
 
 def test_falha_de_escrita_do_handler_e_suprimida(tmp_path, monkeypatch) -> None:
@@ -272,6 +279,26 @@ def test_falha_de_escrita_do_handler_e_suprimida(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(handler, "_open", falhar_abertura)
     logging_service.registrar_evento("inicializacao_iniciada")
+    assert logging_service.obter_estado_logging().status == "FALHA_ESCRITA"
+
+
+def test_instalacao_preserva_e_estende_hooks_padrao(monkeypatch) -> None:
+    hook_sys = lambda *args: None
+    hook_thread = lambda argumentos: None
+    monkeypatch.setattr(logging_service.sys, "excepthook", hook_sys)
+    monkeypatch.setattr(logging_service.threading, "excepthook", hook_thread)
+    monkeypatch.setattr(logging_service, "_HOOK_ANTERIOR", None)
+    monkeypatch.setattr(logging_service, "_HOOK_THREAD_ANTERIOR", None)
+
+    logging_service.instalar_tratamento_erros_nao_tratados()
+
+    assert logging_service._HOOK_ANTERIOR is hook_sys
+    assert logging_service._HOOK_THREAD_ANTERIOR is hook_thread
+    assert logging_service.sys.excepthook is logging_service._tratar_erro_nao_tratado
+    assert (
+        threading.excepthook
+        is logging_service._tratar_erro_thread_nao_tratado
+    )
 
 
 def test_erro_nao_tratado_registra_somente_tipo_seguro(

@@ -3,6 +3,7 @@ from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QGroupBox,
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -23,6 +25,7 @@ from database.conexao import CAMINHO_BANCO
 from interface.dialogo_redefinicao_senha import DialogoRedefinicaoSenha
 from models.sessao_usuario import SessaoUsuario
 from repositories.usuario_repository import IdentificacaoUsuarioEmUsoError
+from services.diagnostico_service import exportar_diagnostico
 from services.usuario_service import (
     alterar_situacao_conta_caixa,
     criar_conta_caixa,
@@ -66,6 +69,24 @@ class PaginaAdministracao(QWidget):
         self.rotulo_mensagem.setObjectName("mensagem_administracao")
         self.rotulo_mensagem.setWordWrap(True)
         layout.addWidget(self.rotulo_mensagem)
+
+        grupo_suporte = QGroupBox("Suporte técnico")
+        grupo_suporte.setObjectName("suporte_tecnico")
+        layout_suporte = QHBoxLayout(grupo_suporte)
+        layout_suporte.setContentsMargins(10, 14, 10, 9)
+        orientacao_suporte = QLabel(
+            "Gera um pacote local limitado, sem banco de dados ou logs brutos."
+        )
+        orientacao_suporte.setWordWrap(True)
+        self.botao_exportar_diagnostico = QPushButton("Exportar diagnóstico")
+        self.botao_exportar_diagnostico.setObjectName("exportar_diagnostico")
+        self.botao_exportar_diagnostico.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Fixed,
+        )
+        layout_suporte.addWidget(orientacao_suporte, 1)
+        layout_suporte.addWidget(self.botao_exportar_diagnostico)
+        layout.addWidget(grupo_suporte)
 
         self.grupo_operadores = QGroupBox("Operadores cadastrados")
         layout_operadores = QVBoxLayout(self.grupo_operadores)
@@ -180,7 +201,40 @@ class PaginaAdministracao(QWidget):
             self.redefinir_senha_selecionada
         )
         self.botao_cadastrar.clicked.connect(self.cadastrar_operador)
+        self.botao_exportar_diagnostico.clicked.connect(
+            self.solicitar_exportacao_diagnostico
+        )
         self._ajustar_layout_responsivo(self.width())
+
+    def solicitar_exportacao_diagnostico(self) -> None:
+        diretorio = QFileDialog.getExistingDirectory(
+            self,
+            "Selecionar destino do diagnóstico",
+            "",
+        )
+        if not diretorio:
+            return
+
+        try:
+            caminho = exportar_diagnostico(
+                diretorio,
+                self.sessao_administrativa,
+                self.caminho_banco,
+            )
+        except Exception:
+            QMessageBox.critical(
+                self,
+                "Falha ao exportar diagnóstico",
+                "Não foi possível gerar o pacote de diagnóstico. "
+                "Confirme a sessão, o destino e tente novamente.",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Diagnóstico exportado",
+            f"Pacote criado em:\n{caminho}",
+        )
 
     def resizeEvent(self, evento) -> None:
         super().resizeEvent(evento)

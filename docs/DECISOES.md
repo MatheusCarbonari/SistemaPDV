@@ -181,6 +181,22 @@
   o banco nem usar o schema como versão. O Sobre e o evento seguro de
   inicialização consomem a mesma identificação; a exportação de pacote continua
   pertencendo ao T51.
+- **DEC-045** — O T51 exporta diagnóstico local somente para Administrador com
+  sessão revalidada. O ZIP contém exclusivamente `manifesto.json` e
+  `eventos.jsonl`: identificação do T50, estado conhecido do logging, limites e
+  contadores da coleta e até 1.000 eventos reconstruídos por contrato fechado.
+  São lidos no máximo seis nomes oficiais de log e 1 MiB por arquivo; o JSONL
+  exportado também é limitado a 1 MiB. Logs são entrada não confiável: mensagem,
+  nível e componente devem coincidir com o catálogo, campos desconhecidos são
+  descartados e IDs de venda e operação não são exportados. Banco, WAL, SHM,
+  backups e arquivos arbitrários nunca são coletados. A geração usa temporário
+  no destino escolhido e publicação atômica sem sobrescrita, sem rede. O estado
+  do T49 passa a distinguir disponibilidade, falha de inicialização, falha de
+  escrita e desconhecido. Exceções não tratadas em threads Python usam hook
+  encadeado ao anterior; não será substituído `QApplication.notify()` nem
+  instalado handler
+  global de mensagens Qt, pois isso seria invasivo e não prova cobertura segura
+  de exceções comerciais já tratadas.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

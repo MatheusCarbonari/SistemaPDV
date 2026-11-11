@@ -734,6 +734,26 @@ testes. Esses resultados não substituem a revisão independente.
 falha ou indisponibilidade do logging sem interromper a operação comercial;
 avaliar captura complementar de exceções em threads e pontos específicos do Qt;
 definir como comunicar e exportar essas informações sem expor dados sensíveis.
+**Andamento:** implementação preparada para revisão independente. Administrador
+revalidado pode escolher um diretório e gerar localmente um ZIP atômico com
+`manifesto.json` e `eventos.jsonl`. O serviço lê somente os seis nomes oficiais
+do T49, aplica limites de arquivos, bytes, linhas e registros, trata cada linha
+como não confiável e reconstrói apenas eventos selecionados. Banco, WAL, SHM,
+backups, arquivos arbitrários, caminhos, operadores, `venda_id` e
+`operation_id` não entram no pacote. Logs ausentes ou corrompidos produzem
+manifesto útil com contadores, sem impedir a operação comercial. O estado do
+logging distingue disponível, falha de inicialização, falha de escrita e
+desconhecido. `threading.excepthook` foi encadeado ao mecanismo anterior; a
+captura global adicional do Qt foi recusada por risco ao ciclo de vida e segue
+como limitação documentada. Validação local: 60 testes específicos de
+diagnóstico, logging e versão; 159 regressões de inicialização, vendas,
+cancelamentos e interfaces; e suíte completa com 1.138 testes aprovados. A
+revisão independente ainda é necessária antes de considerar o ticket aprovado.
+
+**Ajuste da revisão:** valores de `event` com tipo inesperado e JSON com
+aninhamento excessivo são descartados por registro, sem bloquear os eventos
+válidos. A publicação final recusa colisões e preserva pacotes anteriores; o
+temporário continua sendo removido quando a geração ou finalização falha.
 
 ### T52 — Catálogo em memória
 **Origem:** backlog original T41.

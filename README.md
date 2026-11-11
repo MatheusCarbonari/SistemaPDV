@@ -76,6 +76,17 @@ A inicialização não executa Git e funciona sem pasta `.git` ou internet. O
 futuro empacotamento do T59 deverá preencher build e commit em uma cópia do
 módulo antes de gerar o executável. Essa automação ainda não está implementada.
 
+## Exportação de diagnóstico
+
+Na página **Administração**, um Administrador pode escolher um diretório e usar
+**Exportar diagnóstico**. A aplicação cria um ZIP local com manifesto técnico e
+eventos selecionados reconstruídos dos logs; não envia arquivos pela internet.
+
+O pacote não inclui SQLite, WAL, SHM, backups, logs brutos, caminhos locais,
+operadores, IDs de venda ou credenciais. A coleta possui limites de tamanho e
+quantidade, e logs ausentes ou corrompidos são declarados sem bloquear vendas.
+Por segurança, a sessão administrativa é revalidada no momento da exportação.
+
 ## Testes
 
 ```powershell

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
 import logging
@@ -10,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import threading
 from threading import RLock
 from types import TracebackType
 from typing import Any
@@ -20,6 +22,11 @@ NOME_ARQUIVO_LOG = "sistema-pdv.log"
 TAMANHO_MAXIMO_PADRAO = 5 * 1024 * 1024
 BACKUPS_PADRAO = 5
 VARIAVEL_DIRETORIO_LOG = "SISTEMA_PDV_LOG_DIR"
+
+LOGGING_DESCONHECIDO = "DESCONHECIDO"
+LOGGING_DISPONIVEL = "DISPONIVEL"
+LOGGING_FALHA_INICIALIZACAO = "FALHA_INICIALIZACAO"
+LOGGING_FALHA_ESCRITA = "FALHA_ESCRITA"
 
 _CAMPOS_PERMITIDOS = frozenset(
     {
@@ -222,6 +229,24 @@ _CATALOGO_EVENTOS: dict[str, tuple[str, int, str, frozenset[str]]] = {
         "A aplicação encontrou um erro não tratado.",
         frozenset({"erro_tipo"}),
     ),
+    "erro_thread_nao_tratado": (
+        "runtime",
+        logging.CRITICAL,
+        "Uma thread Python encontrou um erro não tratado.",
+        frozenset({"erro_tipo"}),
+    ),
+    "diagnostico_exportado": (
+        "diagnostico",
+        logging.INFO,
+        "O pacote de diagnóstico foi exportado.",
+        frozenset({"resultado"}),
+    ),
+    "diagnostico_exportacao_falhou": (
+        "diagnostico",
+        logging.ERROR,
+        "A exportação do diagnóstico falhou.",
+        frozenset({"erro_tipo", "resultado"}),
+    ),
 }
 _REGISTRO_NAO_CATALOGADO = (
     "logging",
@@ -236,6 +261,26 @@ _LOGGER_RAIZ.setLevel(logging.DEBUG)
 _LOGGER_RAIZ.propagate = False
 _LOGGER_RAIZ.addHandler(logging.NullHandler())
 _HOOK_ANTERIOR = None
+_HOOK_THREAD_ANTERIOR = None
+_ESTADO_LOGGING = LOGGING_DESCONHECIDO
+_DIRETORIO_LOG_ATUAL: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EstadoLogging:
+    """Estado técnico observável sem expor caminho ou conteúdo dos logs."""
+
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
+class ContratoEventoTecnico:
+    """Descrição imutável usada para validar logs tratados como não confiáveis."""
+
+    componente: str
+    nivel: str
+    mensagem: str
+    campos_admitidos: frozenset[str]
 
 
 class _FormatadorJsonSeguro(logging.Formatter):
@@ -297,6 +342,7 @@ class _RotatingFileHandlerTolerante(RotatingFileHandler):
     def handleError(self, record: logging.LogRecord) -> None:  # noqa: N802
         # O logging é auxiliar. Os canais de erro da interface e as exceções
         # comerciais conservam precedência quando o arquivo fica indisponível.
+        _marcar_falha_escrita()
         return None
 
 
@@ -320,6 +366,8 @@ def configurar_logging(
     backup_count: int = BACKUPS_PADRAO,
 ) -> Path | None:
     """Configura um único handler rotativo; falhas degradam com segurança."""
+    global _ESTADO_LOGGING, _DIRETORIO_LOG_ATUAL
+
     if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0:
         raise ValueError("O tamanho máximo do log deve ser um inteiro positivo.")
     if (
@@ -344,6 +392,7 @@ def configurar_logging(
         novo_handler.setLevel(logging.DEBUG)
         novo_handler.setFormatter(_FormatadorJsonSeguro())
     except (OSError, ValueError):
+        _atualizar_estado_logging(LOGGING_FALHA_INICIALIZACAO, None)
         return None
 
     with _BLOQUEIO:
@@ -351,6 +400,8 @@ def configurar_logging(
         _LOGGER_RAIZ.addHandler(novo_handler)
         _LOGGER_RAIZ.setLevel(logging.DEBUG)
         _LOGGER_RAIZ.propagate = False
+        _ESTADO_LOGGING = LOGGING_DISPONIVEL
+        _DIRETORIO_LOG_ATUAL = destino.resolve(strict=False)
     return caminho_log
 
 
@@ -397,18 +448,62 @@ def registrar_evento(
 
 def instalar_tratamento_erros_nao_tratados() -> None:
     """Instala uma vez o registro seguro de exceções que chegam ao Python."""
-    global _HOOK_ANTERIOR
+    global _HOOK_ANTERIOR, _HOOK_THREAD_ANTERIOR
     with _BLOQUEIO:
-        if sys.excepthook is _tratar_erro_nao_tratado:
-            return
-        _HOOK_ANTERIOR = sys.excepthook
-        sys.excepthook = _tratar_erro_nao_tratado
+        if sys.excepthook is not _tratar_erro_nao_tratado:
+            _HOOK_ANTERIOR = sys.excepthook
+            sys.excepthook = _tratar_erro_nao_tratado
+        if threading.excepthook is not _tratar_erro_thread_nao_tratado:
+            _HOOK_THREAD_ANTERIOR = threading.excepthook
+            threading.excepthook = _tratar_erro_thread_nao_tratado
 
 
 def encerrar_logging() -> None:
     """Fecha handlers do projeto, permitindo flush e reconfiguração segura."""
+    global _ESTADO_LOGGING, _DIRETORIO_LOG_ATUAL
+
     with _BLOQUEIO:
         _remover_handlers_gerenciados()
+        _ESTADO_LOGGING = LOGGING_DESCONHECIDO
+        _DIRETORIO_LOG_ATUAL = None
+
+
+def obter_estado_logging() -> EstadoLogging:
+    """Retorna um snapshot seguro do estado conhecido do mecanismo de logging."""
+    with _BLOQUEIO:
+        return EstadoLogging(_ESTADO_LOGGING)
+
+
+def obter_diretorio_logs_autorizado() -> Path:
+    """Retorna somente o diretório configurado pelo T49 ou seu padrão oficial."""
+    with _BLOQUEIO:
+        if _DIRETORIO_LOG_ATUAL is not None:
+            return _DIRETORIO_LOG_ATUAL
+    return resolver_diretorio_logs().resolve(strict=False)
+
+
+def obter_contrato_evento_tecnico(
+    evento: str,
+) -> ContratoEventoTecnico | None:
+    """Expõe uma cópia somente leitura do contrato, sem permitir registrá-lo."""
+    if evento == "registro_nao_catalogado":
+        componente, nivel, mensagem = _REGISTRO_NAO_CATALOGADO
+        return ContratoEventoTecnico(
+            componente,
+            logging.getLevelName(nivel),
+            mensagem,
+            frozenset(),
+        )
+    contrato = _CATALOGO_EVENTOS.get(evento)
+    if contrato is None:
+        return None
+    componente, nivel, mensagem, campos = contrato
+    return ContratoEventoTecnico(
+        componente,
+        logging.getLevelName(nivel),
+        mensagem,
+        campos,
+    )
 
 
 def _tratar_erro_nao_tratado(
@@ -425,11 +520,45 @@ def _tratar_erro_nao_tratado(
         hook_anterior(tipo_excecao, excecao, traceback)
 
 
+def _tratar_erro_thread_nao_tratado(
+    argumentos: threading.ExceptHookArgs,
+) -> None:
+    tipo_excecao = getattr(argumentos, "exc_type", None)
+    if tipo_excecao is not SystemExit:
+        registrar_evento(
+            "erro_thread_nao_tratado",
+            erro_tipo=(
+                tipo_excecao.__name__
+                if isinstance(tipo_excecao, type)
+                else "Exception"
+            ),
+        )
+    hook_anterior = _HOOK_THREAD_ANTERIOR
+    if (
+        hook_anterior is not None
+        and hook_anterior is not _tratar_erro_thread_nao_tratado
+    ):
+        hook_anterior(argumentos)
+
+
 def _remover_handlers_gerenciados() -> None:
     for handler in tuple(_LOGGER_RAIZ.handlers):
         if getattr(handler, "_sistema_pdv_handler", False):
             _LOGGER_RAIZ.removeHandler(handler)
             handler.close()
+
+
+def _atualizar_estado_logging(status: str, diretorio: Path | None) -> None:
+    global _ESTADO_LOGGING, _DIRETORIO_LOG_ATUAL
+    with _BLOQUEIO:
+        _ESTADO_LOGGING = status
+        _DIRETORIO_LOG_ATUAL = diretorio
+
+
+def _marcar_falha_escrita() -> None:
+    global _ESTADO_LOGGING
+    with _BLOQUEIO:
+        _ESTADO_LOGGING = LOGGING_FALHA_ESCRITA
 
 
 def _sanitizar_texto(texto: str) -> str:

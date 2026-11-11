@@ -175,6 +175,40 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   seus valores serão incorporados ao executável sem exigir Git na máquina do
   estabelecimento. O roteiro e a automação desse passo ainda não existem.
 
+## Diagnóstico técnico exportável (T51)
+
+- `services/diagnostico_service.py` revalida uma sessão Administrador e gera,
+  sob solicitação explícita, um ZIP local com `manifesto.json` e
+  `eventos.jsonl`. Não há envio automático nem dependência de internet.
+- O manifesto contém versão do contrato, instante UTC, identificação do T50,
+  estado conhecido do logging e contadores/limites da coleta. Ele não contém
+  usuário, caminho local, banco ou dados comerciais.
+- O coletor não recebe caminho de origem. Ele considera somente o arquivo
+  `sistema-pdv.log` e as cinco rotações oficiais no diretório autorizado pelo
+  T49, rejeita links simbólicos e ignora qualquer outro arquivo.
+- Cada linha é tratada como não confiável. Somente eventos selecionados cujo
+  componente, nível e mensagem coincidam com o catálogo são reconstruídos;
+  campos desconhecidos, `operation_id` e `venda_id` são descartados.
+- Limites atuais: seis arquivos, 1 MiB lido por arquivo, 16 KiB por linha, 1.000
+  eventos e 1 MiB para o JSONL exportado. Truncamento e registros descartados
+  são declarados no manifesto.
+- O ZIP é escrito em arquivo temporário dentro do destino selecionado e
+  publicado por renomeação atômica no Windows, sem substituir um pacote de
+  mesmo nome. Falhas removem o temporário quando possível, são informadas sem
+  mensagem de exceção e não alteram vendas.
+- O T49 mantém em memória os estados `DESCONHECIDO`, `DISPONIVEL`,
+  `FALHA_INICIALIZACAO` e `FALHA_ESCRITA`; o diagnóstico não inventa sucesso
+  quando não há evidência.
+- `sys.excepthook` permanece encadeado e `threading.excepthook` recebe cobertura
+  equivalente, chamando o hook anterior. Não há interceptação global adicional
+  do Qt: substituir `QApplication.notify()` ou instalar handler de mensagens Qt
+  seria invasivo e poderia misturar avisos do framework com exceções comerciais
+  já tratadas.
+- A página Administração oferece a ação **Exportar diagnóstico**. Caixa não
+  recebe essa permissão. Se o banco estiver indisponível e a sessão não puder
+  ser revalidada, a exportação é recusada; essa é uma limitação deliberada de
+  segurança.
+
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.
