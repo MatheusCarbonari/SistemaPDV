@@ -32,6 +32,9 @@ from interface.dialogo_confirmacao_venda import DialogoConfirmacaoVenda
 from interface.dialogo_codigos_recuperacao import DialogoCodigosRecuperacao
 from interface.dialogo_login import DialogoLogin
 from interface.dialogo_pagamentos import DialogoPagamentos
+from interface.dialogo_retomada_contingencia import (
+    DialogoRetomadaContingencia,
+)
 from interface.formatacao import formatar_centavos
 from interface.pagina_historico import PaginaHistorico
 from interface.pagina_administracao import PaginaAdministracao
@@ -54,6 +57,12 @@ from services.autenticacao_service import (
     encerrar_sessao,
 )
 from services.catalogo_memoria_service import CatalogoProdutosMemoria
+from services.contingencia_service import (
+    RetomadaOperacionalError,
+    confirmar_retomada_operacional,
+    resumir_contingencia,
+    verificar_recuperacao_sqlite,
+)
 from services.estado_operacional_service import (
     ControladorEstadoOperacional,
     ModoOperacional,
@@ -129,7 +138,8 @@ class JanelaPrincipal(QMainWindow):
         self.confirmacao_pendente: VendaConfirmada | None = None
         self.ultimo_id_venda_persistida: int | None = None
         self._fechamento_em_processamento = False
-        self._fechamento_incerto = False
+        self._origem_fechamento_incerto = object()
+        self._fechamento_incerto_local = False
         self._processando_entrada = False
         self._ignorar_proximo_enter = False
         self._encerramento_autorizado = False
@@ -260,6 +270,17 @@ class JanelaPrincipal(QMainWindow):
         )
         self.rotulo_modo_operacional.hide()
         layout_principal.addWidget(self.rotulo_modo_operacional)
+        self.botao_verificar_retomada = QPushButton(
+            "Verificar recuperação",
+            estrutura_principal,
+        )
+        self.botao_verificar_retomada.setObjectName("verificar_retomada")
+        self.botao_verificar_retomada.setMaximumWidth(220)
+        self.botao_verificar_retomada.hide()
+        layout_principal.addWidget(
+            self.botao_verificar_retomada,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
 
         self.paginas = QStackedWidget(estrutura_principal)
         self.paginas.setObjectName("paginas_principais")
@@ -600,6 +621,9 @@ class JanelaPrincipal(QMainWindow):
         )
         self.botao_logout.clicked.connect(self.solicitar_logout)
         self.botao_sobre.clicked.connect(self.exibir_sobre)
+        self.botao_verificar_retomada.clicked.connect(
+            self.verificar_e_confirmar_retomada
+        )
         self.botao_codigos_recuperacao.clicked.connect(
             self.abrir_codigos_recuperacao
         )
@@ -983,6 +1007,11 @@ class JanelaPrincipal(QMainWindow):
         self._persistir_fechamento_pendente()
 
     def verificar_fechamento_pendente(self) -> None:
+        if self._modo_operacional() is not ModoOperacional.NORMAL:
+            self._informar_operacao_exige_modo_normal()
+            self._atualizar_venda_exibida()
+            self._restaurar_foco_entrada()
+            return
         if not self._usuario_pode_operar():
             return
         if (
@@ -993,7 +1022,6 @@ class JanelaPrincipal(QMainWindow):
         ):
             return
 
-        self._fechamento_incerto = False
         self._persistir_fechamento_pendente()
 
     def _persistir_fechamento_pendente(self) -> None:
@@ -1154,6 +1182,7 @@ class JanelaPrincipal(QMainWindow):
             sessao_valida
             and self._fechamento_incerto
             and not self._fechamento_em_processamento
+            and modo is ModoOperacional.NORMAL
         )
 
     def solicitar_logout(self) -> None:
@@ -1323,12 +1352,96 @@ class JanelaPrincipal(QMainWindow):
             )
         return ativado
 
+    def verificar_e_confirmar_retomada(self) -> None:
+        if self.dialogo_atual is not None:
+            return
+        try:
+            verificacao = verificar_recuperacao_sqlite(
+                self.caminho_banco,
+                controlador_estado=self.controlador_estado,
+                fechamento_incerto=self._fechamento_incerto,
+            )
+        except Exception:
+            self._definir_status(
+                "Não foi possível verificar a recuperação com segurança.",
+                "erro",
+            )
+            self._restaurar_foco_entrada()
+            return
+        if not verificacao.recuperacao_comprovada:
+            self._definir_status(verificacao.mensagem, "alerta")
+            QMessageBox.warning(
+                self,
+                "Retomada indisponível",
+                verificacao.mensagem,
+            )
+            self._restaurar_foco_entrada()
+            return
+
+        dialogo = DialogoRetomadaContingencia(self)
+        self.dialogo_atual = dialogo
+        resultado = dialogo.exec()
+        identificacao, senha, confirmacao = dialogo.dados_confirmacao()
+        dialogo.limpar_senha()
+        self.dialogo_atual = None
+        dialogo.deleteLater()
+        if resultado != QDialog.DialogCode.Accepted:
+            self._definir_status(
+                "Retomada cancelada. O modo restritivo foi mantido.",
+                "alerta",
+            )
+            self._restaurar_foco_entrada()
+            return
+
+        try:
+            retomada = confirmar_retomada_operacional(
+                self.caminho_banco,
+                controlador_estado=self.controlador_estado,
+                catalogo_produtos=self.catalogo_produtos,
+                identificacao_administrador=identificacao,
+                senha_administrador=senha,
+                confirmacao_explicita=confirmacao,
+                fechamento_incerto=self._fechamento_incerto,
+            )
+        except RetomadaOperacionalError as erro:
+            self._definir_status(str(erro), "erro")
+            QMessageBox.warning(
+                self,
+                "Retomada não autorizada",
+                str(erro),
+            )
+        except Exception:
+            self._definir_status(
+                "A retomada não pôde ser concluída com segurança.",
+                "erro",
+            )
+        else:
+            self._atualizar_venda_exibida()
+            self._definir_status(retomada.mensagem, "sucesso")
+        finally:
+            self._restaurar_foco_entrada()
+
     def _atualizar_aviso_modo_operacional(self) -> None:
-        modo = self._modo_operacional()
+        resumo = resumir_contingencia(
+            self.controlador_estado,
+            self.catalogo_produtos,
+            fechamento_incerto=(
+                self._fechamento_incerto
+                or self.controlador_estado.possui_fechamento_incerto()
+            ),
+        )
+        modo = resumo.modo
         if modo is ModoOperacional.NORMAL:
             self.rotulo_modo_operacional.hide()
+            self.botao_verificar_retomada.hide()
             return
-        if modo is ModoOperacional.CALCULO_DEGRADADO:
+        if resumo.fechamento_incerto:
+            texto = (
+                "FECHAMENTO INCERTO — resolva o resultado pendente antes de "
+                "solicitar a retomada; não gere uma nova tentativa."
+            )
+            cor = "#6b2528"
+        elif resumo.calculo_apenas_memoria:
             texto = (
                 "MODO DE CÁLCULO — valores e itens permanecem somente em memória; "
                 "vendas, pagamentos e alterações não serão registrados."
@@ -1345,6 +1458,7 @@ class JanelaPrincipal(QMainWindow):
             "border: 1px solid #c88a5a; padding: 8px; font-weight: 700; }"
         )
         self.rotulo_modo_operacional.show()
+        self.botao_verificar_retomada.show()
 
     def _usuario_pode_operar(
         self,
@@ -1409,6 +1523,24 @@ class JanelaPrincipal(QMainWindow):
         self.identificador_tentativa_fechamento = None
         self.confirmacao_pendente = None
         self._fechamento_incerto = False
+
+    @property
+    def _fechamento_incerto(self) -> bool:
+        return self._fechamento_incerto_local
+
+    @_fechamento_incerto.setter
+    def _fechamento_incerto(self, incerto: bool) -> None:
+        if not isinstance(incerto, bool):
+            raise TypeError("O estado do fechamento incerto deve ser booleano.")
+        self._fechamento_incerto_local = incerto
+        if incerto:
+            self.controlador_estado.registrar_fechamento_incerto(
+                self._origem_fechamento_incerto
+            )
+        else:
+            self.controlador_estado.resolver_fechamento_incerto(
+                self._origem_fechamento_incerto
+            )
 
     def _fechamento_bloqueia_operacao(self) -> bool:
         return self._fechamento_em_processamento or self._fechamento_incerto

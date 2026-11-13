@@ -436,3 +436,17 @@ def test_substituir_arquivo_no_mesmo_caminho_nao_remove_estado_conservador(
     )
     with pytest.raises(OperacaoProibidaNoModoAtualError):
         exigir_modo_normal(banco, None)
+
+
+def test_fechamentos_incertos_sao_resolvidos_por_origem() -> None:
+    controlador = ControladorEstadoOperacional()
+    primeira_janela = object()
+    segunda_janela = object()
+
+    controlador.registrar_fechamento_incerto(primeira_janela)
+    controlador.registrar_fechamento_incerto(segunda_janela)
+    controlador.resolver_fechamento_incerto(primeira_janela)
+
+    assert controlador.possui_fechamento_incerto()
+    controlador.resolver_fechamento_incerto(segunda_janela)
+    assert not controlador.possui_fechamento_incerto()

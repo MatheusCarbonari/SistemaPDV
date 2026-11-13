@@ -6,11 +6,20 @@ from PySide6.QtCore import Qt
 
 from database.conexao import conectar
 from database.schema import criar_tabelas
-from tests.helpers_identidade import criar_janela_autenticada
+from tests.helpers_identidade import (
+    SENHA_ADMIN_TESTE,
+    criar_janela_autenticada,
+)
+from interface.janela_principal import JanelaPrincipal
 from models.item_venda import ItemVenda
 from models.pagamento import Pagamento, PagamentosEmAndamento
 from models.produto_snapshot import ProdutoSnapshot
 from services.confirmacao_venda_service import confirmar_venda
+from services.contingencia_service import (
+    FechamentoIncertoBloqueiaRetomadaError,
+    confirmar_retomada_operacional,
+)
+from services.estado_operacional_service import ModoOperacional
 from services.persistencia_venda_service import CommitVendaIncertoError
 import interface.janela_principal as janela_principal_module
 
@@ -168,6 +177,106 @@ def test_commit_incerto_bloqueia_operacao_e_recupera_com_mesmo_uuid(
     assert janela.estado_venda.venda.itens == ()
     assert janela.campo_entrada.isEnabled()
     qtbot.waitUntil(janela.campo_entrada.hasFocus)
+
+
+def test_verificacao_recusada_na_degradacao_preserva_incerteza_e_uuid(
+    janela,
+    qtbot,
+    monkeypatch,
+) -> None:
+    janela.item_criado.emit(criar_item())
+    registrar_composicao(janela)
+    tentativas = []
+
+    def resultado_incerto(confirmacao, identificador, caminho, **kwargs):
+        tentativas.append(identificador)
+        raise CommitVendaIncertoError(identificador)
+
+    monkeypatch.setattr(
+        janela_principal_module.persistencia_venda_service,
+        "persistir_venda_confirmada_idempotente",
+        resultado_incerto,
+    )
+    confirmar_pela_interface(janela, qtbot)
+    identificador = janela.identificador_tentativa_fechamento
+    confirmacao = janela.confirmacao_pendente
+    assert janela._tentar_ativar_calculo_degradado(
+        sqlite3.OperationalError("database is locked")
+    )
+
+    janela.verificar_fechamento_pendente()
+
+    assert tentativas == [identificador]
+    assert janela._fechamento_incerto
+    assert janela.identificador_tentativa_fechamento == identificador
+    assert janela.confirmacao_pendente is confirmacao
+    assert not janela.botao_verificar_fechamento.isEnabled()
+    assert janela.controlador_estado.obter_estado().modo is (
+        ModoOperacional.CALCULO_DEGRADADO
+    )
+    with pytest.raises(FechamentoIncertoBloqueiaRetomadaError):
+        confirmar_retomada_operacional(
+            janela.caminho_banco,
+            controlador_estado=janela.controlador_estado,
+            catalogo_produtos=janela.catalogo_produtos,
+            identificacao_administrador="administrador",
+            senha_administrador=SENHA_ADMIN_TESTE,
+            confirmacao_explicita=True,
+            fechamento_incerto=janela._fechamento_incerto,
+        )
+    assert janela.controlador_estado.obter_estado().modo is (
+        ModoOperacional.CALCULO_DEGRADADO
+    )
+
+
+def test_fechamento_incerto_em_outra_janela_bloqueia_retomada(
+    janela,
+    qtbot,
+) -> None:
+    janela.item_criado.emit(criar_item())
+    composicao = registrar_composicao(janela)
+    janela.confirmacao_pendente = confirmar_venda(
+        janela.estado_venda.venda,
+        composicao,
+    )
+    janela.identificador_tentativa_fechamento = (
+        "dcf79ea4-78d9-42df-a369-20ad255d07b1"
+    )
+    janela._fechamento_incerto = True
+    assert janela._tentar_ativar_calculo_degradado(
+        sqlite3.OperationalError("database is locked")
+    )
+
+    segunda = JanelaPrincipal(janela.caminho_banco, janela.sessao)
+    qtbot.addWidget(segunda)
+    assert not segunda._fechamento_incerto
+
+    with pytest.raises(FechamentoIncertoBloqueiaRetomadaError):
+        confirmar_retomada_operacional(
+            segunda.caminho_banco,
+            controlador_estado=segunda.controlador_estado,
+            catalogo_produtos=segunda.catalogo_produtos,
+            identificacao_administrador="administrador",
+            senha_administrador=SENHA_ADMIN_TESTE,
+            confirmacao_explicita=True,
+            fechamento_incerto=False,
+        )
+    assert segunda.controlador_estado.obter_estado().modo is (
+        ModoOperacional.CALCULO_DEGRADADO
+    )
+
+    janela._fechamento_incerto = False
+    resultado = confirmar_retomada_operacional(
+        segunda.caminho_banco,
+        controlador_estado=segunda.controlador_estado,
+        catalogo_produtos=segunda.catalogo_produtos,
+        identificacao_administrador="administrador",
+        senha_administrador=SENHA_ADMIN_TESTE,
+        confirmacao_explicita=True,
+        fechamento_incerto=False,
+    )
+    assert resultado.codigo == "RETOMADA_CONFIRMADA"
+    assert segunda.controlador_estado.obter_estado().modo is ModoOperacional.NORMAL
 
 
 def test_bloqueia_confirmacao_reentrante_enquanto_processa(

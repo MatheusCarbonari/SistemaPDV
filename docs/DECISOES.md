@@ -216,6 +216,19 @@
   equivalentes para o mesmo arquivo são aceitos. Chamadas externas aos serviços
   de produto que omitam o catálogo continuam válidas, mas não oferecem
   sincronização automática; o PDV integrado sempre fornece a instância vinculada.
+- **DEC-048** — A retomada do modo `NORMAL` no T54 exige, de forma cumulativa,
+  verificação técnica satisfatória do SQLite recuperado, reconstrução integral
+  do catálogo T52, inexistência de fechamento incerto pendente, confirmação
+  explícita e credenciais de um Administrador revalidadas no próprio banco. A
+  sessão local preservada pelo T53 e o perfil Caixa não concedem essa autoridade.
+  A verificação isolada nunca libera o sistema automaticamente; qualquer falha
+  mantém o controlador canônico em estado restritivo. Itens calculados continuam
+  somente na memória e não são gravados pela retomada. Sem alterar o schema ou
+  criar persistência auxiliar, o T54 não recupera UUID de fechamento, carrinho ou
+  cálculos de contingência depois que o processo é encerrado. Enquanto o
+  processo estiver ativo, cada janela registra sua incerteza no controlador
+  canônico do banco; a retomada permanece bloqueada até todas as origens serem
+  resolvidas, sem compartilhar UUID, confirmação ou dados comerciais.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

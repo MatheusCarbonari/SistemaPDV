@@ -276,6 +276,33 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   estado anterior de forma fail-closed. Liberar ou reconstruir esse ciclo de
   vida com confirmação operacional pertence ao T54.
 
+## Contingência e retomada operacional (T54)
+
+- A interface conserva um aviso persistente nos modos `CALCULO_DEGRADADO` e
+  `INDISPONIVEL` e oferece uma ação explícita para verificar recuperação. Itens e
+  totais existentes permanecem em memória; a verificação ou retomada não os
+  grava, descarta nem apresenta como venda persistida.
+- A verificação técnica exige o arquivo SQLite existente, schema na versão
+  esperada, tabelas essenciais legíveis, `PRAGMA quick_check` satisfatório e
+  aquisição de `BEGIN IMMEDIATE` seguida de rollback. Ela nunca retorna o modo a
+  `NORMAL` por si só e não cria um banco ausente.
+- A confirmação repete a verificação dentro da seção crítica do controlador
+  canônico vinculado ao banco. Em seguida revalida no SQLite credenciais do perfil
+  Administrador e reconstrói integralmente o catálogo T52 antes da transição.
+  Uma sessão local preservada, um perfil Caixa ou um controlador independente não
+  concedem autoridade para liberar persistência.
+- Fechamento com resultado incerto bloqueia tanto a liberação quanto qualquer
+  falsa confirmação de normalidade. Falha de integridade, leitura, bloqueio,
+  autenticação ou reconstrução do catálogo mantém o estado restritivo. Cada
+  janela marca sua incerteza no controlador canônico compartilhado pelo banco;
+  remover uma marca não elimina as demais. UUID e confirmação continuam privados
+  da janela de origem. A ação de verificação fica desabilitada fora do modo
+  `NORMAL` e uma tentativa recusada não altera esses dados.
+- O protocolo é exclusivamente processual. Sem novo schema ou persistência
+  auxiliar, não recupera UUID de fechamento, carrinho, pagamentos nem cálculos
+  em memória após o encerramento do processo. Também não cria fila de vendas,
+  recuperação automática, backup ou restauração.
+
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.
@@ -283,8 +310,9 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   de latência no equipamento alvo.
 - Concluir nos T55–T57 backup periódico e externo, permissões dos arquivos e
   restauração assistida; o Marco 2 cobre somente o backup pré-migração.
-- Definir no T54 a recuperação do UUID de fechamento após encerramento do
-  processo e o protocolo operacional de contingência.
+- Reavaliar em ticket futuro, mediante decisão de schema/persistência, a
+  recuperação de UUID de fechamento e carrinho após encerramento do processo;
+  o T54 documenta a impossibilidade atual e permanece fail-closed.
 - Sessões, capacidades e bloqueios de credencial são locais ao processo; antes
   da produção, adotar instância única ou decidir coordenação entre processos.
 - O cancelamento não possui identificador persistente por tentativa; resultado

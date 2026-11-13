@@ -27,6 +27,10 @@ class OperacaoProibidaNoModoAtualError(RuntimeError):
     pass
 
 
+class ControladorOperacionalNaoCanonicoError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class EstadoOperacional:
     modo: ModoOperacional
@@ -40,6 +44,7 @@ class ControladorEstadoOperacional:
         self._bloqueio = RLock()
         self._estado = EstadoOperacional(ModoOperacional.NORMAL)
         self._catalogo_degradado: CatalogoProdutosMemoria | None = None
+        self._fechamentos_incertos: set[object] = set()
 
     def obter_estado(self) -> EstadoOperacional:
         with self._bloqueio:
@@ -102,6 +107,20 @@ class ControladorEstadoOperacional:
             ModoOperacional.CALCULO_DEGRADADO,
         }
 
+    def registrar_fechamento_incerto(self, origem: object) -> None:
+        """Marca incerteza processual sem expor ou persistir dados da venda."""
+        with self._bloqueio:
+            self._fechamentos_incertos.add(origem)
+
+    def resolver_fechamento_incerto(self, origem: object) -> None:
+        """Remove somente a incerteza pertencente ao fluxo que a registrou."""
+        with self._bloqueio:
+            self._fechamentos_incertos.discard(origem)
+
+    def possui_fechamento_incerto(self) -> bool:
+        with self._bloqueio:
+            return bool(self._fechamentos_incertos)
+
     def _revalidar_catalogo_sem_bloquear(self) -> None:
         if self._estado.modo is not ModoOperacional.CALCULO_DEGRADADO:
             return
@@ -115,6 +134,13 @@ class ControladorEstadoOperacional:
                 "CATALOGO_INVALIDADO_DURANTE_DEGRADACAO",
             )
             self._catalogo_degradado = None
+
+    def _retomar_modo_normal_sem_bloquear(self) -> None:
+        """Uso exclusivo do protocolo T54 após verificação protegida."""
+        if self._estado.modo is ModoOperacional.NORMAL:
+            return
+        self._estado = EstadoOperacional(ModoOperacional.NORMAL)
+        self._catalogo_degradado = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +207,25 @@ def operacao_comercial_em_modo_normal(
     with controlador_efetivo._bloqueio:
         controlador_efetivo._exigir_modo_normal_sem_bloquear()
         yield
+
+
+@contextmanager
+def recuperacao_operacional_protegida(
+    caminho_banco: str | Path,
+    controlador: ControladorEstadoOperacional,
+):
+    """Serializa a verificação e a retomada usando a autoridade canônica."""
+    caminho_resolvido, chave = _identificar_caminho_banco(caminho_banco)
+    with _BLOQUEIO_VINCULOS:
+        vinculo = _buscar_vinculo_sem_bloquear(caminho_resolvido, chave)
+    if vinculo is None or vinculo.controlador is not controlador:
+        raise ControladorOperacionalNaoCanonicoError(
+            "A retomada exige o controlador operacional vinculado ao banco."
+        )
+
+    with controlador._bloqueio:
+        controlador._revalidar_catalogo_sem_bloquear()
+        yield controlador
 
 
 def _resolver_controlador_operacional(

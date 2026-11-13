@@ -826,10 +826,24 @@ dos serviços modificados; e suíte completa com 1.182 testes aprovados.
 **Origem:** backlog original T43.
 **Entrega verificável:** Resumo, alerta, confirmação e liberação sem falsa persistência.
 **Conceito a estudar:** Recuperação operacional.
-**Pendências vinculadas do Marco 2:** recuperar ou reconciliar o UUID de
-fechamento após encerramento do processo; definir o procedimento para
-cancelamento com commit incerto, reconhecendo que o schema atual não identifica
-de forma persistente a tentativa que produziu uma venda `CANCELADA`.
+**Implementação em revisão:** o estado restritivo apresenta alerta persistente e
+uma ação explícita de verificação. A checagem confirma versão do schema,
+estrutura essencial, leituras, `PRAGMA quick_check` e aquisição de transação de
+gravação com rollback, sem realizar gravação comercial. Ela não altera o modo.
+A liberação exige nova checagem sob o controlador processual do banco,
+catálogo reconstruído, ausência de fechamento incerto, confirmação explícita e
+Administrador revalidado no SQLite recuperado. Sessão local e perfil Caixa não
+autorizam a retomada. Qualquer falha conserva o estado restritivo e os itens que
+ainda existirem em memória, sem transformá-los em venda. Fechamentos incertos
+são sinalizados por origem no controlador canônico: duas janelas do mesmo banco
+não podem divergir sobre a liberação, e a verificação recusada por modo
+restritivo preserva UUID e confirmação pendentes.
+**Limitação expressa:** sem persistência adicional ou mudança de schema, não é
+possível recuperar depois do encerramento do processo o UUID de um fechamento
+incerto, o carrinho ou cálculos feitos em contingência. Cancelamento com commit
+incerto também permanece sem identificador persistente por tentativa. Esses casos
+exigem tratamento operacional conservador e não foram transformados em fila ou
+persistência alternativa pelo T54.
 
 ### T55 — Backup SQLite local
 **Origem:** backlog original T44.
