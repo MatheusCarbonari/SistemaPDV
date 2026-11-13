@@ -23,6 +23,10 @@ from repositories.produto_repository import (
 )
 from services.autenticacao_service import autorizar_sessao
 from services.catalogo_memoria_service import CatalogoProdutosMemoria
+from services.estado_operacional_service import (
+    ControladorEstadoOperacional,
+    operacao_comercial_em_modo_normal,
+)
 from services.autorizacao_pontual_service import (
     GERENCIADOR_AUTORIZACOES,
     GerenciadorAutorizacoesPontuais,
@@ -105,27 +109,33 @@ def cadastrar_produto(
         GERENCIADOR_AUTORIZACOES
     ),
     catalogo_produtos: CatalogoProdutosMemoria | None = None,
+    controlador_estado: ControladorEstadoOperacional | None = None,
 ):
-    comando, erros = preparar_comando_cadastro_produto(
-        codigo,
-        nome,
-        categoria,
-        forma_venda,
-        preco_venda_centavos,
-        origem,
+    with operacao_comercial_em_modo_normal(
         caminho_banco,
-        categoria_id=categoria_id,
-    )
-    if erros:
-        return None, erros
-    return executar_cadastro_produto(
-        comando,
-        sessao_solicitante,
-        caminho_banco,
-        capacidade=capacidade,
-        gerenciador_autorizacoes=gerenciador_autorizacoes,
-        catalogo_produtos=catalogo_produtos,
-    ), []
+        controlador_estado,
+    ):
+        comando, erros = preparar_comando_cadastro_produto(
+            codigo,
+            nome,
+            categoria,
+            forma_venda,
+            preco_venda_centavos,
+            origem,
+            caminho_banco,
+            categoria_id=categoria_id,
+        )
+        if erros:
+            return None, erros
+        return executar_cadastro_produto(
+            comando,
+            sessao_solicitante,
+            caminho_banco,
+            capacidade=capacidade,
+            gerenciador_autorizacoes=gerenciador_autorizacoes,
+            catalogo_produtos=catalogo_produtos,
+            controlador_estado=controlador_estado,
+        ), []
 
 
 def preparar_comando_cadastro_produto(
@@ -178,20 +188,25 @@ def executar_cadastro_produto(
         GERENCIADOR_AUTORIZACOES
     ),
     catalogo_produtos: CatalogoProdutosMemoria | None = None,
+    controlador_estado: ControladorEstadoOperacional | None = None,
 ) -> Produto:
-    if not isinstance(comando, ComandoCadastroProduto):
-        raise TypeError("O comando de cadastro de produto é inválido.")
-    _validar_catalogo_produtos(catalogo_produtos, caminho_banco)
-    _autorizar_comando_produto(
-        comando,
-        sessao_solicitante,
-        capacidade,
+    with operacao_comercial_em_modo_normal(
         caminho_banco,
-        gerenciador_autorizacoes,
-    )
-    produto = cadastrar_produto_comando_repository(comando, caminho_banco)
-    _sincronizar_catalogo_produtos(catalogo_produtos, caminho_banco)
-    return produto
+        controlador_estado,
+    ):
+        if not isinstance(comando, ComandoCadastroProduto):
+            raise TypeError("O comando de cadastro de produto é inválido.")
+        _validar_catalogo_produtos(catalogo_produtos, caminho_banco)
+        _autorizar_comando_produto(
+            comando,
+            sessao_solicitante,
+            capacidade,
+            caminho_banco,
+            gerenciador_autorizacoes,
+        )
+        produto = cadastrar_produto_comando_repository(comando, caminho_banco)
+        _sincronizar_catalogo_produtos(catalogo_produtos, caminho_banco)
+        return produto
 
 
 # Prepara os filtros e solicita ao repository a listagem de produtos.
@@ -238,39 +253,44 @@ def alterar_situacao_produto(
     *,
     sessao_solicitante: SessaoUsuario,
     catalogo_produtos: CatalogoProdutosMemoria | None = None,
+    controlador_estado: ControladorEstadoOperacional | None = None,
 ):
-    _validar_catalogo_produtos(catalogo_produtos, caminho_banco)
-    autorizar_sessao(
-        sessao_solicitante,
-        ("ADMINISTRADOR",),
+    with operacao_comercial_em_modo_normal(
         caminho_banco,
-    )
-    erros = []
-
-    if (
-        not isinstance(produto_id, int)
-        or isinstance(produto_id, bool)
-        or produto_id <= 0
+        controlador_estado,
     ):
-        erros.append("O identificador do produto é inválido.")
+        _validar_catalogo_produtos(catalogo_produtos, caminho_banco)
+        autorizar_sessao(
+            sessao_solicitante,
+            ("ADMINISTRADOR",),
+            caminho_banco,
+        )
+        erros = []
 
-    if not isinstance(ativo, bool):
-        erros.append("A situação do produto é inválida.")
+        if (
+            not isinstance(produto_id, int)
+            or isinstance(produto_id, bool)
+            or produto_id <= 0
+        ):
+            erros.append("O identificador do produto é inválido.")
 
-    if erros:
-        return False, erros
+        if not isinstance(ativo, bool):
+            erros.append("A situação do produto é inválida.")
 
-    foi_atualizado = alterar_situacao_produto_repository(
-        produto_id=produto_id,
-        ativo=ativo,
-        caminho_banco=caminho_banco,
-    )
+        if erros:
+            return False, erros
 
-    if not foi_atualizado:
-        return False, ["Produto não encontrado."]
+        foi_atualizado = alterar_situacao_produto_repository(
+            produto_id=produto_id,
+            ativo=ativo,
+            caminho_banco=caminho_banco,
+        )
 
-    _sincronizar_catalogo_produtos(catalogo_produtos, caminho_banco)
-    return foi_atualizado, [] ####### devolver produto? para mostrar ao cliente.
+        if not foi_atualizado:
+            return False, ["Produto não encontrado."]
+
+        _sincronizar_catalogo_produtos(catalogo_produtos, caminho_banco)
+        return foi_atualizado, []
 
 
 # Valida se o código foi informado e contém somente números.
@@ -555,28 +575,34 @@ def atualizar_produto(
         GERENCIADOR_AUTORIZACOES
     ),
     catalogo_produtos: CatalogoProdutosMemoria | None = None,
+    controlador_estado: ControladorEstadoOperacional | None = None,
 ):
-    comando, erros = preparar_comando_edicao_produto(
-        produto_id,
-        codigo,
-        nome,
-        categoria,
-        forma_venda,
-        preco_venda_centavos,
-        origem,
+    with operacao_comercial_em_modo_normal(
         caminho_banco,
-        categoria_id=categoria_id,
-    )
-    if erros:
-        return None, erros
-    return executar_edicao_produto(
-        comando,
-        sessao_solicitante,
-        caminho_banco,
-        capacidade=capacidade,
-        gerenciador_autorizacoes=gerenciador_autorizacoes,
-        catalogo_produtos=catalogo_produtos,
-    ), []
+        controlador_estado,
+    ):
+        comando, erros = preparar_comando_edicao_produto(
+            produto_id,
+            codigo,
+            nome,
+            categoria,
+            forma_venda,
+            preco_venda_centavos,
+            origem,
+            caminho_banco,
+            categoria_id=categoria_id,
+        )
+        if erros:
+            return None, erros
+        return executar_edicao_produto(
+            comando,
+            sessao_solicitante,
+            caminho_banco,
+            capacidade=capacidade,
+            gerenciador_autorizacoes=gerenciador_autorizacoes,
+            catalogo_produtos=catalogo_produtos,
+            controlador_estado=controlador_estado,
+        ), []
 
 
 def executar_edicao_produto(
@@ -589,20 +615,25 @@ def executar_edicao_produto(
         GERENCIADOR_AUTORIZACOES
     ),
     catalogo_produtos: CatalogoProdutosMemoria | None = None,
+    controlador_estado: ControladorEstadoOperacional | None = None,
 ) -> Produto:
-    if not isinstance(comando, ComandoEdicaoProduto):
-        raise TypeError("O comando de edição de produto é inválido.")
-    _validar_catalogo_produtos(catalogo_produtos, caminho_banco)
-    _autorizar_comando_produto(
-        comando,
-        sessao_solicitante,
-        capacidade,
+    with operacao_comercial_em_modo_normal(
         caminho_banco,
-        gerenciador_autorizacoes,
-    )
-    produto = editar_produto_comando_repository(comando, caminho_banco)
-    _sincronizar_catalogo_produtos(catalogo_produtos, caminho_banco)
-    return produto
+        controlador_estado,
+    ):
+        if not isinstance(comando, ComandoEdicaoProduto):
+            raise TypeError("O comando de edição de produto é inválido.")
+        _validar_catalogo_produtos(catalogo_produtos, caminho_banco)
+        _autorizar_comando_produto(
+            comando,
+            sessao_solicitante,
+            capacidade,
+            caminho_banco,
+            gerenciador_autorizacoes,
+        )
+        produto = editar_produto_comando_repository(comando, caminho_banco)
+        _sincronizar_catalogo_produtos(catalogo_produtos, caminho_banco)
+        return produto
 
 
 def _validar_catalogo_produtos(

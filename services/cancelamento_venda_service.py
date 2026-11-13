@@ -17,6 +17,10 @@ from services.autorizacao_pontual_service import (
     GerenciadorAutorizacoesPontuais,
 )
 from services.logging_service import registrar_evento
+from services.estado_operacional_service import (
+    ControladorEstadoOperacional,
+    operacao_comercial_em_modo_normal,
+)
 
 
 FORMATO_DATA_SQLITE = "%Y-%m-%d %H:%M:%S"
@@ -69,8 +73,32 @@ def cancelar_venda(
     gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
         GERENCIADOR_AUTORIZACOES
     ),
+    controlador_estado: ControladorEstadoOperacional | None = None,
 ) -> CancelamentoVenda:
     """Cancela uma venda ativa sem alterar seus dados comerciais."""
+    with operacao_comercial_em_modo_normal(
+        caminho_banco,
+        controlador_estado,
+    ):
+        return _cancelar_venda_em_modo_normal(
+            venda_id,
+            motivo,
+            capacidade,
+            sessao_solicitante,
+            caminho_banco,
+            gerenciador_autorizacoes=gerenciador_autorizacoes,
+        )
+
+
+def _cancelar_venda_em_modo_normal(
+    venda_id: int,
+    motivo: str,
+    capacidade: CapacidadeAutorizacao,
+    sessao_solicitante: SessaoUsuario,
+    caminho_banco: str | Path,
+    *,
+    gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais,
+) -> CancelamentoVenda:
     _validar_venda_id(venda_id)
     motivo_normalizado = _normalizar_motivo(motivo)
     if type(gerenciador_autorizacoes) is not GerenciadorAutorizacoesPontuais:

@@ -239,6 +239,21 @@ def autorizar_sessao(
         return usuario
 
 
+def autorizar_sessao_local(
+    sessao: SessaoUsuario,
+    perfis_permitidos: Iterable[str],
+    *,
+    gerenciador_sessoes: GerenciadorSessoes = GERENCIADOR_SESSOES,
+) -> SessaoUsuario:
+    """Valida apenas a sessão já emitida durante degradação do SQLite."""
+    gerenciador_sessoes.validar(sessao)
+    if sessao.perfil not in tuple(perfis_permitidos):
+        raise PermissaoNegadaError(
+            "O perfil autenticado não possui permissão."
+        )
+    return sessao
+
+
 def encerrar_sessao(
     sessao: SessaoUsuario,
     *,

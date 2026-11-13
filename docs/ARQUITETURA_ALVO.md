@@ -239,6 +239,43 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   não recebem `catalogo_produtos` não sincronizam snapshots automaticamente;
   essa limitação evita um registro global ou ampliação arquitetural no T52.
 
+## Modo de cálculo degradado (T53)
+
+- `services/estado_operacional_service.py` mantém uma máquina de estados por
+  janela: `NORMAL`, `CALCULO_DEGRADADO` ou `INDISPONIVEL`. Não existe transição
+  automática de volta ao estado normal durante o processo.
+- A degradação exige simultaneamente uma falha SQLite de acesso reconhecida e
+  um snapshot T52 disponível da mesma origem. Erro de entrada, regra comercial,
+  integridade ou programação permanece erro e não seleciona o catálogo.
+- A sessão já emitida pode ser validada no registro processual confiável para
+  manter apenas os cálculos autorizados. Nova autenticação, troca de operador,
+  consulta administrativa e qualquer operação persistente continuam bloqueadas.
+- Etiquetas preservam o total codificado como subtotal. Itens, quantidades e
+  totais permanecem exclusivamente na memória e a interface os identifica como
+  não registrados; não há fila, arquivo auxiliar ou segunda persistência.
+- Cada banco usado pela janela fica vinculado, em memória e somente durante o
+  processo, ao primeiro controlador operacional registrado. Persistência de
+  vendas, cancelamentos e mutações de produto consultam esse vínculo pelo banco
+  antes de validar ou gravar, mesmo se a integração omitir o controlador. Um
+  controlador posterior não substitui a autoridade canônica; caminhos
+  equivalentes do mesmo arquivo resolvem o mesmo vínculo. Na ausência de vínculo,
+  chamadas legadas preservam o fluxo normal.
+- O controlador mantém referência ao snapshot usado na degradação. Se esse
+  catálogo for invalidado, a próxima consulta de estado muda de forma irreversível
+  para `INDISPONIVEL` e cálculos adicionais são bloqueados. Não há recuperação
+  automática; confirmação, liberação e retomada permanecem reservadas ao T54.
+- Operações comerciais usam `operacao_comercial_em_modo_normal()` como seção
+  crítica. A resolução do vínculo usa um bloqueio curto; em seguida, o `RLock` do
+  controlador canônico permanece adquirido desde a validação do modo até o
+  `commit`, `rollback` e reconciliação imediata. Assim, uma transição concorrente
+  acontece integralmente antes ou depois da operação, nunca durante a gravação.
+  Cadastro e edição podem entrar de forma aninhada porque o bloqueio é
+  reentrante; bancos diferentes usam controladores independentes.
+- O vínculo não possui remoção pública no T53. Reabrir uma janela no mesmo
+  processo ou substituir fisicamente o arquivo mantendo o caminho conserva o
+  estado anterior de forma fail-closed. Liberar ou reconstruir esse ciclo de
+  vida com confirmação operacional pertence ao T54.
+
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.

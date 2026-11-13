@@ -92,7 +92,7 @@ def test_falha_antes_do_commit_preserva_dados_e_reutiliza_uuid(
     composicao = registrar_composicao(janela)
     tentativas = []
 
-    def falhar(confirmacao, identificador, caminho):
+    def falhar(confirmacao, identificador, caminho, **kwargs):
         tentativas.append(identificador)
         raise sqlite3.OperationalError("banco ocupado")
 
@@ -112,7 +112,7 @@ def test_falha_antes_do_commit_preserva_dados_e_reutiliza_uuid(
     monkeypatch.setattr(
         janela_principal_module.persistencia_venda_service,
         "persistir_venda_confirmada_idempotente",
-        lambda confirmacao, identificador, caminho: (
+        lambda confirmacao, identificador, caminho, **kwargs: (
             tentativas.append(identificador) or 41
         ),
     )
@@ -133,7 +133,7 @@ def test_commit_incerto_bloqueia_operacao_e_recupera_com_mesmo_uuid(
     registrar_composicao(janela)
     tentativas = []
 
-    def resultado_incerto(confirmacao, identificador, caminho):
+    def resultado_incerto(confirmacao, identificador, caminho, **kwargs):
         tentativas.append(identificador)
         raise CommitVendaIncertoError(identificador)
 
@@ -154,7 +154,7 @@ def test_commit_incerto_bloqueia_operacao_e_recupera_com_mesmo_uuid(
     monkeypatch.setattr(
         janela_principal_module.persistencia_venda_service,
         "persistir_venda_confirmada_idempotente",
-        lambda confirmacao, identificador, caminho: (
+        lambda confirmacao, identificador, caminho, **kwargs: (
             tentativas.append(identificador) or 52
         ),
     )
@@ -179,7 +179,7 @@ def test_bloqueia_confirmacao_reentrante_enquanto_processa(
     confirmacao = confirmar_venda(janela.estado_venda.venda, composicao)
     chamadas = []
 
-    def persistir(confirmacao_recebida, identificador, caminho):
+    def persistir(confirmacao_recebida, identificador, caminho, **kwargs):
         chamadas.append(identificador)
         janela._receber_venda_confirmada(confirmacao_recebida)
         return 63
@@ -206,9 +206,9 @@ def test_alterar_venda_invalida_pagamento_e_uuid_de_falha(
     monkeypatch.setattr(
         janela_principal_module.persistencia_venda_service,
         "persistir_venda_confirmada_idempotente",
-        lambda confirmacao, identificador, caminho: (_ for _ in ()).throw(
-            sqlite3.OperationalError("falha antes do commit")
-        ),
+        lambda confirmacao, identificador, caminho, **kwargs: (
+            _ for _ in ()
+        ).throw(sqlite3.OperationalError("falha antes do commit")),
     )
     confirmar_pela_interface(janela, qtbot)
     assert janela.identificador_tentativa_fechamento is not None

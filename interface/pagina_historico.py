@@ -44,6 +44,7 @@ from services.autorizacao_pontual_service import (
     AutorizacaoPontualInvalidaError,
     GerenciadorAutorizacoesPontuais,
 )
+from services.estado_operacional_service import ControladorEstadoOperacional
 from services.historico_venda_service import (
     FUSO_SAO_PAULO,
     buscar_venda_detalhada_por_id,
@@ -91,12 +92,14 @@ class PaginaHistorico(QWidget):
         gerenciador_autorizacoes: GerenciadorAutorizacoesPontuais = (
             GERENCIADOR_AUTORIZACOES
         ),
+        controlador_estado: ControladorEstadoOperacional | None = None,
     ) -> None:
         super().__init__(parent)
         self.caminho_banco = caminho_banco
         self._operacao_bloqueada = operacao_bloqueada or (lambda: False)
         self.sessao_solicitante = sessao_solicitante
         self.gerenciador_autorizacoes = gerenciador_autorizacoes
+        self.controlador_estado = controlador_estado
         self.detalhe_selecionado: VendaDetalhada | None = None
         self.dialogo_cancelamento: DialogoSolicitacaoCancelamento | None = None
         self.dialogo_autorizacao: DialogoAutorizacaoAdministrativa | None = None
@@ -969,6 +972,7 @@ class PaginaHistorico(QWidget):
                 self.sessao_solicitante,
                 self.caminho_banco,
                 gerenciador_autorizacoes=self.gerenciador_autorizacoes,
+                controlador_estado=self.controlador_estado,
             )
         except AutorizacaoPontualExpiradaError:
             self._permitir_nova_autorizacao(

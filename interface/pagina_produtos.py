@@ -49,6 +49,7 @@ from services.autorizacao_pontual_service import (
 )
 from services.categoria_service import listar_categorias
 from services.catalogo_memoria_service import CatalogoProdutosMemoria
+from services.estado_operacional_service import ControladorEstadoOperacional
 
 
 MENSAGEM_RESTRICAO_ATENDIMENTO = (
@@ -348,6 +349,7 @@ class PaginaProdutos(QWidget):
         parent=None,
         gerenciador_autorizacoes=GERENCIADOR_AUTORIZACOES,
         catalogo_produtos: CatalogoProdutosMemoria | None = None,
+        controlador_estado: ControladorEstadoOperacional | None = None,
     ) -> None:
         super().__init__(parent)
         self.caminho_banco = caminho_banco
@@ -357,6 +359,7 @@ class PaginaProdutos(QWidget):
         self.sessao_administrativa = sessao_administrativa
         self.gerenciador_autorizacoes = gerenciador_autorizacoes
         self.catalogo_produtos = catalogo_produtos
+        self.controlador_estado = controlador_estado
         self._autorizacao_produto_em_processamento = False
         self.dialogo_autorizacao_produto = None
         self.dialogo_atual: QDialog | None = None
@@ -682,6 +685,7 @@ class PaginaProdutos(QWidget):
                 self.caminho_banco,
                 sessao_solicitante=self.sessao_administrativa,
                 catalogo_produtos=self.catalogo_produtos,
+                controlador_estado=self.controlador_estado,
             )
         except Exception as erro:
             self._mostrar_erro(erro)
@@ -875,6 +879,7 @@ class PaginaProdutos(QWidget):
                     capacidade=capacidade,
                     gerenciador_autorizacoes=self.gerenciador_autorizacoes,
                     catalogo_produtos=self.catalogo_produtos,
+                    controlador_estado=self.controlador_estado,
                 )
                 mensagem = f"Produto {produto.codigo} cadastrado com sucesso."
             else:
@@ -885,6 +890,7 @@ class PaginaProdutos(QWidget):
                     capacidade=capacidade,
                     gerenciador_autorizacoes=self.gerenciador_autorizacoes,
                     catalogo_produtos=self.catalogo_produtos,
+                    controlador_estado=self.controlador_estado,
                 )
                 mensagem = f"Produto {produto.codigo} atualizado com sucesso."
         except AutorizacaoPontualExpiradaError:

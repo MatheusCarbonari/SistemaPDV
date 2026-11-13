@@ -784,6 +784,43 @@ automática. A revisão independente final permanece pendente.
 **Origem:** backlog original T42.
 **Entrega verificável:** Operar sem gravação quando for seguro; status explícito.
 **Conceito a estudar:** Degradação graciosa.
+**Andamento:** implementação preparada para revisão independente. O estado
+processual distingue operação normal, cálculo degradado e indisponibilidade
+insegura. Somente falha SQLite reconhecida de bloqueio, abertura ou I/O permite
+usar explicitamente um snapshot T52 disponível e vinculado ao mesmo banco.
+Entradas inválidas, erros comerciais, violações de integridade e falhas de
+programação não acionam contingência. No modo degradado, consulta, etiqueta,
+cálculo e manipulação dos itens permanecem em memória; pagamento, fechamento,
+cancelamento e mutações de produto ficam bloqueados na interface e nos pontos
+de execução integrados. A interface mantém aviso persistente e identifica o
+total como não registrado. Não há retorno automático ao modo normal no mesmo
+processo; protocolo e liberação continuam pertencendo ao T54. A revisão
+independente ainda é necessária antes de considerar o ticket aprovado.
+Validação local: 32 testes específicos de estado, modo degradado e catálogo;
+177 regressões de leitura, interface, inicialização, etiquetas e cálculo; 141
+regressões de vendas, cancelamentos, produtos e autenticação; e suíte completa
+com 1.182 testes aprovados após as correções finais de concorrência.
+
+**Ajuste da revisão:** o banco operacional agora é vinculado processualmente a
+uma autoridade de estado canônica. Os serviços de venda, cancelamento e produto
+consultam esse vínculo mesmo quando o argumento opcional é omitido; outro
+controlador `NORMAL` não substitui o vínculo existente. A ausência de vínculo
+preserva explicitamente integrações normais anteriores. O snapshot usado na
+degradação também passou a ser revalidado: sua invalidação leva o estado a
+`INDISPONIVEL` e bloqueia novos cálculos, sem implementar recuperação do T54.
+Validação do ajuste: 25 testes diretamente relacionados e 155 regressões dos
+serviços protegidos, catálogo e autenticação, todos aprovados.
+
+**Correção final de concorrência:** a verificação pontual foi complementada
+por uma seção crítica operacional que mantém o `RLock` da autoridade canônica
+durante toda a operação comercial, inclusive `commit`, `rollback` e reconciliação
+imediata. A transição para degradação aguarda a operação em curso e novas
+gravações são recusadas depois da mudança. Nova tentativa de ativação também
+revalida o snapshot já associado e retorna falha se ele tiver sido invalidado.
+Vínculos sobrevivem a reabertura de janela e substituição do arquivo no mesmo
+caminho durante o processo; sua liberação controlada continua reservada ao T54.
+Validação final: 25 testes de estado, concorrência e interface; 160 regressões
+dos serviços modificados; e suíte completa com 1.182 testes aprovados.
 
 ### T54 — Protocolo de contingência
 **Origem:** backlog original T43.

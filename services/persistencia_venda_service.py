@@ -12,6 +12,10 @@ from repositories.venda_repository import (
 )
 from services.confirmacao_venda_service import validar_confirmacao_venda
 from services.logging_service import registrar_evento
+from services.estado_operacional_service import (
+    ControladorEstadoOperacional,
+    operacao_comercial_em_modo_normal,
+)
 
 
 class IdentificadorTentativaInvalidoError(ValueError):
@@ -39,117 +43,129 @@ def gerar_identificador_tentativa() -> str:
 def persistir_venda_confirmada(
     venda_confirmada: VendaConfirmada,
     caminho_banco: str | Path = CAMINHO_BANCO,
+    *,
+    controlador_estado: ControladorEstadoOperacional | None = None,
 ) -> int:
     """Persiste venda, itens e pagamentos em uma única transação SQLite."""
-    if not isinstance(venda_confirmada, VendaConfirmada):
-        raise TypeError("A venda deve ser uma VendaConfirmada.")
+    with operacao_comercial_em_modo_normal(
+        caminho_banco,
+        controlador_estado,
+    ):
+        if not isinstance(venda_confirmada, VendaConfirmada):
+            raise TypeError("A venda deve ser uma VendaConfirmada.")
 
-    validar_confirmacao_venda(
-        venda_confirmada.venda,
-        venda_confirmada.pagamentos,
-    )
-
-    conexao = conectar(caminho_banco)
-
-    try:
-        versao = conexao.execute("PRAGMA user_version").fetchone()[0]
-        if versao != VERSAO_ESQUEMA:
-            raise RuntimeError(
-                "A persistência exige o esquema SQLite na versão "
-                f"{VERSAO_ESQUEMA}."
-            )
-
-        conexao.execute("BEGIN IMMEDIATE")
-        venda_id = inserir_venda_confirmada(conexao, venda_confirmada)
-        conexao.commit()
-        return venda_id
-    except Exception as erro:
-        conexao.rollback()
-        registrar_evento(
-            "persistencia_venda_falhou",
-            erro_tipo=type(erro).__name__,
-            resultado="falha",
+        validar_confirmacao_venda(
+            venda_confirmada.venda,
+            venda_confirmada.pagamentos,
         )
-        raise
-    finally:
-        conexao.close()
+
+        conexao = conectar(caminho_banco)
+
+        try:
+            versao = conexao.execute("PRAGMA user_version").fetchone()[0]
+            if versao != VERSAO_ESQUEMA:
+                raise RuntimeError(
+                    "A persistência exige o esquema SQLite na versão "
+                    f"{VERSAO_ESQUEMA}."
+                )
+
+            conexao.execute("BEGIN IMMEDIATE")
+            venda_id = inserir_venda_confirmada(conexao, venda_confirmada)
+            conexao.commit()
+            return venda_id
+        except Exception as erro:
+            conexao.rollback()
+            registrar_evento(
+                "persistencia_venda_falhou",
+                erro_tipo=type(erro).__name__,
+                resultado="falha",
+            )
+            raise
+        finally:
+            conexao.close()
 
 
 def persistir_venda_confirmada_idempotente(
     venda_confirmada: VendaConfirmada,
     identificador_tentativa: str,
     caminho_banco: str | Path = CAMINHO_BANCO,
+    *,
+    controlador_estado: ControladorEstadoOperacional | None = None,
 ) -> int:
     """Persiste uma tentativa lógica sem duplicá-la em repetições."""
-    if not isinstance(venda_confirmada, VendaConfirmada):
-        raise TypeError("A venda deve ser uma VendaConfirmada.")
+    with operacao_comercial_em_modo_normal(
+        caminho_banco,
+        controlador_estado,
+    ):
+        if not isinstance(venda_confirmada, VendaConfirmada):
+            raise TypeError("A venda deve ser uma VendaConfirmada.")
 
-    validar_confirmacao_venda(
-        venda_confirmada.venda,
-        venda_confirmada.pagamentos,
-    )
-    identificador = _normalizar_identificador(identificador_tentativa)
-    conexao = conectar(caminho_banco)
-
-    try:
-        _validar_versao_esquema(conexao)
-        venda_existente = buscar_venda_por_identificador(
-            conexao,
-            identificador,
+        validar_confirmacao_venda(
+            venda_confirmada.venda,
+            venda_confirmada.pagamentos,
         )
-        if venda_existente is not None:
-            return _resolver_venda_existente(
-                conexao,
-                venda_existente,
-                venda_confirmada,
-                identificador,
-            )
-
-        conexao.execute("BEGIN IMMEDIATE")
-        try:
-            venda_id = inserir_venda_confirmada(
-                conexao,
-                venda_confirmada,
-                identificador,
-            )
-        except sqlite3.IntegrityError as erro:
-            _rollback_seguro(conexao)
-            _fechar_conexao(conexao)
-            conexao = None
-            return _verificar_apos_falha(
-                venda_confirmada,
-                identificador,
-                caminho_banco,
-                erro,
-            )
+        identificador = _normalizar_identificador(identificador_tentativa)
+        conexao = conectar(caminho_banco)
 
         try:
-            conexao.commit()
-        except Exception as erro:
-            registrar_evento(
-                "commit_venda_exigiu_verificacao",
-                identificador_operacao=identificador,
-                erro_tipo=type(erro).__name__,
-                resultado="em_verificacao",
-            )
-            _rollback_seguro(conexao)
-            _fechar_conexao(conexao)
-            conexao = None
-            return _verificar_apos_falha(
-                venda_confirmada,
+            _validar_versao_esquema(conexao)
+            venda_existente = buscar_venda_por_identificador(
+                conexao,
                 identificador,
-                caminho_banco,
-                erro,
             )
+            if venda_existente is not None:
+                return _resolver_venda_existente(
+                    conexao,
+                    venda_existente,
+                    venda_confirmada,
+                    identificador,
+                )
 
-        return venda_id
-    except Exception:
-        if conexao is not None:
-            _rollback_seguro(conexao)
-        raise
-    finally:
-        if conexao is not None:
-            _fechar_conexao(conexao)
+            conexao.execute("BEGIN IMMEDIATE")
+            try:
+                venda_id = inserir_venda_confirmada(
+                    conexao,
+                    venda_confirmada,
+                    identificador,
+                )
+            except sqlite3.IntegrityError as erro:
+                _rollback_seguro(conexao)
+                _fechar_conexao(conexao)
+                conexao = None
+                return _verificar_apos_falha(
+                    venda_confirmada,
+                    identificador,
+                    caminho_banco,
+                    erro,
+                )
+
+            try:
+                conexao.commit()
+            except Exception as erro:
+                registrar_evento(
+                    "commit_venda_exigiu_verificacao",
+                    identificador_operacao=identificador,
+                    erro_tipo=type(erro).__name__,
+                    resultado="em_verificacao",
+                )
+                _rollback_seguro(conexao)
+                _fechar_conexao(conexao)
+                conexao = None
+                return _verificar_apos_falha(
+                    venda_confirmada,
+                    identificador,
+                    caminho_banco,
+                    erro,
+                )
+
+            return venda_id
+        except Exception:
+            if conexao is not None:
+                _rollback_seguro(conexao)
+            raise
+        finally:
+            if conexao is not None:
+                _fechar_conexao(conexao)
 
 
 def _normalizar_identificador(identificador_tentativa: str) -> str:

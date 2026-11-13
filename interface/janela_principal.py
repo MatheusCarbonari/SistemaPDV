@@ -1,4 +1,5 @@
 import services.persistencia_venda_service as persistencia_venda_service
+import sqlite3
 
 from PySide6.QtCore import Qt, QSignalBlocker, QTimer, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QPalette
@@ -48,13 +49,25 @@ from services.estado_venda_service import (
 )
 from services.autenticacao_service import (
     PermissaoNegadaError,
+    autorizar_sessao_local,
     autorizar_sessao,
     encerrar_sessao,
 )
 from services.catalogo_memoria_service import CatalogoProdutosMemoria
+from services.estado_operacional_service import (
+    ControladorEstadoOperacional,
+    ModoOperacional,
+    vincular_controlador_ao_banco,
+)
 from services.item_venda_service import criar_item_de_etiqueta_com_estimativa
-from services.produto_etiqueta import associar_etiqueta_ao_produto
-from services.produto_service import consultar_produto_por_codigo
+from services.produto_etiqueta import (
+    associar_etiqueta_ao_catalogo,
+    associar_etiqueta_ao_produto,
+)
+from services.produto_service import (
+    consultar_produto_no_catalogo,
+    consultar_produto_por_codigo,
+)
 from services.venda_em_andamento_service import calcular_total
 from services.version_service import (
     formatar_informacoes_sobre,
@@ -77,6 +90,7 @@ class JanelaPrincipal(QMainWindow):
         caminho_banco=CAMINHO_BANCO,
         sessao: SessaoUsuario | None = None,
         catalogo_produtos: CatalogoProdutosMemoria | None = None,
+        controlador_estado: ControladorEstadoOperacional | None = None,
     ) -> None:
         super().__init__()
         self.caminho_banco = caminho_banco
@@ -97,6 +111,10 @@ class JanelaPrincipal(QMainWindow):
             else CatalogoProdutosMemoria()
         )
         self.catalogo_produtos.vincular_ou_validar_banco(self.caminho_banco)
+        self.controlador_estado = vincular_controlador_ao_banco(
+            self.caminho_banco,
+            controlador_estado or ControladorEstadoOperacional(),
+        )
         try:
             self.catalogo_produtos.carregar(self.caminho_banco)
         except Exception:
@@ -231,6 +249,17 @@ class JanelaPrincipal(QMainWindow):
         layout_menu.addWidget(self.botao_codigos_recuperacao)
         layout_menu.addWidget(self.botao_logout)
         layout_principal.addWidget(menu_superior)
+
+        self.rotulo_modo_operacional = QLabel(estrutura_principal)
+        self.rotulo_modo_operacional.setObjectName("modo_operacional")
+        self.rotulo_modo_operacional.setWordWrap(True)
+        self.rotulo_modo_operacional.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.rotulo_modo_operacional.setStyleSheet(
+            "QLabel { color: #fff3c4; background: #684f13; "
+            "border: 1px solid #c89b2f; padding: 8px; font-weight: 700; }"
+        )
+        self.rotulo_modo_operacional.hide()
+        layout_principal.addWidget(self.rotulo_modo_operacional)
 
         self.paginas = QStackedWidget(estrutura_principal)
         self.paginas.setObjectName("paginas_principais")
@@ -536,19 +565,21 @@ class JanelaPrincipal(QMainWindow):
         self.pagina_historico = PaginaHistorico(
             self.caminho_banco,
             self.paginas,
-            operacao_bloqueada=self._fechamento_bloqueia_operacao,
+            operacao_bloqueada=self._operacao_persistente_bloqueada,
             sessao_solicitante=self.sessao,
+            controlador_estado=self.controlador_estado,
         )
         self.pagina_produtos = PaginaProdutos(
             self.caminho_banco,
             tem_venda_em_andamento=lambda: bool(
                 self.estado_venda.venda.itens
             ),
-            operacao_bloqueada=self._fechamento_bloqueia_operacao,
+            operacao_bloqueada=self._operacao_persistente_bloqueada,
             alteracao_permitida=self._usuario_pode_operar,
             sessao_administrativa=self.sessao,
             parent=self.paginas,
             catalogo_produtos=self.catalogo_produtos,
+            controlador_estado=self.controlador_estado,
         )
         self.pagina_administracao = PaginaAdministracao(
             self.sessao,
@@ -671,7 +702,14 @@ class JanelaPrincipal(QMainWindow):
         self.pagina_administracao.ativar()
 
     def processar_entrada(self) -> None:
-        if not self._usuario_pode_operar():
+        if not self._usuario_pode_operar(permitir_degradacao=True):
+            return
+        if not self.controlador_estado.permite_calculo():
+            self._atualizar_venda_exibida()
+            self._definir_status(
+                "Cálculo indisponível: o catálogo seguro não pode ser usado.",
+                "erro",
+            )
             return
         if (
             self.dialogo_atual is not None
@@ -720,10 +758,27 @@ class JanelaPrincipal(QMainWindow):
         self.processar_entrada()
 
     def _processar_etiqueta(self, codigo: str) -> None:
-        produto_etiqueta, erros = associar_etiqueta_ao_produto(
-            codigo,
-            self.caminho_banco,
-        )
+        if self._em_calculo_degradado():
+            produto_etiqueta, erros = associar_etiqueta_ao_catalogo(
+                codigo,
+                self.catalogo_produtos,
+            )
+        else:
+            try:
+                produto_etiqueta, erros = associar_etiqueta_ao_produto(
+                    codigo,
+                    self.caminho_banco,
+                )
+            except sqlite3.Error as erro:
+                if not self._tentar_ativar_calculo_degradado(erro):
+                    self._concluir_com_erro(
+                        ["Não foi possível consultar o produto no SQLite."]
+                    )
+                    return
+                produto_etiqueta, erros = associar_etiqueta_ao_catalogo(
+                    codigo,
+                    self.catalogo_produtos,
+                )
 
         if erros:
             self._concluir_com_erro(erros)
@@ -739,10 +794,27 @@ class JanelaPrincipal(QMainWindow):
         self._limpar_entrada_e_restaurar_foco()
 
     def _processar_codigo_produto(self, codigo: str) -> None:
-        produto, erros = consultar_produto_por_codigo(
-            codigo,
-            self.caminho_banco,
-        )
+        if self._em_calculo_degradado():
+            produto, erros = consultar_produto_no_catalogo(
+                codigo,
+                self.catalogo_produtos,
+            )
+        else:
+            try:
+                produto, erros = consultar_produto_por_codigo(
+                    codigo,
+                    self.caminho_banco,
+                )
+            except sqlite3.Error as erro:
+                if not self._tentar_ativar_calculo_degradado(erro):
+                    self._concluir_com_erro(
+                        ["Não foi possível consultar o produto no SQLite."]
+                    )
+                    return
+                produto, erros = consultar_produto_no_catalogo(
+                    codigo,
+                    self.catalogo_produtos,
+                )
 
         if erros:
             self._concluir_com_erro(erros)
@@ -814,6 +886,9 @@ class JanelaPrincipal(QMainWindow):
     def abrir_dialogo_pagamentos(self) -> None:
         if not self._usuario_pode_operar():
             return
+        if self._operacao_persistente_bloqueada():
+            self._informar_operacao_exige_modo_normal()
+            return
         if (
             self.dialogo_atual is not None
             or self._fechamento_bloqueia_operacao()
@@ -844,7 +919,10 @@ class JanelaPrincipal(QMainWindow):
         dialogo.open()
 
     def _emitir_pagamentos_confirmados(self, pagamentos) -> None:
-        if not self._usuario_pode_operar() or self._fechamento_bloqueia_operacao():
+        if (
+            not self._usuario_pode_operar()
+            or self._operacao_persistente_bloqueada()
+        ):
             return
         composicao_alterada = pagamentos != self.composicao_pagamentos
         self.composicao_pagamentos = pagamentos
@@ -857,6 +935,9 @@ class JanelaPrincipal(QMainWindow):
 
     def abrir_dialogo_confirmacao(self) -> None:
         if not self._usuario_pode_operar():
+            return
+        if self._operacao_persistente_bloqueada():
+            self._informar_operacao_exige_modo_normal()
             return
         if (
             self.dialogo_atual is not None
@@ -891,7 +972,10 @@ class JanelaPrincipal(QMainWindow):
         dialogo.open()
 
     def _receber_venda_confirmada(self, resultado: VendaConfirmada) -> None:
-        if not self._usuario_pode_operar() or self._fechamento_bloqueia_operacao():
+        if (
+            not self._usuario_pode_operar()
+            or self._operacao_persistente_bloqueada()
+        ):
             return
         self.resultado_confirmacao = resultado
         self.confirmacao_pendente = resultado
@@ -913,6 +997,9 @@ class JanelaPrincipal(QMainWindow):
         self._persistir_fechamento_pendente()
 
     def _persistir_fechamento_pendente(self) -> None:
+        if self._modo_operacional() is not ModoOperacional.NORMAL:
+            self._informar_operacao_exige_modo_normal()
+            return
         if self._fechamento_em_processamento:
             return
         if self.confirmacao_pendente is None:
@@ -933,6 +1020,7 @@ class JanelaPrincipal(QMainWindow):
                     self.confirmacao_pendente,
                     self.identificador_tentativa_fechamento,
                     self.caminho_banco,
+                    controlador_estado=self.controlador_estado,
                 )
             )
         except persistencia_venda_service.CommitVendaIncertoError:
@@ -1003,9 +1091,18 @@ class JanelaPrincipal(QMainWindow):
 
         self.tabela_itens.clearSelection()
         total = calcular_total(self.estado_venda.venda)
-        self.rotulo_total.setText(f"Total: {formatar_centavos(total)}")
+        modo = self._modo_operacional()
+        if modo is ModoOperacional.CALCULO_DEGRADADO:
+            self.rotulo_total.setText(
+                f"Total calculado (não registrado): {formatar_centavos(total)}"
+            )
+        else:
+            self.rotulo_total.setText(f"Total: {formatar_centavos(total)}")
+        self._atualizar_aviso_modo_operacional()
         sessao_valida = self._usuario_pode_operar(mostrar_mensagem=False)
         operacao_bloqueada = self._fechamento_bloqueia_operacao()
+        persistencia_bloqueada = self._operacao_persistente_bloqueada()
+        calculo_permitido = self.controlador_estado.permite_calculo()
         if (
             operacao_bloqueada
             and self.paginas.currentWidget() is not self.pagina_frente_caixa
@@ -1013,35 +1110,45 @@ class JanelaPrincipal(QMainWindow):
             self.paginas.setCurrentWidget(self.pagina_frente_caixa)
             self.botao_navegar_caixa.setChecked(True)
         self.botao_navegar_caixa.setEnabled(sessao_valida)
-        self.botao_navegar_historico.setEnabled(sessao_valida and not operacao_bloqueada)
+        self.botao_navegar_historico.setEnabled(
+            sessao_valida and not persistencia_bloqueada
+        )
         self.botao_navegar_produtos.setEnabled(
             sessao_valida
-            and not operacao_bloqueada
+            and not persistencia_bloqueada
         )
         self.botao_navegar_administracao.setEnabled(
             sessao_valida
             and self.sessao.perfil == "ADMINISTRADOR"
-            and not operacao_bloqueada
+            and not persistencia_bloqueada
         )
-        self.botao_logout.setEnabled(sessao_valida and not operacao_bloqueada)
+        self.botao_logout.setEnabled(
+            sessao_valida and not persistencia_bloqueada
+        )
         self.botao_codigos_recuperacao.setEnabled(
             sessao_valida
             and self.sessao.perfil == "ADMINISTRADOR"
-            and not operacao_bloqueada
+            and not persistencia_bloqueada
         )
-        self.campo_entrada.setEnabled(sessao_valida and not operacao_bloqueada)
-        self.tabela_itens.setEnabled(sessao_valida and not operacao_bloqueada)
-        self.botao_remover.setEnabled(bool(itens) and sessao_valida and not operacao_bloqueada)
+        calculo_habilitado = (
+            sessao_valida and calculo_permitido and not operacao_bloqueada
+        )
+        self.campo_entrada.setEnabled(calculo_habilitado)
+        self.tabela_itens.setEnabled(calculo_habilitado)
+        self.botao_remover.setEnabled(bool(itens) and calculo_habilitado)
         self.botao_desfazer.setEnabled(
             self.estado_venda.ultima_remocao is not None
             and sessao_valida
+            and calculo_permitido
             and not operacao_bloqueada
         )
-        self.botao_pagamento.setEnabled(total > 0 and sessao_valida and not operacao_bloqueada)
+        self.botao_pagamento.setEnabled(
+            total > 0 and sessao_valida and not persistencia_bloqueada
+        )
         self.botao_confirmar_venda.setEnabled(
             self.composicao_pagamentos is not None
             and sessao_valida
-            and not operacao_bloqueada
+            and not persistencia_bloqueada
         )
         self.botao_verificar_fechamento.setEnabled(
             sessao_valida
@@ -1174,10 +1281,81 @@ class JanelaPrincipal(QMainWindow):
         )
         dialogo.open()
 
-    def _usuario_pode_operar(self, *, mostrar_mensagem: bool = True) -> bool:
+    def _modo_operacional(self) -> ModoOperacional:
+        return self.controlador_estado.obter_estado().modo
+
+    def _em_calculo_degradado(self) -> bool:
+        return self._modo_operacional() is ModoOperacional.CALCULO_DEGRADADO
+
+    def _operacao_persistente_bloqueada(self) -> bool:
+        return (
+            self._fechamento_bloqueia_operacao()
+            or self._modo_operacional() is not ModoOperacional.NORMAL
+        )
+
+    def _informar_operacao_exige_modo_normal(self) -> None:
+        self._definir_status(
+            "Operação indisponível no modo de cálculo: nada será registrado.",
+            "alerta",
+        )
+
+    def _tentar_ativar_calculo_degradado(self, erro: BaseException) -> bool:
+        ativado = self.controlador_estado.tentar_ativar_calculo_degradado(
+            erro,
+            self.catalogo_produtos,
+            self.caminho_banco,
+        )
+        estado = self._modo_operacional()
+        if estado is not ModoOperacional.NORMAL:
+            self.paginas.setCurrentWidget(self.pagina_frente_caixa)
+            self.botao_navegar_caixa.setChecked(True)
+            self._atualizar_venda_exibida()
+        if ativado:
+            self._definir_status(
+                "SQLite indisponível. Cálculo em memória ativado; "
+                "pagamentos e gravações estão bloqueados.",
+                "alerta",
+            )
+        elif estado is ModoOperacional.INDISPONIVEL:
+            self._definir_status(
+                "SQLite e catálogo seguro indisponíveis. O cálculo foi bloqueado.",
+                "erro",
+            )
+        return ativado
+
+    def _atualizar_aviso_modo_operacional(self) -> None:
+        modo = self._modo_operacional()
+        if modo is ModoOperacional.NORMAL:
+            self.rotulo_modo_operacional.hide()
+            return
+        if modo is ModoOperacional.CALCULO_DEGRADADO:
+            texto = (
+                "MODO DE CÁLCULO — valores e itens permanecem somente em memória; "
+                "vendas, pagamentos e alterações não serão registrados."
+            )
+            cor = "#684f13"
+        else:
+            texto = (
+                "OPERAÇÃO INDISPONÍVEL — não há fonte segura para consulta e cálculo."
+            )
+            cor = "#6b2528"
+        self.rotulo_modo_operacional.setText(texto)
+        self.rotulo_modo_operacional.setStyleSheet(
+            f"QLabel {{ color: #fff3e0; background: {cor}; "
+            "border: 1px solid #c88a5a; padding: 8px; font-weight: 700; }"
+        )
+        self.rotulo_modo_operacional.show()
+
+    def _usuario_pode_operar(
+        self,
+        *,
+        mostrar_mensagem: bool = True,
+        permitir_degradacao: bool = False,
+    ) -> bool:
         return self._sessao_permite(
             ("ADMINISTRADOR", "CAIXA"),
             mostrar_mensagem=mostrar_mensagem,
+            permitir_degradacao=permitir_degradacao,
         )
 
     def _usuario_pode_administrar_produtos(self) -> bool:
@@ -1188,13 +1366,33 @@ class JanelaPrincipal(QMainWindow):
         perfis: tuple[str, ...],
         *,
         mostrar_mensagem: bool = True,
+        permitir_degradacao: bool = False,
     ) -> bool:
         try:
-            autorizar_sessao(self.sessao, perfis, self.caminho_banco)
+            if self._modo_operacional() is ModoOperacional.NORMAL:
+                autorizar_sessao(self.sessao, perfis, self.caminho_banco)
+            else:
+                autorizar_sessao_local(self.sessao, perfis)
         except PermissaoNegadaError:
             if mostrar_mensagem:
                 self._definir_status(
                     "O perfil autenticado não possui permissão para esta operação.",
+                    "erro",
+                )
+            return False
+        except sqlite3.Error as erro:
+            if permitir_degradacao and self._tentar_ativar_calculo_degradado(erro):
+                try:
+                    autorizar_sessao_local(self.sessao, perfis)
+                except Exception:
+                    return False
+                return True
+            if (
+                mostrar_mensagem
+                and self._modo_operacional() is ModoOperacional.NORMAL
+            ):
+                self._definir_status(
+                    "Não foi possível validar a sessão no SQLite.",
                     "erro",
                 )
             return False
