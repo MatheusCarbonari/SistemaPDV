@@ -216,7 +216,7 @@ def test_falha_de_integridade_nao_publica_copia(
     _criar_banco(banco)
     monkeypatch.setattr(
         backup_module,
-        "_validar_backup",
+        "validar_backup_sqlite",
         lambda caminho: (_ for _ in ()).throw(
             ValidacaoBackupError("falha controlada")
         ),
@@ -245,7 +245,7 @@ def test_validacao_rejeita_copia_incompativel(tmp_path, cenario) -> None:
             conexao.close()
 
     with pytest.raises(ValidacaoBackupError):
-        backup_module._validar_backup(copia)
+        backup_module.validar_backup_sqlite(copia)
 
 
 def test_colisao_de_nome_preserva_backup_anterior(
@@ -369,7 +369,7 @@ def test_retencao_so_e_aplicada_depois_de_novo_backup_valido(
     )
     monkeypatch.setattr(
         backup_module,
-        "_validar_backup",
+        "validar_backup_sqlite",
         lambda caminho: (_ for _ in ()).throw(
             ValidacaoBackupError("inválido")
         ),
@@ -561,6 +561,60 @@ def test_backups_simultaneos_da_mesma_origem_serializam_retencao_e_retorno(
     # O novo backup pode ser o 12º ponto quando o relógio aparente é anterior
     # ao backup reconhecido mais recente; ele permanece protegido por contrato.
     assert 1 <= len(restantes) <= 12
+
+
+def test_transporte_mantem_lock_ate_fechar_contexto(tmp_path) -> None:
+    banco = tmp_path / "transporte.db"
+    raiz = tmp_path / "backups"
+    _criar_banco(banco)
+    resultado = criar_backup_local(banco, raiz)
+    tentativa_iniciada = Event()
+    segundo_entrou = Event()
+
+    def adquirir_mesmo_lock():
+        tentativa_iniciada.set()
+        with backup_module._backup_local_coordenado(
+            resultado.caminho_backup.parent,
+            resultado.identificador_origem,
+        ):
+            segundo_entrou.set()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with backup_module.abrir_backup_local_para_transporte(resultado):
+            futuro = executor.submit(adquirir_mesmo_lock)
+            assert tentativa_iniciada.wait(10)
+            assert not segundo_entrou.wait(0.2)
+
+        assert segundo_entrou.wait(10)
+        futuro.result(10)
+
+
+def test_transporte_libera_lock_apos_excecao_no_contexto(tmp_path) -> None:
+    banco = tmp_path / "transporte-excecao.db"
+    raiz = tmp_path / "backups"
+    _criar_banco(banco)
+    resultado = criar_backup_local(banco, raiz)
+    tentativa_iniciada = Event()
+    segundo_entrou = Event()
+
+    def adquirir_mesmo_lock():
+        tentativa_iniciada.set()
+        with backup_module._backup_local_coordenado(
+            resultado.caminho_backup.parent,
+            resultado.identificador_origem,
+        ):
+            segundo_entrou.set()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with pytest.raises(RuntimeError, match="falha no transporte"):
+            with backup_module.abrir_backup_local_para_transporte(resultado):
+                futuro = executor.submit(adquirir_mesmo_lock)
+                assert tentativa_iniciada.wait(10)
+                assert not segundo_entrou.wait(0.2)
+                raise RuntimeError("falha no transporte")
+
+        assert segundo_entrou.wait(10)
+        futuro.result(10)
 
 
 def test_origens_diferentes_nao_compartilham_bloqueio(

@@ -247,6 +247,18 @@ _CATALOGO_EVENTOS: dict[str, tuple[str, int, str, frozenset[str]]] = {
         "A exportação do diagnóstico falhou.",
         frozenset({"erro_tipo", "resultado"}),
     ),
+    "backup_externo_concluido": (
+        "backup_externo",
+        logging.INFO,
+        "O backup externo foi transportado e validado.",
+        frozenset({"resultado", "status"}),
+    ),
+    "backup_externo_falhou": (
+        "backup_externo",
+        logging.ERROR,
+        "A tentativa de backup externo falhou sem afetar a operação comercial.",
+        frozenset({"erro_tipo", "resultado", "status"}),
+    ),
 }
 _REGISTRO_NAO_CATALOGADO = (
     "logging",

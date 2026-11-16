@@ -20,6 +20,7 @@ Sistema de ponto de venda desenvolvido para operação local em açougues. A apl
 - Recuperação administrativa por códigos offline.
 - Migração versionada do SQLite com backup verificado antes da atualização.
 - Identificação offline da versão do aplicativo e da origem do build.
+- Backup SQLite local validado e transporte externo configurável.
 
 ## Tecnologias
 
@@ -101,6 +102,26 @@ seu caminho nem substituir o snapshot já carregado.
 O T52 fornece apenas a base de leitura controlada. O fluxo normal continua no
 SQLite e ainda não existe liberação automática de operação degradada, fechamento
 ou cancelamento sem banco; essas decisões pertencem aos T53 e T54.
+
+## Backup externo configurável
+
+O backup externo é desabilitado por padrão. Para habilitar o destino de
+diretório, defina a variável antes de iniciar a aplicação:
+
+```powershell
+$env:SISTEMA_PDV_BACKUP_EXTERNO_DIR = "E:\Sistema-PDV\backups"
+python main.py
+```
+
+Quando configurado, o sistema cria primeiro um backup local consistente pelo
+mecanismo do T55 e transporta a cópia em segundo plano. A primeira tentativa
+ocorre ao abrir a operação e as seguintes a cada duas horas após o fim da
+tentativa anterior. Falhas ficam registradas sem bloquear vendas.
+
+O diretório precisa estar em mídia ou compartilhamento administrado e com
+permissões adequadas. Informar outro caminho no mesmo disco não cria redundância
+física. A implementação atual não envia para nuvem, não restaura dados e não
+executa enquanto o programa estiver fechado.
 
 ## Testes
 

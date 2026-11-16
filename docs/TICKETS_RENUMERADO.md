@@ -881,6 +881,25 @@ estado; 174 regressões de schema, vendas e cancelamentos; e suíte completa com
 **Origem:** backlog original T45.
 **Entrega verificável:** Destino externo, agendamento 2h, falhas e alertas.
 **Conceito a estudar:** Tolerância a falhas.
+**Implementação em revisão:** o serviço reutiliza a cópia consistente do T55
+e a envia a um destino de diretório explicitamente configurado por
+`SISTEMA_PDV_BACKUP_EXTERNO_DIR`. A transferência compara SHA-256, repete as
+validações SQLite em temporário e publica sem sobrescrita. Cada origem é
+isolada e execuções cooperantes no mesmo destino são serializadas. A retenção
+externa mantém um ponto por cada um dos 30 dias locais mais recentes e preserva
+arquivos não reconhecidos.
+O agendador processual tenta uma vez ao abrir a operação configurada e novamente
+duas horas depois do fim de cada tentativa, sem sobreposição nem retentativa
+imediata. Os estados `NAO_CONFIGURADO`, `PENDENTE`, `EM_EXECUCAO`, `SUCESSO` e
+`FALHA` ficam disponíveis em memória e os resultados geram somente logs
+catalogados seguros. Falha externa não bloqueia vendas e não interfere no T54.
+Diretório diferente não prova redundância física; mídia e compartilhamento
+reais ainda exigem homologação. Não há transporte de nuvem, credenciais,
+restauração ou persistência do estado. A cópia condicionada ao encerramento
+continua limitada pela ausência de marcador durável de alterações.
+Validação local: 109 testes específicos de backup, logs, diagnóstico e
+inicialização; 131 regressões comerciais; e suíte completa com 1.245 testes
+aprovados. Esses resultados não substituem a revisão independente.
 
 ### T57 — Restauração assistida
 **Origem:** backlog original T46.

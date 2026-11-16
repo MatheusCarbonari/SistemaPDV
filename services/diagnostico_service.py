@@ -77,6 +77,10 @@ _CAMPOS_EXPORTAVEIS_POR_EVENTO: dict[str, frozenset[str]] = {
     "erro_thread_nao_tratado": frozenset({"erro_tipo"}),
     "diagnostico_exportado": frozenset({"resultado"}),
     "diagnostico_exportacao_falhou": frozenset({"erro_tipo", "resultado"}),
+    "backup_externo_concluido": frozenset({"resultado", "status"}),
+    "backup_externo_falhou": frozenset(
+        {"erro_tipo", "resultado", "status"}
+    ),
     "registro_nao_catalogado": frozenset(),
 }
 

@@ -234,6 +234,7 @@ def test_login_valido_abre_janela_com_sessao(
             return QDialog.DialogCode.Accepted
 
     janelas = []
+    integracao_backup = {}
     janela_real = aplicacao_module.criar_janela_principal
 
     def criar_janela(caminho_banco, sessao_recebida):
@@ -241,8 +242,47 @@ def test_login_valido_abre_janela_com_sessao(
         janelas.append(janela)
         return janela
 
+    destino = object()
+
+    class ServicoBackupExternoFalso:
+        def __init__(
+            self,
+            caminho_banco,
+            *,
+            destino,
+            controlador_estado,
+        ):
+            integracao_backup["caminho"] = caminho_banco
+            integracao_backup["destino"] = destino
+            integracao_backup["controlador"] = controlador_estado
+
+    class AgendadorBackupExternoFalso:
+        def __init__(self, servico):
+            integracao_backup["servico"] = servico
+
+        def iniciar(self):
+            integracao_backup["iniciado"] = True
+
+        def parar(self):
+            integracao_backup["parado"] = True
+
     monkeypatch.setattr(aplicacao_module, "DialogoLogin", LoginValido)
     monkeypatch.setattr(aplicacao_module, "criar_janela_principal", criar_janela)
+    monkeypatch.setattr(
+        aplicacao_module,
+        "destino_externo_configurado_no_ambiente",
+        lambda: destino,
+    )
+    monkeypatch.setattr(
+        aplicacao_module,
+        "ServicoBackupExterno",
+        ServicoBackupExternoFalso,
+    )
+    monkeypatch.setattr(
+        aplicacao_module,
+        "AgendadorBackupExterno",
+        AgendadorBackupExternoFalso,
+    )
     monkeypatch.setattr(QApplication, "exec", lambda self: 37)
 
     resultado = aplicacao_module.executar_aplicacao([], caminho)
@@ -251,6 +291,15 @@ def test_login_valido_abre_janela_com_sessao(
     assert len(janelas) == 1
     assert janelas[0].sessao is sessao
     assert janelas[0].isVisible()
+    assert integracao_backup["caminho"] == caminho
+    assert integracao_backup["destino"] is destino
+    assert integracao_backup["controlador"] is janelas[0].controlador_estado
+    assert isinstance(
+        integracao_backup["servico"],
+        ServicoBackupExternoFalso,
+    )
+    assert integracao_backup["iniciado"] is True
+    assert integracao_backup["parado"] is True
     janelas[0].close()
 
 

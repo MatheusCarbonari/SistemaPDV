@@ -344,14 +344,52 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   horas, cópia ao encerrar, destino externo e alertas pertencem ao T56; seleção
   e aplicação de uma restauração pertencem ao T57.
 
+## Backup externo configurável (T56)
+
+- `services/backup_externo_service.py` não abre nem copia o SQLite operacional.
+  Ele solicita ao T55 uma cópia local consistente, mantém um descritor estável
+  dessa cópia e entrega seu conteúdo ao destino configurado.
+- O contrato `DestinoBackupExterno` separa a origem validada do transporte. A
+  implementação atual, `DestinoDiretorio`, atende unidade removível ou
+  compartilhamento montado e permite testes isolados; novos transportes devem
+  preservar validação, publicação exclusiva e contrato de falha.
+- O destino é opt-in pela variável `SISTEMA_PDV_BACKUP_EXTERNO_DIR`. Sem valor,
+  o estado é `NAO_CONFIGURADO` e nenhum backup é tentado. Com valor, o
+  agendador faz uma tentativa em thread daemon após abrir a operação e aguarda
+  duas horas a partir do fim de cada tentativa. Uma falha não provoca laço de
+  retentativas; a próxima tentativa ocorre no intervalo regular.
+- O transporte grava um temporário exclusivo no destino, calcula SHA-256 na
+  origem e na cópia recebida, reabre o SQLite para as validações do T55 e só
+  então publica sem sobrescrita. Falha limpa o temporário na medida permitida e
+  preserva cópias válidas anteriores.
+- Cada origem usa subdiretório e lock próprios. Operações cooperantes da mesma
+  origem e destino serializam cópia, publicação e retenção; origens distintas
+  permanecem isoladas. A retenção conserva um ponto por cada um dos 30 dias
+  locais mais recentes e não toca arquivos desconhecidos.
+- O estado público distingue `NAO_CONFIGURADO`, `PENDENTE`, `EM_EXECUCAO`,
+  `SUCESSO` e `FALHA`, com última tentativa, último sucesso e tipo técnico do
+  erro. Logs catalogados não contêm caminho, hash, credencial ou dado comercial.
+  Esse estado é volátil e reinicia com o processo.
+- Falha externa nunca libera estado operacional, nunca bloqueia operação
+  comercial e não substitui restauração. O T57 continua responsável por
+  seleção e recuperação assistida.
+- Um diretório diferente pode estar no mesmo disco. O serviço rejeita a área
+  local conhecida, mas não declara redundância física: mídia removível,
+  compartilhamento, permissões e locks precisam ser homologados no ambiente.
+- Limitações atuais: o agendador só existe enquanto o aplicativo está aberto;
+  timestamps e resultado não sobrevivem ao reinício; parada de thread é
+  cooperativa diante de I/O travado. O requisito histórico de backup ao encerrar
+  quando houver mudanças não foi presumido: não existe marcador durável e
+  confiável de mutação para implementá-lo sem ampliar a arquitetura.
+
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.
 - Validar no T61/T62 lock SQLite, transações incertas, escala do Windows e metas
   de latência no equipamento alvo.
-- Concluir nos T56–T57 agendamento, backup externo, permissões no ambiente
-  instalado e restauração assistida. O T55 cobre somente a cópia local sob
-  chamada explícita; o Marco 2 cobre o backup pré-migração.
+- Validar no ambiente instalado a mídia externa, permissões e semântica de
+  locks do T56; concluir no T57 a restauração assistida. O Marco 2 cobre o
+  backup pré-migração.
 - Reavaliar em ticket futuro, mediante decisão de schema/persistência, a
   recuperação de UUID de fechamento e carrinho após encerramento do processo;
   o T54 documenta a impossibilidade atual e permanece fail-closed.

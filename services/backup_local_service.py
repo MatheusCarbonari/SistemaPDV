@@ -121,34 +121,73 @@ def criar_backup_local(
 
 
 @contextmanager
+def abrir_backup_local_para_transporte(resultado: ResultadoBackupLocal):
+    """Abre uma cópia T55 sob o lock e mantém seu descritor estável."""
+    if not isinstance(resultado, ResultadoBackupLocal):
+        raise TypeError("O resultado do backup local é inválido.")
+    caminho = resultado.caminho_backup
+    with _backup_local_coordenado(
+        caminho.parent,
+        resultado.identificador_origem,
+    ):
+        if not caminho.is_file():
+            raise BackupLocalError(
+                "O backup local validado não está mais disponível."
+            )
+        with caminho.open("rb") as arquivo:
+            yield arquivo
+
+
+@contextmanager
 def _backup_local_coordenado(
     diretorio: Path,
     identificador_origem: str,
 ):
-    chave = os.path.normcase(os.fspath(diretorio.resolve(strict=True)))
+    nome_lock = f".{_PREFIXO_BACKUP}.{identificador_origem}.lock"
+    with coordenar_diretorio_backup(diretorio, nome_lock):
+        yield
+
+
+@contextmanager
+def coordenar_diretorio_backup(
+    diretorio: str | Path,
+    nome_lock: str,
+):
+    """Serializa operações cooperantes em um diretório de backup."""
+    if (
+        not isinstance(nome_lock, str)
+        or not re.fullmatch(r"\.[A-Za-z0-9._-]{1,180}\.lock", nome_lock)
+    ):
+        raise ValueError("O nome do lock de backup é inválido.")
+    raiz = Path(diretorio).resolve(strict=True)
+    chave = os.path.normcase(os.fspath(raiz / nome_lock))
     with _BLOQUEIO_REGISTRO:
         bloqueio_local = _BLOQUEIOS_DIRETORIO.setdefault(chave, RLock())
 
     with bloqueio_local:
-        caminho_lock = diretorio / (
-            f".{_PREFIXO_BACKUP}.{identificador_origem}.lock"
-        )
+        caminho_lock = raiz / nome_lock
         try:
-            with caminho_lock.open("a+b", buffering=0) as arquivo_lock:
-                if arquivo_lock.seek(0, os.SEEK_END) == 0:
-                    arquivo_lock.write(b"\0")
-                arquivo_lock.seek(0)
-                _adquirir_lock_arquivo(arquivo_lock)
-                try:
-                    yield
-                finally:
-                    _liberar_lock_arquivo(arquivo_lock)
-        except CoordenacaoBackupError:
-            raise
+            arquivo_lock = caminho_lock.open("a+b", buffering=0)
         except OSError as erro:
             raise CoordenacaoBackupError(
                 "Não foi possível coordenar o backup local."
             ) from erro
+        with arquivo_lock:
+            try:
+                if arquivo_lock.seek(0, os.SEEK_END) == 0:
+                    arquivo_lock.write(b"\0")
+                arquivo_lock.seek(0)
+                _adquirir_lock_arquivo(arquivo_lock)
+            except CoordenacaoBackupError:
+                raise
+            except OSError as erro:
+                raise CoordenacaoBackupError(
+                    "Não foi possível coordenar o backup local."
+                ) from erro
+            try:
+                yield
+            finally:
+                _liberar_lock_arquivo(arquivo_lock)
 
 
 def _adquirir_lock_arquivo(arquivo_lock) -> None:
@@ -351,7 +390,7 @@ def _criar_e_publicar_backup(
     )
     try:
         _executar_backup_sqlite(origem, temporario)
-        _validar_backup(temporario)
+        validar_backup_sqlite(temporario)
         _publicar_sem_sobrescrever(temporario, definitivo)
         return definitivo
     except BackupLocalError:
@@ -385,7 +424,8 @@ def _executar_backup_sqlite(origem: Path, temporario: Path) -> None:
             conexao_origem.close()
 
 
-def _validar_backup(caminho_backup: Path) -> None:
+def validar_backup_sqlite(caminho_backup: str | Path) -> None:
+    caminho_backup = Path(caminho_backup)
     conexao = None
     try:
         conexao = sqlite3.connect(

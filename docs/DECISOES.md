@@ -249,6 +249,21 @@
   sucesso. A garantia entre processos depende de todos usarem o serviço e de um
   filesystem local com locks confiáveis; ferramentas externas e filesystems de
   rede que ignorem locks permanecem fora da garantia.
+- **DEC-050** — O T56 reutiliza exclusivamente a cópia consistente e validada do
+  T55 e separa dela o transporte por um contrato de destino. A implementação
+  atual oferece destino de diretório explicitamente configurado por
+  `SISTEMA_PDV_BACKUP_EXTERNO_DIR`; nuvem, FTP, credenciais e descoberta
+  automática permanecem fora do escopo. O transporte calcula SHA-256 da cópia
+  local aberta de forma estável, grava temporário no destino, compara o resumo,
+  repete a validação SQLite e publica sem sobrescrever. A retenção externa
+  conserva um ponto por cada um dos 30 dias locais mais recentes e ignora
+  arquivos desconhecidos, links, temporários e outras origens. O agendador
+  processual faz a primeira tentativa ao iniciar a operação configurada e as
+  seguintes duas horas depois do fim de cada tentativa, sem sobreposição nem
+  retentativa imediata. Falhas ficam em estado técnico e log seguro, mas não
+  bloqueiam vendas nem alteram o protocolo T54. Estado e horários são somente
+  processuais. Um caminho diferente não comprova mídia física distinta; essa
+  validação continua sendo responsabilidade da instalação e homologação.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

@@ -12,6 +12,11 @@ from models.sessao_usuario import SessaoUsuario
 from repositories.usuario_repository import EstadoIdentidadeInconsistenteError
 from services.administrador_inicial_service import obter_estado_primeiro_acesso
 from services.autenticacao_service import autorizar_sessao, encerrar_sessao
+from services.backup_externo_service import (
+    AgendadorBackupExterno,
+    ServicoBackupExterno,
+    destino_externo_configurado_no_ambiente,
+)
 from services.inicializacao_banco_service import (
     InicializacaoBancoError,
     preparar_banco_para_operacao,
@@ -210,11 +215,23 @@ def executar_aplicacao(
         return 1
 
     janela.show()
+    servico_backup_externo = ServicoBackupExterno(
+        caminho_banco,
+        destino=destino_externo_configurado_no_ambiente(),
+        controlador_estado=getattr(janela, "controlador_estado", None),
+    )
+    agendador_backup_externo = AgendadorBackupExterno(
+        servico_backup_externo
+    )
+    agendador_backup_externo.iniciar()
     registrar_evento(
         "operacao_iniciada",
         resultado="sucesso",
     )
-    codigo_saida = aplicacao.exec()
+    try:
+        codigo_saida = aplicacao.exec()
+    finally:
+        agendador_backup_externo.parar()
     registrar_evento(
         "aplicacao_encerrada",
         codigo_saida=codigo_saida,
