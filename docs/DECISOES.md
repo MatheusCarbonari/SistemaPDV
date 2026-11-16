@@ -229,6 +229,26 @@
   processo estiver ativo, cada janela registra sua incerteza no controlador
   canônico do banco; a retomada permanece bloqueada até todas as origens serem
   resolvidas, sem compartilhar UUID, confirmação ou dados comerciais.
+- **DEC-049** — O T55 produz backup local por `sqlite3.Connection.backup` a partir
+  de conexão somente leitura, primeiro em arquivo temporário no diretório de
+  destino. A cópia só é publicada, sem sobrescrita, depois de validar
+  `PRAGMA integrity_check`, versão do schema, tabelas essenciais e chaves
+  estrangeiras. A identidade privada combina caminho canônico e identidade do
+  arquivo de origem, isolando bancos diferentes sem alterar o schema. Backups
+  locais ficam em `backups/local/<identidade>` ao lado do banco, salvo raiz
+  explicitamente informada. A retenção conserva um ponto para cada um dos sete
+  dias locais mais recentes e um ponto para cada uma das quatro semanas ISO
+  anteriores ao intervalo diário; o novo backup e a última cópia reconhecida
+  nunca são removidos. Rotação ocorre somente após publicação válida e ignora
+  arquivos desconhecidos, temporários, links e outras origens. O T55 não agenda
+  execuções, não envia cópias externamente e não restaura dados.
+  Criação, publicação, retenção e formação do resultado usam uma única
+  seção crítica por origem e destino: `RLock` no processo e lock exclusivo em
+  arquivo para processos cooperantes. Origens diferentes não compartilham esse
+  lock. A espera tem limite de 60 segundos e falha de coordenação não publica
+  sucesso. A garantia entre processos depende de todos usarem o serviço e de um
+  filesystem local com locks confiáveis; ferramentas externas e filesystems de
+  rede que ignorem locks permanecem fora da garantia.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

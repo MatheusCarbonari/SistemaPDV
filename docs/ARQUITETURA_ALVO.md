@@ -303,13 +303,55 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   em memória após o encerramento do processo. Também não cria fila de vendas,
   recuperação automática, backup ou restauração.
 
+## Backup SQLite local (T55)
+
+- `services/backup_local_service.py` abre a origem em modo somente leitura e usa
+  a Backup API do SQLite. Isso obtém uma imagem transacional consistente também
+  em WAL, sem copiar diretamente o arquivo aberto e sem modificar registros ou
+  schema.
+- A cópia nasce como temporário no destino. Antes da publicação, uma conexão
+  independente confirma `PRAGMA integrity_check = ok`, versão exata do schema,
+  tabelas essenciais legíveis e ausência de violações de chave estrangeira. A
+  publicação usa nome exclusivo e não substitui arquivos existentes.
+- A identidade do banco é privada e deriva do caminho canônico e da identidade
+  do arquivo. Cada origem usa subdiretório próprio em
+  `backups/local/<identidade>`; substituir o banco no mesmo caminho cria nova
+  identidade e não mistura sua rotação com as cópias anteriores.
+- A retenção mantém o backup mais recente de cada um dos sete dias locais mais
+  recentes e, antes desse intervalo, o mais recente de cada uma das quatro
+  semanas ISO. A cópia recém-publicada é protegida mesmo se o relógio retroceder.
+  Arquivos desconhecidos, temporários, links e outras identidades não participam
+  da exclusão. Erro ao remover uma cópia antiga mantém o arquivo e aparece no
+  resultado, sem invalidar o novo backup.
+- A publicação exclusiva usa link atômico entre nomes no mesmo filesystem. Um
+  destino local sem esse recurso é recusado de forma segura, sem fallback para
+  sobrescrita ou cópia não atômica.
+- O ciclo completo de uma operação — temporário, cópia, validação, publicação,
+  retenção e confirmação do resultado — é serializado por origem e destino. Um
+  `RLock` coordena threads e um arquivo oculto com lock exclusivo coordena
+  processos que usam o mesmo serviço. O arquivo de lock é persistente e ignorado
+  pela retenção; o sistema operacional libera o lock se o processo terminar.
+  Cada operação adquire apenas esse lock e a espera expira em 60 segundos, sem
+  ciclo de dependências. Origens distintas usam diretórios e locks distintos.
+- O lock entre processos é cooperativo. A garantia não abrange exclusão por
+  ferramentas externas nem filesystems de rede que não preservem corretamente
+  locks e links atômicos; nesses ambientes o destino deve ser considerado
+  incompatível até validação operacional.
+- O serviço opera somente enquanto o controlador canônico permanece `NORMAL`.
+  A cópia é recusada em `CALCULO_DEGRADADO` e `INDISPONIVEL`; ela não libera
+  estado, não repara banco e não altera as barreiras comerciais.
+- O T55 fornece mecanismo local sob chamada explícita. Periodicidade de duas
+  horas, cópia ao encerrar, destino externo e alertas pertencem ao T56; seleção
+  e aplicação de uma restauração pertencem ao T57.
+
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.
 - Validar no T61/T62 lock SQLite, transações incertas, escala do Windows e metas
   de latência no equipamento alvo.
-- Concluir nos T55–T57 backup periódico e externo, permissões dos arquivos e
-  restauração assistida; o Marco 2 cobre somente o backup pré-migração.
+- Concluir nos T56–T57 agendamento, backup externo, permissões no ambiente
+  instalado e restauração assistida. O T55 cobre somente a cópia local sob
+  chamada explícita; o Marco 2 cobre o backup pré-migração.
 - Reavaliar em ticket futuro, mediante decisão de schema/persistência, a
   recuperação de UUID de fechamento e carrinho após encerramento do processo;
   o T54 documenta a impossibilidade atual e permanece fail-closed.

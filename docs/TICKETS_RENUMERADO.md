@@ -849,6 +849,33 @@ persistência alternativa pelo T54.
 **Origem:** backlog original T44.
 **Entrega verificável:** Cópia consistente, integridade e retenção local.
 **Conceito a estudar:** Backup API.
+**Implementação em revisão:** serviço explícito usa a API de backup do SQLite
+com origem somente leitura e temporário criado no próprio destino, compatível
+com WAL. A publicação sem sobrescrita ocorre somente após abertura independente,
+`PRAGMA integrity_check`, schema atual, estruturas essenciais e relacionamentos
+válidos. A identidade privada da origem separa bancos mesmo quando possuem o
+mesmo nome e aceita caminhos equivalentes para o mesmo arquivo. Por padrão, as
+cópias ficam em `backups/local/<identidade>` ao lado do banco.
+**Retenção local:** um ponto por cada um dos 7 dias mais recentes no fuso de
+São Paulo, seguido de um ponto por cada uma das 4 semanas ISO anteriores. O novo
+backup e o último ponto reconhecido são preservados; rotação só começa depois da
+nova publicação válida e não toca arquivos externos, temporários, links ou
+cópias de outra origem. Falhas de exclusão preservam o arquivo e são reportadas.
+O serviço é permitido em `NORMAL` e recusado em `CALCULO_DEGRADADO` ou
+`INDISPONIVEL` pelo controlador canônico. Agendamento, backup externo e interface
+administrativa permanecem fora do T55; restauração pertence ao T57.
+O destino local precisa oferecer publicação por link atômico no mesmo
+filesystem; quando essa capacidade não existe, a operação falha sem substituir
+backup anterior e remove seu temporário na medida permitida pelo sistema.
+**Correção de concorrência em revisão:** operações da mesma origem e destino
+são serializadas desde a criação até a retenção e verificação final do caminho
+retornado. A coordenação combina lock processual e arquivo de lock exclusivo
+para processos cooperantes, com timeout de 60 segundos; origens diferentes
+continuam independentes. A garantia não cobre programas que ignorem o protocolo
+nem filesystems de rede sem semântica confiável de lock.
+Validação local: 67 testes específicos de backup, inicialização, contingência e
+estado; 174 regressões de schema, vendas e cancelamentos; e suíte completa com
+1.224 testes aprovados. Esses resultados não substituem a revisão independente.
 
 ### T56 — Backup externo
 **Origem:** backlog original T45.

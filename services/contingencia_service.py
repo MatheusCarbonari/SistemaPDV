@@ -7,7 +7,7 @@ from pathlib import Path
 import sqlite3
 
 from database.conexao import CAMINHO_BANCO, conectar
-from database.schema import VERSAO_ESQUEMA
+from database.schema import TABELAS_ESSENCIAIS, VERSAO_ESQUEMA
 from services.autenticacao_service import (
     LIMITADOR_LOGIN_PADRAO,
     coordenar_credenciais,
@@ -21,21 +21,6 @@ from services.estado_operacional_service import (
     ControladorEstadoOperacional,
     ModoOperacional,
     recuperacao_operacional_protegida,
-)
-
-
-TABELAS_ESSENCIAIS = frozenset(
-    {
-        "categorias",
-        "codigos_recuperacao",
-        "estado_identidade",
-        "historico_precos_produtos",
-        "itens_venda",
-        "pagamentos",
-        "produtos",
-        "usuarios",
-        "vendas",
-    }
 )
 
 

@@ -7,6 +7,20 @@ from models.categoria import (
 
 VERSAO_ESQUEMA = 10
 
+TABELAS_ESSENCIAIS = frozenset(
+    {
+        "categorias",
+        "codigos_recuperacao",
+        "estado_identidade",
+        "historico_precos_produtos",
+        "itens_venda",
+        "pagamentos",
+        "produtos",
+        "usuarios",
+        "vendas",
+    }
+)
+
 _COMANDO_CRIAR_PRODUTOS = """
 CREATE TABLE IF NOT EXISTS produtos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
