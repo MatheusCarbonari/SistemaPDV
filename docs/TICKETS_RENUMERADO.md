@@ -927,6 +927,29 @@ revisão independente.
 **Origem:** backlog original T47.
 **Entrega verificável:** Roteiro de migração e recusa segura de esquema incompatível.
 **Conceito a estudar:** Schema evolution.
+**Implementação em revisão:** registro único de migrações sequenciais usa
+`PRAGMA user_version`, valida o caminho completo e executa alterações e versões
+em uma transação atômica. A inicialização bloqueia operações, serializa
+processos cooperantes, exige backup pré-migração consistente e validado pelo
+núcleo do T55 e recusa versão futura, rota ausente, corrupção ou estrutura
+divergente. A inspeção é somente leitura; o contrato estrutural progressivo
+valida colunas, índices e chaves estrangeiras, e a cópia pré-migração deve ter
+a versão original esperada. O resultado técnico expõe versões, passos, backup,
+declaração, homologação, aptidão do banco para o aplicativo atual e autorização
+da próxima etapa como estados distintos. Banco novo ou sem migrações pendentes
+pode operar normalmente, mas rota vazia não autoriza instalar outro aplicativo.
+A autorização exige uma rota não vazia, futura, declarada e homologada e vale
+somente para aquela execução coordenada; não é persistida no banco.
+As rotas históricas v0→v10 são preservadas como legado, não comprovam
+compatibilidade com o aplicativo anterior e não autorizam automaticamente o
+instalador. A migração v9→v10 pode quebrar aplicativos anteriores; seu uso
+operacional exige procedimento específico de manutenção e homologação, fora
+deste ticket. Migrações posteriores à v10 devem cumprir integralmente a DEC-056
+e provar compatibilidade; declaração ou sucesso da migração não são prova
+suficiente. As versões SQLite v0→v10 são internas ao desenvolvimento. O primeiro
+lançamento comercial homologado poderá ser o aplicativo `1.0.0`, independente
+do schema interno então aprovado, e formará o primeiro marco de compatibilidade
+comercial sem renumerar as migrações existentes.
 
 ### T59 — Empacotamento Windows
 **Origem:** backlog original T48.
@@ -945,6 +968,20 @@ coordena rotação entre processos; impedir que duas instâncias escrevam ou
 rotacionem simultaneamente o mesmo conjunto de logs sem proteção adequada; e
 avaliar diretórios distintos para produção e homologação quando esses perfis
 forem implementados.
+**Contrato obrigatório vinculado do T58:** o instalador deve reconhecer que
+migrações históricas não estão automaticamente autorizadas para atualização
+coordenada. Ele deverá: identificar versões do aplicativo e schema; validar as
+combinações compatíveis; manter o PDV fechado; preservar executável,
+configurações e banco; acionar o T58; exigir backup pré-migração validado;
+validar banco e compatibilidade com o aplicativo anterior; instalar a nova
+versão somente após autorização da etapa de banco; não instalar se a migração
+falhar; preservar ou recuperar o executável anterior após falha de instalação
+somente quando houver compatibilidade comprovada; validar a combinação final;
+registrar falhas para manutenção; e nunca substituir automaticamente o banco
+operacional por backup como rollback comum. O projeto deverá ainda contemplar
+queda de energia, reinicialização e arquivos parcialmente instalados. Uma nova
+execução do T58 sem migrações pendentes não recupera autorização anterior; o
+instalador deverá revalidar a combinação aplicativo/schema antes de prosseguir.
 
 ### T61 — Teste de performance
 **Origem:** backlog original T50.

@@ -409,6 +409,66 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   libera vendas. Substituição futura deverá preservar o banco anterior e exigir
   um protocolo próprio, fora deste ticket.
 
+## Migrações versionadas e atualização coordenada (T58)
+
+- `database/migracoes.py` é o registro único de rotas SQLite. Cada passo informa
+  origem, destino, identificador, classificação legada e declaração explícita de
+  compatibilidade com o aplicativo anterior. `PRAGMA user_version` continua
+  sendo a versão do schema e não se confunde com a versão do aplicativo.
+- O motor valida a estrutura progressiva declarada para cada versão: conjunto,
+  tipo, nulabilidade e chave primária das colunas essenciais; unicidade, colunas,
+  ordenação e colação dos índices; e definições exatas das chaves estrangeiras.
+  A inspeção usa conexão SQLite somente leitura e nunca cria caminho ausente.
+  O caminho completo é calculado antes da alteração, e todos os passos,
+  inclusive cada avanço de `user_version`, usam uma única transação. Falha
+  provoca rollback integral; versão futura, rota ausente, corrupção ou estrutura
+  divergente bloqueiam a inicialização sem recriar tabelas.
+- `preparar_banco_para_operacao()` serializa processos cooperantes por banco,
+  inspeciona a origem, cria uma cópia consistente validada antes da primeira
+  mudança e somente libera a operação após validação final. O backup reutiliza
+  o núcleo SQLite do T55 com validador adequado à versão legada e confirma que
+  `user_version` da cópia corresponde à versão original inspecionada, sem
+  modificar retenção ou contratos públicos dos T55, T56 e T57.
+- A coordenação usa lock de arquivo com espera limitada para processos que
+  adotam o serviço e `BEGIN IMMEDIATE` como barreira SQLite. Ferramentas externas
+  que ignoram o lock não fazem parte da garantia; a transação ainda impede duas
+  gravações concorrentes no mesmo banco.
+- As rotas v0→v10 são históricas e legadas. Elas permanecem disponíveis para a
+  inicialização existente, mas não autorizam automaticamente a próxima etapa de
+  um instalador. A rota v9→v10 reconstrói `produtos` e pode ser incompatível com
+  aplicativos anteriores; atualizações operacionais por essa rota dependem de
+  procedimento de manutenção e homologação fora deste ticket.
+- Para qualquer migração posterior à v10, a DEC-056 é integral: cada passo
+  deve primeiro declarar sua compatibilidade. A homologação é um estado
+  separado e exige identificar a versão anterior do aplicativo e a evidência
+  técnica; somente a rota integralmente declarada e homologada pode autorizar a
+  etapa seguinte. DDL concluído, `integrity_check` satisfatório, declaração ou
+  migração bem-sucedida não são, isoladamente, prova de compatibilidade.
+- Os números SQLite v0→v10 são internos ao desenvolvimento. O primeiro
+  lançamento comercial homologado poderá ser identificado como aplicativo
+  `1.0.0`, independentemente do número interno de schema aprovado naquela data.
+  Esse lançamento será o primeiro marco de compatibilidade comercial; as
+  migrações existentes não serão renumeradas.
+- O resultado estruturado separa três dimensões: aptidão estrutural para operar
+  com o aplicativo atual; estado e passos da migração; e autorização para a
+  próxima etapa de uma atualização coordenada. Banco novo ou já atualizado pode
+  estar apto à operação com autorização de atualização falsa. Rota vazia nunca
+  autoriza instalar outro aplicativo. A autorização somente pode ser positiva
+  para uma rota não vazia, futura, integralmente declarada e homologada, e vale
+  para aquela execução coordenada; ela não fica persistida no banco. O resultado
+  também informa versões, backup, declaração e homologação, mas não instala
+  executável, restaura automaticamente o banco nem substitui o futuro T60.
+- O T60 deverá manter o PDV fechado, preservar executável, configurações e
+  banco anteriores, validar as combinações aplicativo/schema antes e depois,
+  acionar o T58, exigir backup válido e instalar o aplicativo novo somente se a
+  etapa de banco autorizar. Falha de migração impede a instalação; falha do
+  instalador deve conservar ou recuperar o executável anterior somente quando
+  sua compatibilidade estiver comprovada. A combinação final precisa ser
+  validada e o banco operacional jamais é substituído automaticamente por um
+  backup como rollback comum. Se a coordenação for interrompida depois da
+  migração, uma nova execução sem rota não herda a autorização anterior; o T60
+  deverá revalidar explicitamente a combinação antes de prosseguir.
+
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.

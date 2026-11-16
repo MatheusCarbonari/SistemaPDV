@@ -279,6 +279,43 @@
   A cópia nasce como temporário, é validada antes da publicação exclusiva e
   não altera estado operacional, fechamento incerto, backup de origem ou banco
   comercial. Validar uma base de teste não autoriza retomada pelo T54.
+- **DEC-055** — Migrações compatíveis são executadas automaticamente na etapa
+  apropriada de inicialização ou atualização e devem terminar, ser validadas e
+  manter as operações comerciais bloqueadas antes da liberação do PDV. O
+  sucesso dessa etapa não presume nem autoriza, por si só, uma atualização
+  completa do aplicativo. Banco apto ao aplicativo atual e autorização para
+  instalar outro aplicativo são resultados independentes. Banco novo, banco já
+  atualizado ou execução sem migrações pendentes podem operar normalmente, mas
+  não concedem autorização de atualização por essa ausência de passos.
+- **DEC-056** — A atualização coordenada migra o banco antes de instalar a nova
+  versão do aplicativo. Deve preservar aplicativo, configurações e banco
+  anteriores; verificar previamente as combinações compatíveis; exigir backup
+  pré-migração validado; executar e validar a migração transacional; e somente
+  então autorizar o futuro instalador a avançar. Falha reverte a transação e
+  conserva o aplicativo anterior apenas quando sua compatibilidade com o banco
+  preservado estiver comprovada. Rollback do banco não é rollback do executável
+  e backup nunca substitui automaticamente o banco operacional como rollback
+  comum. Declaração da migração, homologação com versão anterior e evidência
+  técnica identificada, e autorização do instalador são estados distintos. O
+  simples sucesso, a declaração isolada ou a ausência de migrações não
+  comprovam compatibilidade. A autorização emitida pelo T58 pertence à rota
+  não vazia avaliada naquela execução coordenada; não é uma propriedade
+  persistente do banco final.
+- **DEC-057** — Migrações são explícitas, determinísticas, sequenciais e
+  identificadas pelas versões de origem e destino. O roteiro completo deve
+  existir antes da primeira alteração; apenas passos pendentes são executados e
+  passos concluídos não são reaplicados. As rotas históricas v1→v10 são
+  preservadas como legado e não recebem autorização automática para o futuro
+  instalador coordenado. Em particular, v9→v10 reconstrói `produtos` e pode
+  quebrar aplicativos anteriores. Seu uso operacional exige procedimento
+  específico de manutenção e homologação, fora do T58. Migrações posteriores
+  à v10 devem declarar e validar explicitamente a compatibilidade com a versão
+  anterior do aplicativo segundo a DEC-056. As versões SQLite v0→v10 são
+  marcos internos de desenvolvimento e não definem a versão comercial. O
+  primeiro lançamento homologado poderá ser o aplicativo `1.0.0` com qualquer
+  versão interna de schema então aprovada, sem renumerar migrações. Esse
+  lançamento, e não necessariamente o schema v10, estabelecerá a primeira base
+  de compatibilidade para atualizações comerciais.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

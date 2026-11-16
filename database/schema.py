@@ -1,4 +1,4 @@
-from database.conexao import CAMINHO_BANCO, conectar
+from database.conexao import CAMINHO_BANCO
 from models.categoria import (
     NOME_CATEGORIA_LEGADA,
     normalizar_identidade_categoria,
@@ -415,98 +415,22 @@ ON codigos_recuperacao (usuario_id, conjunto_id, id);
 """
 
 
-def criar_tabelas(caminho_banco=CAMINHO_BANCO) -> None:
+def criar_tabelas(
+    caminho_banco=CAMINHO_BANCO,
+    *,
+    antes_de_migrar=None,
+    validar_estrutura_estrita=False,
+):
     """
     Evolui o banco até a versão de esquema suportada pela aplicação.
     """
-    conexao = conectar(caminho_banco)
+    from database.migracoes import executar_migracoes
 
-    chaves_estrangeiras_desabilitadas = False
-    try:
-        versao_atual = conexao.execute("PRAGMA user_version").fetchone()[0]
-
-        if versao_atual > VERSAO_ESQUEMA:
-            raise RuntimeError(
-                "O banco usa uma versão de esquema mais nova que a aplicação."
-            )
-
-        if versao_atual == VERSAO_ESQUEMA:
-            return
-
-        if versao_atual < 10:
-            conexao.execute("PRAGMA foreign_keys = OFF")
-            chaves_estrangeiras_desabilitadas = True
-
-        # DDL também participa da transação no SQLite. Se qualquer comando
-        # falhar, nem as tabelas anteriores nem a nova versão são confirmadas.
-        conexao.execute("BEGIN IMMEDIATE")
-
-        if versao_atual < 1:
-            conexao.execute(_COMANDO_CRIAR_PRODUTOS)
-            conexao.execute(_COMANDO_CRIAR_VENDAS)
-            versao_atual = 1
-
-        if versao_atual < 2:
-            conexao.execute(_COMANDO_CRIAR_ITENS_VENDA)
-            versao_atual = 2
-
-        if versao_atual < 3:
-            conexao.execute(_COMANDO_CRIAR_PAGAMENTOS)
-            versao_atual = 3
-
-        if versao_atual < 4:
-            conexao.execute(_COMANDO_ADICIONAR_IDENTIFICADOR_TENTATIVA)
-            conexao.execute(_COMANDO_CRIAR_INDICE_TENTATIVA)
-            versao_atual = 4
-
-        if versao_atual < 5:
-            conexao.execute(_COMANDO_CRIAR_INDICE_HISTORICO_VENDAS)
-            versao_atual = 5
-
-        if versao_atual < 6:
-            conexao.execute(_COMANDO_ADICIONAR_MOTIVO_CANCELAMENTO)
-            conexao.execute(_COMANDO_ADICIONAR_DATA_CANCELAMENTO)
-            conexao.execute(_COMANDO_ADICIONAR_AUTORIZADOR_CANCELAMENTO)
-            conexao.execute(_COMANDO_ADICIONAR_STATUS_VENDA)
-            versao_atual = 6
-
-        if versao_atual < 7:
-            conexao.execute(_COMANDO_CRIAR_HISTORICO_PRECOS)
-            conexao.execute(_COMANDO_CRIAR_INDICE_HISTORICO_PRECOS)
-            versao_atual = 7
-
-        if versao_atual < 8:
-            conexao.execute(_COMANDO_CRIAR_USUARIOS)
-            conexao.execute(_COMANDO_CRIAR_ESTADO_IDENTIDADE)
-            conexao.execute(_COMANDO_INICIALIZAR_ESTADO_IDENTIDADE)
-            versao_atual = 8
-
-        if versao_atual < 9:
-            conexao.execute(_COMANDO_CRIAR_CODIGOS_RECUPERACAO)
-            conexao.execute(_COMANDO_CRIAR_INDICE_CODIGOS_RECUPERACAO)
-            versao_atual = 9
-
-        if versao_atual < 10:
-            _migrar_categorias_v10(conexao)
-            versao_atual = 10
-
-        referencias_invalidas = conexao.execute(
-            "PRAGMA foreign_key_check"
-        ).fetchall()
-        if referencias_invalidas:
-            raise RuntimeError(
-                "A migração produziu referências inválidas."
-            )
-
-        conexao.execute(f"PRAGMA user_version = {versao_atual}")
-        conexao.commit()
-    except Exception:
-        conexao.rollback()
-        raise
-    finally:
-        if chaves_estrangeiras_desabilitadas:
-            conexao.execute("PRAGMA foreign_keys = ON")
-        conexao.close()
+    return executar_migracoes(
+        caminho_banco,
+        antes_de_migrar=antes_de_migrar,
+        validar_estrutura_estrita=validar_estrutura_estrita,
+    )
 
 
 def _migrar_categorias_v10(conexao) -> None:

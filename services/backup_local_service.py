@@ -13,6 +13,7 @@ import sqlite3
 import tempfile
 from threading import Lock, RLock
 import time
+from typing import Callable
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -118,6 +119,64 @@ def criar_backup_local(
                     "O backup publicado deixou de estar disponível."
                 )
             return resultado
+
+
+def criar_copia_sqlite_consistente(
+    caminho_banco: str | Path,
+    caminho_destino: str | Path,
+    *,
+    validador: Callable[[Path], None],
+) -> Path:
+    """Publica uma cópia SQLite somente após a validação informada."""
+    if not callable(validador):
+        raise TypeError("O validador da cópia SQLite é inválido.")
+    origem, _ = _identificar_origem(caminho_banco)
+    destino_informado = Path(caminho_destino).expanduser()
+    if destino_informado.is_symlink():
+        raise DestinoBackupInvalidoError(
+            "Links simbólicos não são aceitos como destino de backup."
+        )
+    diretorio = destino_informado.parent
+    if diretorio.is_symlink() or not diretorio.is_dir():
+        raise DestinoBackupInvalidoError(
+            "O diretório do backup não é válido."
+        )
+    try:
+        destino = diretorio.resolve(strict=True) / destino_informado.name
+    except OSError as erro:
+        raise DestinoBackupInvalidoError(
+            "O diretório do backup não está acessível."
+        ) from erro
+    if destino == origem:
+        raise DestinoBackupInvalidoError(
+            "O destino do backup não pode ser o banco de origem."
+        )
+    if destino.exists() or destino.is_symlink():
+        raise PublicacaoBackupError(
+            "Já existe um arquivo no destino do backup."
+        )
+
+    descritor, nome_temporario = tempfile.mkstemp(
+        prefix=f".{_PREFIXO_BACKUP}.",
+        suffix=".tmp",
+        dir=diretorio,
+    )
+    os.close(descritor)
+    temporario = Path(nome_temporario)
+    try:
+        _executar_backup_sqlite(origem, temporario)
+        validador(temporario)
+        _publicar_sem_sobrescrever(temporario, destino)
+        if not destino.is_file():
+            raise PublicacaoBackupError(
+                "A cópia SQLite publicada deixou de estar disponível."
+            )
+        return destino
+    finally:
+        try:
+            temporario.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 @contextmanager
@@ -375,13 +434,6 @@ def _criar_e_publicar_backup(
     diretorio: Path,
     identificador_origem: str,
 ) -> Path:
-    descritor, nome_temporario = tempfile.mkstemp(
-        prefix=f".{_PREFIXO_BACKUP}.",
-        suffix=".tmp",
-        dir=diretorio,
-    )
-    os.close(descritor)
-    temporario = Path(nome_temporario)
     instante = datetime.now(UTC)
     definitivo = diretorio / _criar_nome_backup(
         identificador_origem,
@@ -389,21 +441,17 @@ def _criar_e_publicar_backup(
         uuid4().hex,
     )
     try:
-        _executar_backup_sqlite(origem, temporario)
-        validar_backup_sqlite(temporario)
-        _publicar_sem_sobrescrever(temporario, definitivo)
-        return definitivo
+        return criar_copia_sqlite_consistente(
+            origem,
+            definitivo,
+            validador=validar_backup_sqlite,
+        )
     except BackupLocalError:
         raise
     except Exception as erro:
         raise BackupLocalError(
             "Não foi possível criar e validar o backup local."
         ) from erro
-    finally:
-        try:
-            temporario.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def _executar_backup_sqlite(origem: Path, temporario: Path) -> None:
