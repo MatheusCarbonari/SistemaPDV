@@ -264,6 +264,21 @@
   bloqueiam vendas nem alteram o protocolo T54. Estado e horários são somente
   processuais. Um caminho diferente não comprova mídia física distinta; essa
   validação continua sendo responsabilidade da instalação e homologação.
+- **DEC-051** — O T57 entrega somente o serviço de recuperação isolada. A tela
+  de restauração e qualquer integração automática permanecem posteriores.
+- **DEC-052** — Uma futura substituição operacional deverá preservar
+  obrigatoriamente o banco anterior. O T57 não substitui, renomeia, remove nem
+  modifica o banco operacional.
+- **DEC-053** — A recuperação assistida aceita os formatos reconhecidos de
+  backup local do T55 e externo do T56. O tipo é identificado pelo contrato de
+  nome e o conteúdo passa por validação SQLite integral; renomear um arquivo
+  arbitrário não dispensa essa validação.
+- **DEC-054** — O T57 publica exclusivamente uma nova base de teste em destino
+  explícito e separado. A operação exige sessão válida, credenciais de
+  Administrador revalidadas com o limitador existente e confirmação explícita.
+  A cópia nasce como temporário, é validada antes da publicação exclusiva e
+  não altera estado operacional, fechamento incerto, backup de origem ou banco
+  comercial. Validar uma base de teste não autoriza retomada pelo T54.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

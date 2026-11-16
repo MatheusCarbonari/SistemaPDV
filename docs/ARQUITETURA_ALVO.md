@@ -382,14 +382,41 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   quando houver mudanças não foi presumido: não existe marcador durável e
   confiável de mutação para implementá-lo sem ampliar a arquitetura.
 
+## Restauração assistida em base de teste (T57)
+
+- `services/restauracao_assistida_service.py` recebe explicitamente um backup
+  T55 ou T56 e o caminho de uma nova base de teste. Não há descoberta
+  automática, interface ou substituição do banco operacional.
+- Antes de copiar, o serviço rejeita ausência, diretório, link simbólico, nome
+  fora dos contratos oficiais, SQLite corrompido, schema incompatível,
+  estrutura incompleta e violação de chave estrangeira.
+- A autorização exige uma sessão emitida e ainda válida, confirmação
+  explícita e credenciais de Administrador revalidadas no banco operacional
+  pelo limitador de tentativas existente. Uma sessão Caixa pode solicitar a
+  operação, mas credenciais Caixa nunca concedem a autoridade administrativa.
+- A recuperação cria temporário exclusivo no diretório escolhido, copia o
+  backup sem modificá-lo, valida novamente a cópia pelo contrato do T55 e por
+  consultas funcionais a produtos, vendas e pagamentos, e publica por link
+  exclusivo. Destino existente nunca é substituído. O filesystem do destino
+  precisa oferecer hard link no mesmo diretório; sem essa garantia a publicação
+  falha de forma conservadora.
+- O resultado imutável informa caminho da base de teste, origem local ou
+  externa, instante UTC, schema, validação e contagens de produtos, vendas e
+  pagamentos. Logs registram somente resultado e tipo técnico de erro, sem
+  caminhos, credenciais, hashes ou dados comerciais.
+- O serviço não consulta nem modifica o controlador T54. Recuperação bem
+  sucedida não muda o modo para `NORMAL`, não resolve fechamento incerto e não
+  libera vendas. Substituição futura deverá preservar o banco anterior e exigir
+  um protocolo próprio, fora deste ticket.
+
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.
 - Validar no T61/T62 lock SQLite, transações incertas, escala do Windows e metas
   de latência no equipamento alvo.
 - Validar no ambiente instalado a mídia externa, permissões e semântica de
-  locks do T56; concluir no T57 a restauração assistida. O Marco 2 cobre o
-  backup pré-migração.
+  locks do T56 e executar uma homologação manual da base de teste do T57. O
+  Marco 2 cobre o backup pré-migração.
 - Reavaliar em ticket futuro, mediante decisão de schema/persistência, a
   recuperação de UUID de fechamento e carrinho após encerramento do processo;
   o T54 documenta a impossibilidade atual e permanece fail-closed.

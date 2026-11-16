@@ -905,6 +905,23 @@ aprovados. Esses resultados não substituem a revisão independente.
 **Origem:** backlog original T46.
 **Entrega verificável:** Autorização e validação de recuperação com base de teste.
 **Conceito a estudar:** Recovery.
+**Implementação em revisão:** serviço sem interface recebe um backup T55 ou
+T56 e um destino explícito. O backup é validado por integridade, schema,
+estrutura e chaves estrangeiras; a operação exige sessão válida, confirmação
+explícita e credenciais administrativas revalidadas com limitação de
+tentativas. A cópia nasce em temporário, passa novamente pelo contrato do T55 e
+por leitura funcional de produtos, vendas e pagamentos, e é publicada sem
+sobrescrever destino existente.
+O resultado identifica a base de teste, origem local ou externa, instante,
+schema e contagens técnicas. Logs não recebem caminhos nem dados sensíveis. O
+banco operacional, o backup e restaurações anteriores permanecem inalterados.
+O serviço não modifica o T54, não libera modo `NORMAL`, não resolve fechamento
+incerto, não migra schema e não substitui o banco comercial. Interface e futura
+substituição operacional permanecem fora deste ticket conforme DEC-051–054.
+Validação local: 19 testes específicos do serviço; 186 regressões de
+autenticação, inicialização, operações comerciais, contingência e backups; e
+suíte completa com 1.266 testes aprovados. Esses resultados não substituem a
+revisão independente.
 
 ### T58 — Migrações versionadas
 **Origem:** backlog original T47.

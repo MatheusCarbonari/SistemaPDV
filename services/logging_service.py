@@ -259,6 +259,18 @@ _CATALOGO_EVENTOS: dict[str, tuple[str, int, str, frozenset[str]]] = {
         "A tentativa de backup externo falhou sem afetar a operação comercial.",
         frozenset({"erro_tipo", "resultado", "status"}),
     ),
+    "restauracao_teste_concluida": (
+        "restauracao",
+        logging.INFO,
+        "Uma base de teste foi restaurada e validada.",
+        frozenset({"resultado"}),
+    ),
+    "restauracao_teste_falhou": (
+        "restauracao",
+        logging.ERROR,
+        "A restauração isolada não foi concluída.",
+        frozenset({"erro_tipo", "resultado"}),
+    ),
 }
 _REGISTRO_NAO_CATALOGADO = (
     "logging",
