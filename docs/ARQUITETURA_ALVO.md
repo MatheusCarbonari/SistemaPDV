@@ -469,6 +469,52 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   migração, uma nova execução sem rota não herda a autorização anterior; o T60
   deverá revalidar explicitamente a combinação antes de prosseguir.
 
+## Empacotamento Windows (T59)
+
+- `main.py` é o ponto de entrada do PyInstaller. A especificação versionada gera
+  `Sistema-PDV.exe` em modo `onedir`, sem console, e deixa as dependências sob a
+  pasta da aplicação. QtCore, QtGui, QtWidgets e os plugins resolvidos pelos
+  hooks oficiais do PyInstaller compõem o runtime; nenhum recurso externo é
+  necessário atualmente.
+- O roteiro copia por allowlist somente `main.py` e módulos Python de runtime.
+  `data/`, testes, documentos, caches, logs, backups, credenciais e temporários
+  não entram na análise. A árvore produzida é novamente auditada antes de ser
+  considerada distribuição.
+- Cada execução produz sua candidata em diretório isolado. A pasta publicada
+  anterior não é removida durante preparação, PyInstaller, auditoria ou smoke;
+  somente depois do sucesso ocorre uma troca protegida da saída local, com
+  restauração da anterior se a própria publicação falhar. Isso não constitui
+  atualização nem rollback de instalação do T60.
+- O roteiro usa o caminho absoluto do interpretador resolvido no início,
+  substitui temporariamente `PYTHONPATH` pela raiz conhecida e valida Windows
+  x64, Python 3.14, versões fixadas em `requirements-build.txt` e `pip check`.
+- Build e commit seguem exclusivamente o T50. Valores explícitos ou o commit do
+  repositório de build são validados e escritos somente na cópia temporária de
+  `services/version_service.py`; a fonte de desenvolvimento permanece com
+  metadados desconhecidos. A máquina de execução não precisa de Git, Python ou
+  rede.
+- `database/conexao.py` centraliza a escolha de dados. Em desenvolvimento usa
+  `repositorio/data/sistema_acougue.db`. Somente quando o processo apresenta os
+  marcadores do PyInstaller usa
+  `%LOCALAPPDATA%\Sistema-PDV\data\sistema_acougue.db`, caminho absoluto e
+  específico do usuário Windows, independente do diretório de trabalho.
+  Ausência ou valor relativo de `%LOCALAPPDATA%` bloqueia a resolução.
+- Não existe transferência automática entre o banco de desenvolvimento e o
+  empacotado. O T59 não lê, copia, move, exclui ou migra esses arquivos. Backups
+  locais e pré-migração continuam ao lado da origem escolhida; logs continuam
+  em `%LOCALAPPDATA%\Sistema-PDV\logs` conforme T49.
+- O smoke test usa `%LOCALAPPDATA%` temporário, plataforma Qt `offscreen` e um
+  argumento técnico do executável. Ele valida detecção congelada, metadados e
+  criação de QApplication/widget, encerrando sem abrir nem criar SQLite. Não
+  valida renderização da interface operacional, login ou fluxos comerciais;
+  esses itens exigem homologação gráfica manual em VM/usuário isolado, com
+  `%LOCALAPPDATA%` temporário e, quando necessário, banco exclusivo de
+  homologação, nunca o banco operacional.
+- O T59 não instala, cria atalhos, atualiza nem recupera executável. Para o T60
+  permanece a decisão entre dados por usuário em `%LOCALAPPDATA%` e eventual
+  armazenamento compartilhado em `%PROGRAMDATA%`; essa escolha exige política
+  de permissões, instância/coordenação e migração explícita, nunca silenciosa.
+
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.

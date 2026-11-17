@@ -1,11 +1,41 @@
+import os
 from pathlib import Path
 import sqlite3
+import sys
 
 
-# Define o banco principal a partir da raiz do projeto.
-DIRETORIO_RAIZ = Path(__file__).resolve().parent.parent
-DIRETORIO_BANCO = DIRETORIO_RAIZ / "data"
-CAMINHO_BANCO = DIRETORIO_BANCO / "sistema_acougue.db"
+NOME_DIRETORIO_APLICATIVO = "Sistema-PDV"
+NOME_ARQUIVO_BANCO = "sistema_acougue.db"
+DIRETORIO_RAIZ_DESENVOLVIMENTO = Path(__file__).resolve().parent.parent
+
+
+def execucao_empacotada() -> bool:
+    """Detecta o processo congelado pelo PyInstaller, sem usar o CWD."""
+    return bool(getattr(sys, "frozen", False)) and hasattr(sys, "_MEIPASS")
+
+
+def resolver_diretorio_dados() -> Path:
+    """Resolve a raiz persistente sem misturá-la aos arquivos do executável."""
+    if not execucao_empacotada():
+        return DIRETORIO_RAIZ_DESENVOLVIMENTO / "data"
+
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data or not local_app_data.strip():
+        raise RuntimeError(
+            "LOCALAPPDATA não está disponível para armazenar os dados do PDV."
+        )
+    diretorio_usuario = Path(local_app_data.strip()).expanduser()
+    if not diretorio_usuario.is_absolute():
+        raise RuntimeError("LOCALAPPDATA deve indicar um caminho absoluto.")
+    return diretorio_usuario / NOME_DIRETORIO_APLICATIVO / "data"
+
+
+def resolver_caminho_banco() -> Path:
+    return resolver_diretorio_dados() / NOME_ARQUIVO_BANCO
+
+
+DIRETORIO_BANCO = resolver_diretorio_dados()
+CAMINHO_BANCO = resolver_caminho_banco()
 
 
 def conectar(caminho_banco=CAMINHO_BANCO) -> sqlite3.Connection:

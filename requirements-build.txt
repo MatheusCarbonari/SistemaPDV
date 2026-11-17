@@ -1,0 +1,14 @@
+# Lock Windows x64 validado para o build T59 com Python 3.14.
+# QtCore, QtGui, QtWidgets e QtNetwork são fornecidos por PySide6_Essentials.
+# O metapacote PySide6 não é usado: ele instalaria Addons, PDF e WebEngine,
+# componentes que o runtime atual do PDV não importa.
+altgraph==0.17.5
+packaging==26.1
+pefile==2024.8.26
+PyInstaller==6.22.3
+pyinstaller-hooks-contrib==2026.10
+PySide6_Essentials==6.12.0
+pywin32-ctypes==0.2.3
+setuptools==84.2.1
+shiboken6==6.12.0
+tzdata==2026.6

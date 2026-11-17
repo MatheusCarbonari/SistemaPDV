@@ -72,6 +72,25 @@ def obter_identificacao_aplicativo() -> IdentificacaoAplicativo:
     )
 
 
+def validar_metadados_build(
+    identificador_build: str | None,
+    commit_git: str | None,
+) -> tuple[str | None, str | None]:
+    """Valida os valores que o T59 incorporará à cópia temporária de build."""
+    return (
+        _validar_metadado_informado(
+            identificador_build,
+            _IDENTIFICADOR_BUILD_VALIDO,
+            "identificador do build",
+        ),
+        _validar_metadado_informado(
+            commit_git,
+            _COMMIT_GIT_VALIDO,
+            "commit Git",
+        ),
+    )
+
+
 def formatar_informacoes_sobre(
     identificacao: IdentificacaoAplicativo | None = None,
 ) -> str:
@@ -89,3 +108,18 @@ def _normalizar_metadado(valor: str | None, padrao: re.Pattern[str]) -> str | No
         return None
     normalizado = valor.strip()
     return normalizado if padrao.fullmatch(normalizado) else None
+
+
+def _validar_metadado_informado(
+    valor: str | None,
+    padrao: re.Pattern[str],
+    nome: str,
+) -> str | None:
+    if valor is None:
+        return None
+    if not isinstance(valor, str):
+        raise TypeError(f"O {nome} deve ser textual.")
+    normalizado = valor.strip()
+    if not padrao.fullmatch(normalizado):
+        raise ValueError(f"O {nome} informado é inválido.")
+    return normalizado

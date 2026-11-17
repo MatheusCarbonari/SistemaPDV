@@ -74,8 +74,67 @@ identificador do build e commit Git; valores ainda não incorporados aparecem
 como `desconhecido`.
 
 A inicialização não executa Git e funciona sem pasta `.git` ou internet. O
-futuro empacotamento do T59 deverá preencher build e commit em uma cópia do
-módulo antes de gerar o executável. Essa automação ainda não está implementada.
+empacotamento T59 preenche build e commit somente em uma cópia temporária do
+módulo; o arquivo-fonte permanece sem metadados artificiais.
+
+## Build Windows
+
+O build validado usa Python 3.14, PyInstaller em modo `onedir` e as versões
+fixadas em `requirements-build.txt`. Em um ambiente Windows limpo de build:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements-build.txt
+.\scripts\build_windows.ps1
+```
+
+O resultado fica em `dist\windows\Sistema-PDV\`, com o executável
+`Sistema-PDV.exe`; `dist\windows\build-report.json` registra build, commit e
+SHA-256 do executável. Cada tentativa é preparada, auditada e testada sob um
+diretório exclusivo de `build/`; `dist\windows` somente é substituído depois
+dessas validações. Falhas anteriores à publicação preservam integralmente a
+distribuição anterior. Essa troca protege apenas a saída local do build e não
+é o mecanismo de atualização ou rollback do T60.
+
+O roteiro resolve uma única vez o `python` ativo, exige Windows x64 e Python
+3.14, confere as versões exatas de `requirements-build.txt` e executa
+`pip check`. O `PYTHONPATH` herdado não participa da descoberta de módulos do
+build. `SISTEMA_PDV_BUILD_ID` e `SISTEMA_PDV_COMMIT_GIT` podem
+ser definidos antes do comando. Sem valores explícitos, o roteiro tenta usar o
+commit do repositório de build e cria um identificador determinístico a partir
+dele somente se a árvore estiver limpa. Em árvore modificada, commit e build
+permanecem desconhecidos, salvo valores explícitos, para não atribuir o artefato
+a um commit que não contém suas fontes. Git não é necessário na máquina que
+executa o programa.
+
+O roteiro audita arquivos proibidos e executa um smoke test Qt `offscreen`
+isolado. Esse teste comprova somente o carregamento básico do runtime
+empacotado, a criação de QApplication/widget, os metadados e a resolução segura
+do caminho. Ele não comprova renderização visual da interface operacional,
+login nem fluxos comerciais. Ele não inclui nem acessa o banco de `data/`. Na
+execução empacotada, o banco fica em
+`%LOCALAPPDATA%\Sistema-PDV\data\sistema_acougue.db`; `%LOCALAPPDATA%` pertence
+ao usuário Windows atual. Durante o desenvolvimento, permanece em
+`repositorio\data\sistema_acougue.db`. Nenhum banco é transferido entre esses
+locais automaticamente.
+
+### Homologação gráfica manual
+
+Em uma VM Windows limpa ou usuário de teste, copiar a pasta `Sistema-PDV`
+produzida e iniciar `Sistema-PDV.exe` sem o argumento de smoke. Antes da
+execução, apontar `LOCALAPPDATA` para uma pasta temporária vazia e confirmar
+que ela não contém o banco operacional. Verificar abertura, escala, fontes,
+foco, navegação e encerramento. Login e fluxos comerciais devem ser verificados
+separadamente com banco e credenciais exclusivos de homologação colocados nessa
+pasta pelo responsável pelo teste. Registrar ambiente e resultado e, ao final,
+eliminar somente a pasta temporária confirmada; nunca apontar esse procedimento
+para `data/` do estabelecimento.
+
+O T59 não fornece instalador, atalhos, assinatura de código, atualização ou
+rollback. Um teste final em máquina Windows limpa e a decisão sobre eventual
+uso de `%PROGRAMDATA%` continuam para homologação/T60.
 
 ## Exportação de diagnóstico
 

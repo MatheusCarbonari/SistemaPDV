@@ -316,6 +316,20 @@
   versão interna de schema então aprovada, sem renumerar migrações. Esse
   lançamento, e não necessariamente o schema v10, estabelecerá a primeira base
   de compatibilidade para atualizações comerciais.
+- **DEC-058** — O T59 usa PyInstaller em modo `onedir`, com aplicação gráfica
+  sem console e fontes de build selecionadas por allowlist. O build incorpora
+  metadados T50 somente numa cópia temporária e nunca inclui banco, WAL, SHM,
+  backups, logs, credenciais, testes ou documentação interna. A execução em
+  desenvolvimento conserva `repositorio/data`; a execução reconhecida como
+  PyInstaller por `sys.frozen` e `sys._MEIPASS` usa
+  `%LOCALAPPDATA%\Sistema-PDV\data` do usuário Windows. Não há cópia, migração,
+  exclusão ou descoberta automática entre essas origens. Backups permanecem ao
+  lado do banco e logs mantêm o contrato T49. O T60 deverá decidir se uma
+  instalação multiusuário exigirá `%PROGRAMDATA%`, incluindo identidade do
+  estabelecimento, permissões, coordenação e transição explícita dos dados.
+  A saída de cada build é validada em diretório isolado antes de substituir a
+  distribuição local anterior. O smoke `offscreen` cobre apenas o runtime Qt
+  básico; interface, login e fluxos exigem homologação gráfica isolada.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

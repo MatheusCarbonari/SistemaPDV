@@ -955,6 +955,20 @@ comercial sem renumerar as migrações existentes.
 **Origem:** backlog original T48.
 **Entrega verificável:** Criar distribuição com dependências, sem dados embarcados.
 **Conceito a estudar:** Build/release.
+**Implementação em revisão:** PyInstaller `onedir` produz `Sistema-PDV.exe` sem
+console a partir de configuração e roteiro versionados. Uma allowlist prepara
+somente fontes de runtime, incorpora build/commit T50 na cópia temporária e
+audita a distribuição contra dados operacionais, credenciais, testes e arquivos
+internos. A candidata é validada em diretório isolado e a distribuição anterior
+permanece intacta em falhas anteriores à publicação. O smoke test carrega o
+runtime Qt em ambiente isolado sem criar SQLite, mas não substitui a homologação
+gráfica manual da interface, login e fluxos comerciais.
+Desenvolvimento preserva `repositorio/data`; a execução PyInstaller usa o banco
+específico do usuário em
+`%LOCALAPPDATA%\Sistema-PDV\data\sistema_acougue.db`, sem depender do diretório
+de trabalho. Não existe transferência automática entre os caminhos. Logs e
+backups preservam os contratos anteriores. Instalador, atalhos, atualização,
+rollback e migração de dados permanecem fora do T59.
 
 ### T60 — Instalador atualizável
 **Origem:** backlog original T49.
@@ -982,6 +996,11 @@ operacional por backup como rollback comum. O projeto deverá ainda contemplar
 queda de energia, reinicialização e arquivos parcialmente instalados. Uma nova
 execução do T58 sem migrações pendentes não recupera autorização anterior; o
 instalador deverá revalidar a combinação aplicativo/schema antes de prosseguir.
+**Pendência vinculada do T59:** decidir se a instalação comercial continuará
+com dados por usuário em `%LOCALAPPDATA%` ou adotará `%PROGRAMDATA%`. Qualquer
+mudança exige política explícita de permissões e compartilhamento, coordenação
+entre processos e transição assistida; o instalador não poderá copiar, mover ou
+migrar o banco silenciosamente.
 
 ### T61 — Teste de performance
 **Origem:** backlog original T50.

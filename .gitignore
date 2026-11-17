@@ -15,6 +15,12 @@ __pycache__/
 coverage.xml
 htmlcov/
 
+# Saídas reproduzíveis do empacotamento T59
+/build/t59-staging/
+/build/pyinstaller-work/
+/build/t59-*/
+/dist/windows/
+
 # Bancos de dados e dados locais (inclusive homologação e backups aninhados)
 data/**
 !data/.gitkeep
