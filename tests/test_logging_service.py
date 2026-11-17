@@ -200,6 +200,26 @@ def test_diretorio_configuravel_por_argumento_e_variavel(tmp_path, monkeypatch) 
     )
 
 
+def test_instalacao_comercial_ignora_diretorio_de_log_do_ambiente(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    autorizado = tmp_path / "ProgramData" / "Sistema-PDV" / "logs"
+    hostil = tmp_path / "perfil" / "logs"
+    contexto = SimpleNamespace(
+        comercial=True,
+        caminhos=SimpleNamespace(logs=autorizado),
+    )
+    monkeypatch.setenv(logging_service.VARIAVEL_DIRETORIO_LOG, str(hostil))
+    monkeypatch.setattr(
+        logging_service,
+        "obter_contexto_instalacao",
+        lambda: contexto,
+    )
+
+    assert logging_service.resolver_diretorio_logs() == autorizado
+
+
 @pytest.mark.parametrize("valor", [0, -1, True, False, 1.5, "5"])
 def test_backup_count_exige_inteiro_positivo(tmp_path, valor) -> None:
     with pytest.raises(ValueError, match="inteira e positiva"):

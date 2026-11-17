@@ -30,6 +30,10 @@ from services.version_service import (
     IdentificacaoAplicativo,
     obter_identificacao_aplicativo,
 )
+from services.contexto_instalacao_service import (
+    ContextoInstalacao,
+    obter_contexto_instalacao,
+)
 
 
 class PrimeiroAcessoNecessarioError(RuntimeError):
@@ -62,9 +66,11 @@ def obter_aplicacao(argumentos: Sequence[str] | None = None) -> QApplication:
 def criar_janela_principal(
     caminho_banco=CAMINHO_BANCO,
     sessao: SessaoUsuario | None = None,
+    *,
+    contexto: ContextoInstalacao | None = None,
 ) -> JanelaPrincipal:
     """Cria a janela somente para uma sessão autenticada e ainda válida."""
-    preparar_banco_para_operacao(caminho_banco)
+    preparar_banco_para_operacao(caminho_banco, contexto=contexto)
     estado = obter_estado_primeiro_acesso(caminho_banco)
     if estado == "NAO_CONFIGURADO":
         raise PrimeiroAcessoNecessarioError(
@@ -76,10 +82,16 @@ def criar_janela_principal(
 
 def executar_aplicacao(
     argumentos: Sequence[str] | None = None,
-    caminho_banco=CAMINHO_BANCO,
+    caminho_banco=None,
+    *,
+    contexto: ContextoInstalacao | None = None,
 ) -> int:
     """Exibe a janela principal e inicia o event loop do Qt."""
-    configurar_logging()
+    contexto_efetivo = contexto or obter_contexto_instalacao()
+    caminho_banco = caminho_banco or contexto_efetivo.caminhos.banco
+    configurar_logging(
+        contexto_efetivo.caminhos.logs if contexto_efetivo.comercial else None
+    )
     instalar_tratamento_erros_nao_tratados()
     registrar_evento(
         "inicializacao_iniciada",
@@ -87,7 +99,10 @@ def executar_aplicacao(
     registrar_identificacao_aplicativo()
     aplicacao = obter_aplicacao(argumentos)
     try:
-        resultado_banco = preparar_banco_para_operacao(caminho_banco)
+        resultado_banco = preparar_banco_para_operacao(
+            caminho_banco,
+            contexto=contexto_efetivo,
+        )
     except InicializacaoBancoError as erro:
         registrar_evento(
             "preparacao_banco_falhou",
@@ -199,6 +214,7 @@ def executar_aplicacao(
         janela = criar_janela_principal(
             caminho_banco,
             dialogo_login.sessao,
+            contexto=contexto_efetivo,
         )
     except Exception as erro:
         registrar_evento(

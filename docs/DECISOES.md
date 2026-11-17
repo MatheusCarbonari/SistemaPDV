@@ -330,6 +330,32 @@
   A saída de cada build é validada em diretório isolado antes de substituir a
   distribuição local anterior. O smoke `offscreen` cobre apenas o runtime Qt
   básico; interface, login e fluxos exigem homologação gráfica isolada.
+- **DEC-059** — A instalação comercial do T60 é por computador. Executáveis e
+  dependências pertencem a uma raiz registrada sob `%ProgramFiles%`; dados de
+  Produção e Homologação ficam respectivamente em
+  `%PROGRAMDATA%\Sistema-PDV\Producao` e
+  `%PROGRAMDATA%\Sistema-PDV\Homologacao`. Cada ambiente possui identificador
+  estável, GUID próprio de instalação, banco, logs, estado administrativo e
+  mutex global independentes. A identidade deve coincidir entre HKLM e o
+  descritor administrativo `installation.json`; ausência ou divergência
+  bloqueia a execução empacotada, sem fallback para desenvolvimento ou
+  `%LOCALAPPDATA%`. O grupo local `Sistema-PDV-Operadores` recebe somente os
+  acessos operacionais que o futuro instalador provisionará; identidade,
+  manifestos e estado de manutenção permanecem sob controle administrativo.
+  O processo adquire o mutex antes de importar interface, banco, logging ou
+  sessões e só prossegue quando o estado de manutenção é conhecido e livre.
+  O desenvolvimento mantém `repositorio/data` e seus caminhos atuais. Esta
+  decisão não autoriza migração automática de localização nem implementa o
+  coordenador de atualização.
+- **DEC-060** — A abertura operacional nunca executa migrações em banco de uma
+  instalação comercial. Banco inexistente pode receber a criação inicial
+  controlada; banco na versão esperada passa por inspeção somente leitura e
+  validação estrutural estrita. Versão anterior exige manutenção/atualização
+  coordenada e é recusada antes de backup ou DDL. Versão futura, estrutura
+  divergente, caminho fora do contexto ou estado de manutenção não livre também
+  bloqueiam a operação. Desenvolvimento preserva a preparação automática e as
+  migrações históricas existentes. Essa separação não autoriza nenhuma rota do
+  T58 nem antecipa o coordenador do T60.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

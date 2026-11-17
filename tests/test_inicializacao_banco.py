@@ -1,16 +1,29 @@
+from dataclasses import replace
+import json
 import sqlite3
+import sys
+from uuid import uuid4
 
 import pytest
 
 from database.conexao import conectar
 import database.schema as schema
 from services.inicializacao_banco_service import (
+    AtualizacaoCoordenadaNecessariaError,
     BackupPreMigracaoError,
+    BancoIncompativelError,
+    ContextoBancoComercialError,
     MigracaoBancoError,
     VersaoBancoFuturaError,
     preparar_banco_para_operacao,
 )
 import services.inicializacao_banco_service as inicializacao_service
+from services.contexto_instalacao_service import (
+    AMBIENTE_PRODUCAO_ID,
+    CONTRATO_MANUTENCAO_VERSAO,
+    AmbienteInstalacao,
+    resolver_contexto_instalacao,
+)
 
 
 def preparar_banco_legado(caminho_banco, *, wal=False) -> None:
@@ -48,6 +61,36 @@ def backups_criados(caminho_banco):
     return sorted(diretorio.glob("*.db")) if diretorio.exists() else []
 
 
+def criar_contexto_comercial(tmp_path, *, estado_livre=True):
+    contexto_desenvolvimento = resolver_contexto_instalacao(
+        empacotado=False,
+        caminho_executavel=sys.executable,
+        raiz_repositorio=tmp_path,
+    )
+    contexto = replace(
+        contexto_desenvolvimento,
+        ambiente=AmbienteInstalacao.PRODUCAO,
+        ambiente_id=AMBIENTE_PRODUCAO_ID,
+        instalacao_id=str(uuid4()),
+        comercial=True,
+    )
+    if estado_livre:
+        contexto.caminhos.manutencao.mkdir(parents=True, exist_ok=True)
+        contexto.caminhos.estado_manutencao.write_text(
+            json.dumps(
+                {
+                    "contract_version": CONTRATO_MANUTENCAO_VERSAO,
+                    "product_id": contexto.produto_id,
+                    "environment_id": contexto.ambiente_id,
+                    "installation_id": contexto.instalacao_id,
+                    "status": "IDLE",
+                }
+            ),
+            encoding="utf-8",
+        )
+    return contexto
+
+
 def test_banco_novo_cria_esquema_sem_backup(tmp_path) -> None:
     caminho = tmp_path / "novo.db"
 
@@ -57,6 +100,147 @@ def test_banco_novo_cria_esquema_sem_backup(tmp_path) -> None:
     assert resultado.caminho_backup is None
     assert consultar_versao(caminho) == schema.VERSAO_ESQUEMA
     assert backups_criados(caminho) == []
+
+
+def test_banco_comercial_novo_recebe_criacao_inicial_controlada(
+    tmp_path,
+) -> None:
+    contexto = criar_contexto_comercial(tmp_path)
+    caminho = contexto.caminhos.banco
+
+    resultado = preparar_banco_para_operacao(caminho, contexto=contexto)
+
+    assert resultado.banco_novo is True
+    assert resultado.versao_final == schema.VERSAO_ESQUEMA
+    assert consultar_versao(caminho) == schema.VERSAO_ESQUEMA
+    assert backups_criados(caminho) == []
+
+
+def test_banco_comercial_atual_e_somente_validado(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    contexto = criar_contexto_comercial(tmp_path)
+    caminho = contexto.caminhos.banco
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    schema.criar_tabelas(caminho)
+    conteudo_antes = caminho.read_bytes()
+    monkeypatch.setattr(
+        inicializacao_service,
+        "criar_tabelas",
+        lambda *args, **kwargs: pytest.fail("não deve executar DDL"),
+    )
+
+    resultado = preparar_banco_para_operacao(caminho, contexto=contexto)
+
+    assert resultado.banco_novo is False
+    assert resultado.versao_inicial == schema.VERSAO_ESQUEMA
+    assert resultado.versao_final == schema.VERSAO_ESQUEMA
+    assert resultado.migracoes_realizadas == ()
+    assert resultado.proxima_etapa_atualizacao_autorizada is False
+    assert caminho.read_bytes() == conteudo_antes
+
+
+def test_banco_comercial_legado_e_bloqueado_sem_backup_ddl_ou_alteracao(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    contexto = criar_contexto_comercial(tmp_path)
+    caminho = contexto.caminhos.banco
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    preparar_banco_legado(caminho)
+    conteudo_antes = caminho.read_bytes()
+    conexao = conectar(caminho)
+    try:
+        estrutura_antes = tuple(
+            conexao.execute(
+                "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+            ).fetchall()
+        )
+    finally:
+        conexao.close()
+    monkeypatch.setattr(
+        inicializacao_service,
+        "_criar_backup_pre_migracao",
+        lambda *args, **kwargs: pytest.fail("não deve criar backup"),
+    )
+    monkeypatch.setattr(
+        inicializacao_service,
+        "criar_tabelas",
+        lambda *args, **kwargs: pytest.fail("não deve executar DDL"),
+    )
+
+    with pytest.raises(AtualizacaoCoordenadaNecessariaError):
+        preparar_banco_para_operacao(caminho, contexto=contexto)
+
+    assert caminho.read_bytes() == conteudo_antes
+    assert consultar_versao(caminho) == 1
+    assert backups_criados(caminho) == []
+    conexao = conectar(caminho)
+    try:
+        estrutura_depois = tuple(
+            conexao.execute(
+                "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+            ).fetchall()
+        )
+    finally:
+        conexao.close()
+    assert estrutura_depois == estrutura_antes
+
+
+def test_banco_comercial_futuro_ou_estrutura_divergente_sao_bloqueados(
+    tmp_path,
+) -> None:
+    contexto_futuro = criar_contexto_comercial(tmp_path / "futuro")
+    caminho_futuro = contexto_futuro.caminhos.banco
+    caminho_futuro.parent.mkdir(parents=True, exist_ok=True)
+    schema.criar_tabelas(caminho_futuro)
+    conexao = conectar(caminho_futuro)
+    try:
+        conexao.execute(f"PRAGMA user_version = {schema.VERSAO_ESQUEMA + 1}")
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    with pytest.raises(VersaoBancoFuturaError):
+        preparar_banco_para_operacao(
+            caminho_futuro,
+            contexto=contexto_futuro,
+        )
+    assert consultar_versao(caminho_futuro) == schema.VERSAO_ESQUEMA + 1
+    assert backups_criados(caminho_futuro) == []
+
+    contexto_invalido = criar_contexto_comercial(tmp_path / "invalido")
+    caminho_invalido = contexto_invalido.caminhos.banco
+    caminho_invalido.parent.mkdir(parents=True, exist_ok=True)
+    conexao = conectar(caminho_invalido)
+    try:
+        conexao.execute(f"PRAGMA user_version = {schema.VERSAO_ESQUEMA}")
+        conexao.commit()
+    finally:
+        conexao.close()
+
+    with pytest.raises(BancoIncompativelError):
+        preparar_banco_para_operacao(
+            caminho_invalido,
+            contexto=contexto_invalido,
+        )
+    assert consultar_versao(caminho_invalido) == schema.VERSAO_ESQUEMA
+    assert backups_criados(caminho_invalido) == []
+
+
+def test_manutencao_comercial_incompleta_bloqueia_antes_de_criar_banco(
+    tmp_path,
+) -> None:
+    contexto = criar_contexto_comercial(tmp_path, estado_livre=False)
+
+    with pytest.raises(ContextoBancoComercialError):
+        preparar_banco_para_operacao(
+            contexto.caminhos.banco,
+            contexto=contexto,
+        )
+
+    assert not contexto.caminhos.banco.exists()
 
 
 def test_banco_atualizado_nao_cria_backup_desnecessario(tmp_path) -> None:

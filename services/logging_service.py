@@ -16,6 +16,8 @@ from threading import RLock
 from types import TracebackType
 from typing import Any
 
+from services.contexto_instalacao_service import obter_contexto_instalacao
+
 
 NOME_LOGGER = "sistema_pdv"
 NOME_ARQUIVO_LOG = "sistema-pdv.log"
@@ -372,6 +374,10 @@ class _RotatingFileHandlerTolerante(RotatingFileHandler):
 
 def resolver_diretorio_logs() -> Path:
     """Resolve o diretório local sem acoplá-lo ao caminho do banco SQLite."""
+    contexto = obter_contexto_instalacao()
+    if contexto.comercial:
+        return contexto.caminhos.logs
+
     configurado = os.environ.get(VARIAVEL_DIRETORIO_LOG)
     if configurado:
         return Path(configurado).expanduser()

@@ -57,9 +57,12 @@ No primeiro uso de um banco novo, a aplicação conduz a criação do Administra
 
 ## Logs locais
 
-A aplicação registra eventos técnicos em formato JSON Lines. No Windows, o
-destino padrão é `%LOCALAPPDATA%\Sistema-PDV\logs\sistema-pdv.log`. Para usar
-outro diretório, defina `SISTEMA_PDV_LOG_DIR` antes de iniciar o programa. Os
+A aplicação registra eventos técnicos em formato JSON Lines. No desenvolvimento
+Windows, o destino padrão é
+`%LOCALAPPDATA%\Sistema-PDV\logs\sistema-pdv.log`; ele pode ser substituído por
+`SISTEMA_PDV_LOG_DIR`. Na instalação comercial, Produção e Homologação usam o
+diretório `logs` de seus contextos sob `%PROGRAMDATA%`, sem aceitar esse
+redirecionamento por variável de ambiente. Os
 arquivos possuem rotação e não devem conter senhas, hashes, códigos de
 recuperação, credenciais ou capacidades de autorização. Consulte a
 [arquitetura-alvo](docs/ARQUITETURA_ALVO.md#logs-locais-t49) para a política
@@ -113,28 +116,28 @@ O roteiro audita arquivos proibidos e executa um smoke test Qt `offscreen`
 isolado. Esse teste comprova somente o carregamento básico do runtime
 empacotado, a criação de QApplication/widget, os metadados e a resolução segura
 do caminho. Ele não comprova renderização visual da interface operacional,
-login nem fluxos comerciais. Ele não inclui nem acessa o banco de `data/`. Na
-execução empacotada, o banco fica em
-`%LOCALAPPDATA%\Sistema-PDV\data\sistema_acougue.db`; `%LOCALAPPDATA%` pertence
-ao usuário Windows atual. Durante o desenvolvimento, permanece em
-`repositorio\data\sistema_acougue.db`. Nenhum banco é transferido entre esses
-locais automaticamente.
+login nem fluxos comerciais. Ele não inclui nem acessa o banco de `data/`.
+Durante o desenvolvimento, o banco permanece em
+`repositorio\data\sistema_acougue.db`. Uma instalação comercial validada usa
+`%PROGRAMDATA%\Sistema-PDV\Producao\data\sistema_acougue.db` ou o equivalente
+isolado de `Homologacao`. Nenhum banco é transferido automaticamente entre
+esses locais; a migração administrativa explícita pertence a uma etapa futura.
 
 ### Homologação gráfica manual
 
-Em uma VM Windows limpa ou usuário de teste, copiar a pasta `Sistema-PDV`
-produzida e iniciar `Sistema-PDV.exe` sem o argumento de smoke. Antes da
-execução, apontar `LOCALAPPDATA` para uma pasta temporária vazia e confirmar
-que ela não contém o banco operacional. Verificar abertura, escala, fontes,
-foco, navegação e encerramento. Login e fluxos comerciais devem ser verificados
-separadamente com banco e credenciais exclusivos de homologação colocados nessa
-pasta pelo responsável pelo teste. Registrar ambiente e resultado e, ao final,
-eliminar somente a pasta temporária confirmada; nunca apontar esse procedimento
-para `data/` do estabelecimento.
+Em uma VM Windows limpa, provisionar uma identidade temporária completa de
+Homologação em HKLM e no `installation.json`, o estado de manutenção `IDLE`, o
+grupo local e as ACLs descritas no contrato T60-B. Usar somente banco e
+credenciais de teste sob a raiz isolada de Homologação em `%PROGRAMDATA%`.
+Iniciar `Sistema-PDV.exe` sem o argumento de smoke e verificar abertura, escala,
+fontes, foco, navegação e encerramento. Registrar ambiente e resultado; remover
+somente os recursos temporários confirmados da VM. Nunca apontar esse
+procedimento para o banco do estabelecimento.
 
 O T59 não fornece instalador, atalhos, assinatura de código, atualização ou
-rollback. Um teste final em máquina Windows limpa e a decisão sobre eventual
-uso de `%PROGRAMDATA%` continuam para homologação/T60.
+rollback. O T60-B definiu identidade, `%PROGRAMDATA%`, ACLs e instância única,
+mas ainda não provisiona esses recursos; a homologação comercial completa
+continua dependente das próximas etapas do instalador.
 
 ## Exportação de diagnóstico
 

@@ -1,14 +1,17 @@
-from pathlib import Path
 import sys
 
 import pytest
 
 import database.conexao as conexao_module
+from services.contexto_instalacao_service import (
+    IdentidadeInstalacaoAusenteError,
+    resolver_contexto_instalacao,
+)
 
 
-def _simular_pyinstaller(monkeypatch, meipass: Path) -> None:
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
+class RegistroVazio:
+    def listar_instalacoes(self):
+        return ()
 
 
 def test_desenvolvimento_preserva_data_do_repositorio(
@@ -28,51 +31,46 @@ def test_desenvolvimento_preserva_data_do_repositorio(
     )
 
 
-def test_empacotado_usa_localappdata_especifico_do_usuario(
+def test_empacotado_sem_identidade_nao_cai_em_localappdata(
     tmp_path,
     monkeypatch,
 ) -> None:
-    bundle = tmp_path / "bundle"
-    bundle.mkdir()
-    _simular_pyinstaller(monkeypatch, bundle / "_internal")
     local_app_data = tmp_path / "perfil" / "AppData" / "Local"
     monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
-    monkeypatch.chdir(bundle)
+    executavel = tmp_path / "Sistema-PDV.exe"
+    executavel.write_bytes(b"teste")
 
-    assert conexao_module.execucao_empacotada()
-    assert conexao_module.resolver_caminho_banco() == (
-        local_app_data / "Sistema-PDV" / "data" / "sistema_acougue.db"
+    with pytest.raises(IdentidadeInstalacaoAusenteError):
+        resolver_contexto_instalacao(
+            empacotado=True,
+            caminho_executavel=executavel,
+            provedor_registro=RegistroVazio(),
+            program_data=tmp_path / "ProgramData",
+            program_files=tmp_path / "Program Files",
+        )
+
+    assert not local_app_data.exists()
+
+
+def test_desenvolvimento_e_instalacao_comercial_nao_compartilham_fallback(
+    tmp_path,
+) -> None:
+    desenvolvimento = resolver_contexto_instalacao(
+        empacotado=False,
+        raiz_repositorio=tmp_path / "repositorio",
     )
+    executavel = tmp_path / "instalado" / "Sistema-PDV.exe"
+    executavel.parent.mkdir()
+    executavel.write_bytes(b"teste")
 
-
-def test_bancos_de_desenvolvimento_e_empacotado_sao_isolados(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.delattr(sys, "frozen", raising=False)
-    monkeypatch.delattr(sys, "_MEIPASS", raising=False)
-    caminho_desenvolvimento = conexao_module.resolver_caminho_banco()
-
-    _simular_pyinstaller(monkeypatch, tmp_path / "_internal")
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "usuario"))
-    caminho_empacotado = conexao_module.resolver_caminho_banco()
-
-    assert caminho_empacotado != caminho_desenvolvimento
-    assert caminho_empacotado.parent != caminho_desenvolvimento.parent
-    assert not caminho_empacotado.exists()
-
-
-@pytest.mark.parametrize("valor", [None, "", "relativo"])
-def test_empacotado_recusa_localappdata_ausente_ou_relativo(
-    tmp_path,
-    monkeypatch,
-    valor,
-) -> None:
-    _simular_pyinstaller(monkeypatch, tmp_path / "_internal")
-    if valor is None:
-        monkeypatch.delenv("LOCALAPPDATA", raising=False)
-    else:
-        monkeypatch.setenv("LOCALAPPDATA", valor)
-
-    with pytest.raises(RuntimeError, match="LOCALAPPDATA"):
-        conexao_module.resolver_caminho_banco()
+    assert desenvolvimento.caminhos.banco == (
+        tmp_path / "repositorio" / "data" / "sistema_acougue.db"
+    )
+    with pytest.raises(IdentidadeInstalacaoAusenteError):
+        resolver_contexto_instalacao(
+            empacotado=True,
+            caminho_executavel=executavel,
+            provedor_registro=RegistroVazio(),
+            program_data=tmp_path / "ProgramData",
+            program_files=tmp_path / "Program Files",
+        )

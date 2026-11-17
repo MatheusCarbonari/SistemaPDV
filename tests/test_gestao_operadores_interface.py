@@ -939,7 +939,7 @@ def test_bootstrap_usa_login_inicial_uma_unica_vez(qapp, tmp_path, monkeypatch) 
         def show(self):
             pass
 
-    def criar_janela(caminho_banco, sessao):
+    def criar_janela(caminho_banco, sessao, *, contexto=None):
         janela = JanelaFalsa(sessao)
         janelas.append(janela)
         return janela

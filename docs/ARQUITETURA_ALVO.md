@@ -494,26 +494,84 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   metadados desconhecidos. A máquina de execução não precisa de Git, Python ou
   rede.
 - `database/conexao.py` centraliza a escolha de dados. Em desenvolvimento usa
-  `repositorio/data/sistema_acougue.db`. Somente quando o processo apresenta os
-  marcadores do PyInstaller usa
-  `%LOCALAPPDATA%\Sistema-PDV\data\sistema_acougue.db`, caminho absoluto e
-  específico do usuário Windows, independente do diretório de trabalho.
-  Ausência ou valor relativo de `%LOCALAPPDATA%` bloqueia a resolução.
+  `repositorio/data/sistema_acougue.db`. O T59 usou provisoriamente
+  `%LOCALAPPDATA%` para a distribuição ainda não instalada; o contrato
+  comercial vigente é substituído pela fundação T60-B descrita abaixo.
 - Não existe transferência automática entre o banco de desenvolvimento e o
   empacotado. O T59 não lê, copia, move, exclui ou migra esses arquivos. Backups
-  locais e pré-migração continuam ao lado da origem escolhida; logs continuam
-  em `%LOCALAPPDATA%\Sistema-PDV\logs` conforme T49.
+  locais e pré-migração continuam ao lado da origem escolhida. Em
+  desenvolvimento, logs preservam o destino T49; em instalação comercial,
+  seguem o ambiente T60-B sob `%PROGRAMDATA%`.
 - O smoke test usa `%LOCALAPPDATA%` temporário, plataforma Qt `offscreen` e um
   argumento técnico do executável. Ele valida detecção congelada, metadados e
   criação de QApplication/widget, encerrando sem abrir nem criar SQLite. Não
   valida renderização da interface operacional, login ou fluxos comerciais;
-  esses itens exigem homologação gráfica manual em VM/usuário isolado, com
-  `%LOCALAPPDATA%` temporário e, quando necessário, banco exclusivo de
-  homologação, nunca o banco operacional.
-- O T59 não instala, cria atalhos, atualiza nem recupera executável. Para o T60
-  permanece a decisão entre dados por usuário em `%LOCALAPPDATA%` e eventual
-  armazenamento compartilhado em `%PROGRAMDATA%`; essa escolha exige política
-  de permissões, instância/coordenação e migração explícita, nunca silenciosa.
+  esses itens exigem homologação gráfica manual em VM isolada, com identidade
+  T60-B e banco exclusivo de Homologação, nunca o banco operacional.
+- O T59 não instala, cria atalhos, atualiza nem recupera executável. O T60-B
+  substitui o caminho comercial provisório do T59 por `%PROGRAMDATA%`; não há
+  transferência automática entre as localizações.
+
+## Fundação da instalação Windows — T60-B, etapa 1
+
+- A execução de desenvolvimento não exige instalação: usa o banco em
+  `repositorio/data` e preserva o contrato de logs anterior. Uma execução
+  reconhecida como PyInstaller, fora do smoke test restrito do T59, é sempre
+  comercial e nunca recua silenciosamente para esse contexto.
+- A identidade comercial é lida de
+  `HKLM\SOFTWARE\Sistema-PDV\Installations\<InstallationId>`, visão de 64 bits.
+  A subchave contém `ProductId`, `Environment`, `EnvironmentId`,
+  `InstallationId`, `InstallRoot` e `ExecutablePath` como `REG_SZ`. O
+  executável deve pertencer à raiz registrada sob a pasta conhecida
+  `%ProgramFiles%`.
+- O registro deve coincidir com o objeto JSON fechado
+  `%PROGRAMDATA%\Sistema-PDV\<Producao|Homologacao>\administrative\installation.json`.
+  O descritor contém `contract_version`, `product_id`, `environment`,
+  `environment_id`, `installation_id`, `install_root` e `executable_path`.
+  Produto e ambientes usam identificadores estáveis no código; cada instalação
+  recebe um UUID normalizado próprio. Registro ausente, múltiplo, inacessível
+  ou divergente bloqueia a inicialização.
+- O runtime resolve `%ProgramFiles%` e `%PROGRAMDATA%` pelas Known Folder APIs
+  do Windows. `PROGRAMDATA`, `LOCALAPPDATA`, `SISTEMA_PDV_LOG_DIR` e o diretório
+  de trabalho não selecionam nem redirecionam uma instalação comercial.
+- Produção usa `%PROGRAMDATA%\Sistema-PDV\Producao`; Homologação usa
+  `%PROGRAMDATA%\Sistema-PDV\Homologacao`. Cada raiz possui `data`, `logs`,
+  `config`, `administrative` e `maintenance` separados. Backups locais
+  continuam sob a origem do banco e permanecem isolados pelo mesmo contexto.
+- O contrato de ACL reserva aos Administradores e `SYSTEM` o controle de
+  `config`, `administrative` e `maintenance`. O grupo local
+  `Sistema-PDV-Operadores` deve receber escrita em `data` e `logs` e somente
+  leitura/travessia nas áreas administrativas necessárias. O aplicativo apenas
+  declara e verifica esse contrato; criação do grupo e aplicação das ACLs são
+  responsabilidade futura do instalador e não ocorrem em desenvolvimento.
+- O mutex nomeado comercial usa o namespace `Global` e combina produto,
+  ambiente e instalação. Sua DACL concede controle a Administradores/`SYSTEM`
+  e sincronização/modificação ao grupo de operadores. O kernel libera o recurso
+  no encerramento normal ou abrupto; `WAIT_ABANDONED` também é aceito de forma
+  segura. Produção e Homologação não compartilham mutex.
+- A ordem de inicialização é: resolver e validar identidade; adquirir mutex;
+  validar estado de manutenção; somente então importar a interface, configurar
+  logging, preparar SQLite e criar sessões. Segunda instância exibe aviso
+  nativo e encerra antes desses efeitos.
+- Nesta etapa, `maintenance/state.json` é uma barreira mínima, não um diário de
+  atualização. Para iniciar, o objeto deve identificar produto, ambiente e
+  instalação, usar `contract_version` 1 e `status` `IDLE`. Arquivo ausente,
+  inválido, desconhecido ou indicando operação incompleta mantém a instalação
+  bloqueada. O coordenador, retomada e transições duráveis pertencem às etapas
+  posteriores do T60.
+- A política de preparação do SQLite é centralizada no serviço de inicialização
+  e recebe o contexto da instalação. Em desenvolvimento, mantém criação e
+  migrações automáticas legadas. Em contexto comercial, um banco ausente pode
+  ser criado pelas validações existentes; um banco presente é aberto somente
+  para inspeção. Se já estiver na versão esperada e estruturalmente íntegro,
+  pode operar sem DDL. Se possuir versão anterior, a rota é identificada, mas a
+  abertura é bloqueada antes de backup ou migração. Versão futura, estrutura
+  divergente, banco fora do contexto e manutenção não livre permanecem
+  fail-closed. Tanto a inicialização geral quanto a criação da janela principal
+  atravessam essa mesma política.
+- O argumento interno `--t59-smoke-test` permanece limitado à validação do
+  runtime Qt em diretório temporário vazio: não resolve identidade comercial,
+  não abre banco, não configura logs e não oferece operação do PDV.
 
 ## Riscos e validações ainda necessários
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,

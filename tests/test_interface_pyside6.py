@@ -12,7 +12,10 @@ from interface.aplicacao import (
     obter_aplicacao,
 )
 from services.autenticacao_service import SessaoInvalidaError
-from services.inicializacao_banco_service import InicializacaoBancoError
+from services.inicializacao_banco_service import (
+    AtualizacaoCoordenadaNecessariaError,
+    InicializacaoBancoError,
+)
 from tests.helpers_identidade import criar_janela_autenticada
 from tests.helpers_identidade import criar_sessao_admin_teste
 
@@ -82,7 +85,7 @@ def test_falha_de_inicializacao_nao_abre_operacao_comercial(
     monkeypatch.setattr(
         aplicacao_module,
         "preparar_banco_para_operacao",
-        lambda caminho: (_ for _ in ()).throw(
+        lambda caminho, *, contexto=None: (_ for _ in ()).throw(
             InicializacaoBancoError("backup indisponível")
         ),
     )
@@ -237,8 +240,12 @@ def test_login_valido_abre_janela_com_sessao(
     integracao_backup = {}
     janela_real = aplicacao_module.criar_janela_principal
 
-    def criar_janela(caminho_banco, sessao_recebida):
-        janela = janela_real(caminho_banco, sessao_recebida)
+    def criar_janela(caminho_banco, sessao_recebida, *, contexto=None):
+        janela = janela_real(
+            caminho_banco,
+            sessao_recebida,
+            contexto=contexto,
+        )
         janelas.append(janela)
         return janela
 
@@ -301,6 +308,32 @@ def test_login_valido_abre_janela_com_sessao(
     assert integracao_backup["iniciado"] is True
     assert integracao_backup["parado"] is True
     janelas[0].close()
+
+
+def test_criar_janela_principal_revalida_politica_do_contexto(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    caminho = tmp_path / "legado.db"
+    contexto = object()
+    chamadas = []
+
+    def bloquear_legado(caminho_recebido, *, contexto=None):
+        chamadas.append((caminho_recebido, contexto))
+        raise AtualizacaoCoordenadaNecessariaError(
+            "atualização coordenada necessária"
+        )
+
+    monkeypatch.setattr(
+        aplicacao_module,
+        "preparar_banco_para_operacao",
+        bloquear_legado,
+    )
+
+    with pytest.raises(AtualizacaoCoordenadaNecessariaError):
+        criar_janela_principal(caminho, contexto=contexto)
+
+    assert chamadas == [(caminho, contexto)]
 
 
 def test_estado_de_identidade_inconsistente_bloqueia_sem_recriar(

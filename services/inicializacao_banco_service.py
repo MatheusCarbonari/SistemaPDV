@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
+import os
 from pathlib import Path
 import sqlite3
 from uuid import uuid4
@@ -10,6 +11,7 @@ from database.migracoes import (
     ConcorrenciaMigracaoError,
     EstruturaEsquemaDivergenteError,
     IntegridadeEsquemaError,
+    PlanoMigracao,
     RotaMigracaoIndisponivelError,
     VersaoEsquemaFuturaError,
     inspecionar_migracao,
@@ -20,6 +22,12 @@ from services.backup_local_service import (
     CoordenacaoBackupError,
     coordenar_diretorio_backup,
     criar_copia_sqlite_consistente,
+)
+from services.contexto_instalacao_service import (
+    ContextoInstalacao,
+    ContextoInstalacaoError,
+    obter_contexto_instalacao,
+    verificar_estado_manutencao,
 )
 
 
@@ -47,6 +55,14 @@ class InicializacaoConcorrenteError(InicializacaoBancoError):
     pass
 
 
+class AtualizacaoCoordenadaNecessariaError(InicializacaoBancoError):
+    pass
+
+
+class ContextoBancoComercialError(InicializacaoBancoError):
+    pass
+
+
 @dataclass(frozen=True)
 class ResultadoInicializacaoBanco:
     caminho_banco: Path
@@ -65,9 +81,14 @@ class ResultadoInicializacaoBanco:
 
 def preparar_banco_para_operacao(
     caminho_banco: str | Path = CAMINHO_BANCO,
+    *,
+    contexto: ContextoInstalacao | None = None,
 ) -> ResultadoInicializacaoBanco:
-    """Prepara o esquema e protege bancos legados com backup verificado."""
+    """Aplica a política de preparação adequada ao contexto da instalação."""
+    contexto_efetivo = contexto or obter_contexto_instalacao()
     caminho = Path(caminho_banco)
+    if contexto_efetivo.comercial:
+        _validar_preparacao_comercial(contexto_efetivo, caminho)
     banco_novo = not caminho.exists()
     caminho_backup = None
 
@@ -77,19 +98,30 @@ def preparar_banco_para_operacao(
             caminho.parent,
             _nome_lock_migracao(caminho),
         ):
+            if contexto_efetivo.comercial:
+                _validar_preparacao_comercial(contexto_efetivo, caminho)
             banco_novo = not caminho.exists()
             if not banco_novo:
                 plano = inspecionar_migracao(caminho)
                 if plano.migracoes:
+                    if contexto_efetivo.comercial:
+                        raise AtualizacaoCoordenadaNecessariaError(
+                            "O banco comercial exige atualização coordenada "
+                            "antes de iniciar o Sistema-PDV."
+                        )
                     caminho_backup = _criar_backup_pre_migracao(
                         caminho,
                         plano.versao_inicial,
                     )
+                elif contexto_efetivo.comercial:
+                    return _resultado_validacao_comercial(caminho, plano)
             resultado_migracao = criar_tabelas(
                 caminho,
                 validar_estrutura_estrita=True,
             )
             inspecionar_migracao(caminho, banco_novo=banco_novo)
+    except (AtualizacaoCoordenadaNecessariaError, ContextoBancoComercialError):
+        raise
     except BackupPreMigracaoError:
         raise
     except VersaoEsquemaFuturaError as erro:
@@ -146,6 +178,50 @@ def preparar_banco_para_operacao(
         proxima_etapa_atualizacao_autorizada=(
             resultado_migracao.proxima_etapa_atualizacao_autorizada
         ),
+    )
+
+
+def _validar_preparacao_comercial(
+    contexto: ContextoInstalacao,
+    caminho_banco: Path,
+) -> None:
+    try:
+        verificar_estado_manutencao(contexto)
+    except ContextoInstalacaoError as erro:
+        raise ContextoBancoComercialError(
+            "A instalação comercial não possui estado de manutenção livre."
+        ) from erro
+    esperado = contexto.caminhos.banco.resolve(strict=False)
+    observado = caminho_banco.resolve(strict=False)
+    if os.path.normcase(str(esperado)) != os.path.normcase(str(observado)):
+        try:
+            equivalente = os.path.samefile(esperado, observado)
+        except OSError:
+            equivalente = False
+        if not equivalente:
+            raise ContextoBancoComercialError(
+                "O banco informado não pertence ao contexto da instalação."
+            )
+
+
+def _resultado_validacao_comercial(
+    caminho_banco: Path,
+    plano: PlanoMigracao,
+) -> ResultadoInicializacaoBanco:
+    return ResultadoInicializacaoBanco(
+        caminho_banco=caminho_banco,
+        banco_novo=False,
+        versao_inicial=plano.versao_inicial,
+        versao_final=plano.versao_alvo,
+        declaracao_compatibilidade_aplicativo_anterior=(
+            plano.declaracao_compatibilidade.value
+        ),
+        homologacao_compatibilidade_aplicativo_anterior=(
+            plano.homologacao_compatibilidade.value
+        ),
+        estado_migracao="SEM_ALTERACOES",
+        banco_apto_operacao_aplicativo_atual=True,
+        proxima_etapa_atualizacao_autorizada=False,
     )
 
 

@@ -963,11 +963,11 @@ internos. A candidata é validada em diretório isolado e a distribuição anter
 permanece intacta em falhas anteriores à publicação. O smoke test carrega o
 runtime Qt em ambiente isolado sem criar SQLite, mas não substitui a homologação
 gráfica manual da interface, login e fluxos comerciais.
-Desenvolvimento preserva `repositorio/data`; a execução PyInstaller usa o banco
-específico do usuário em
-`%LOCALAPPDATA%\Sistema-PDV\data\sistema_acougue.db`, sem depender do diretório
-de trabalho. Não existe transferência automática entre os caminhos. Logs e
-backups preservam os contratos anteriores. Instalador, atalhos, atualização,
+Desenvolvimento preserva `repositorio/data`; no T59, a distribuição ainda não
+instalada usava provisoriamente o banco específico do usuário em
+`%LOCALAPPDATA%\Sistema-PDV\data\sistema_acougue.db`. O contrato comercial foi
+posteriormente substituído pela fundação T60-B em `%PROGRAMDATA%`, sem
+transferência automática entre os caminhos. Instalador, atalhos, atualização,
 rollback e migração de dados permanecem fora do T59.
 
 ### T60 — Instalador atualizável
@@ -996,11 +996,24 @@ operacional por backup como rollback comum. O projeto deverá ainda contemplar
 queda de energia, reinicialização e arquivos parcialmente instalados. Uma nova
 execução do T58 sem migrações pendentes não recupera autorização anterior; o
 instalador deverá revalidar a combinação aplicativo/schema antes de prosseguir.
-**Pendência vinculada do T59:** decidir se a instalação comercial continuará
-com dados por usuário em `%LOCALAPPDATA%` ou adotará `%PROGRAMDATA%`. Qualquer
-mudança exige política explícita de permissões e compartilhamento, coordenação
-entre processos e transição assistida; o instalador não poderá copiar, mover ou
-migrar o banco silenciosamente.
+**Etapa 1 em revisão (T60-B):** a instalação comercial foi definida por
+computador, com executáveis sob `%ProgramFiles%` e dados isolados de Produção e
+Homologação sob `%PROGRAMDATA%`. A identidade combina HKLM, descritor
+administrativo e GUID próprio; divergências bloqueiam a execução empacotada.
+O grupo `Sistema-PDV-Operadores` possui um contrato de acesso operacional, sem
+controle da identidade, manifestos ou manutenção. Um mutex Windows global por
+instalação/ambiente é adquirido antes de banco, logging e sessões. A barreira
+mínima de manutenção recusa estado ausente, desconhecido ou incompleto.
+Desenvolvimento permanece em `repositorio/data`. Não há migração automática de
+`%LOCALAPPDATA%`, criação de grupo/ACL, instalador ou coordenador nesta etapa.
+As etapas seguintes devem provisionar a identidade e permissões, implementar o
+coordenador e definir a migração administrativa explícita sem sobrescrita.
+Na abertura comercial, a preparação do banco permite somente criação inicial
+controlada ou validação somente leitura da versão esperada. Banco legado exige
+atualização coordenada e é bloqueado antes de backup, DDL ou alteração de
+`user_version`; bancos futuros ou divergentes também são recusados. O fluxo de
+criação da janela reutiliza a mesma política. Desenvolvimento mantém o contrato
+histórico de preparação automática.
 
 ### T61 — Teste de performance
 **Origem:** backlog original T50.
