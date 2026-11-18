@@ -18,6 +18,7 @@ from services.instancia_unica_service import (
     InstanciaJaExecutandoError,
     adquirir_instancia_unica,
     criar_nome_mutex,
+    criar_nome_mutex_ambiente,
 )
 
 
@@ -35,6 +36,25 @@ class BackendMemoria:
 
     def liberar(self, recurso):
         self.liberados.append(recurso)
+
+
+class BackendFalhaSegundoMutex(BackendMemoria):
+    def adquirir(self, nome, *, grupo_operadores):
+        if self.chamadas:
+            raise InstanciaJaExecutandoError("ocupado")
+        return super().adquirir(nome, grupo_operadores=grupo_operadores)
+
+
+class BackendMutexManutencaoOcupado(BackendMemoria):
+    def __init__(self, nome_ocupado):
+        super().__init__()
+        self.nome_ocupado = nome_ocupado
+
+    def adquirir(self, nome, *, grupo_operadores):
+        self.chamadas.append((nome, grupo_operadores))
+        if nome == self.nome_ocupado:
+            raise InstanciaJaExecutandoError("manutenção em andamento")
+        return object(), False
 
 
 def _contexto_desenvolvimento(raiz: Path):
@@ -87,6 +107,19 @@ def test_mutex_comercial_e_global_e_vinculado_a_instalacao(tmp_path) -> None:
     assert contexto.instalacao_id in nome
 
 
+def test_mutex_estavel_do_ambiente_permite_coordenacao_com_instalador(
+    tmp_path,
+) -> None:
+    contexto = _contexto_comercial(tmp_path)
+
+    nome = criar_nome_mutex_ambiente(contexto)
+
+    assert nome == (
+        f"Global\\Sistema-PDV-{contexto.produto_id}-{contexto.ambiente_id}"
+    )
+    assert contexto.instalacao_id not in nome
+
+
 def test_producao_e_homologacao_nao_compartilham_mutex(tmp_path) -> None:
     producao = _contexto_comercial(tmp_path)
     homologacao = ContextoInstalacao(
@@ -112,8 +145,41 @@ def test_backend_recebe_grupo_operadores_somente_no_contexto_comercial(
     with adquirir_instancia_unica(contexto, backend=backend):
         pass
 
-    assert backend.chamadas[0][1] == "Sistema-PDV-Operadores"
+    assert [nome for nome, _ in backend.chamadas] == [
+        criar_nome_mutex_ambiente(contexto),
+        criar_nome_mutex(contexto),
+    ]
+    assert [grupo for _, grupo in backend.chamadas] == [
+        "Sistema-PDV-Operadores",
+        "Sistema-PDV-Operadores",
+    ]
+    assert len(backend.liberados) == 2
+
+
+def test_falha_no_mutex_da_instalacao_libera_mutex_estavel(tmp_path) -> None:
+    backend = BackendFalhaSegundoMutex()
+    contexto = _contexto_comercial(tmp_path)
+
+    with pytest.raises(InstanciaJaExecutandoError):
+        with adquirir_instancia_unica(contexto, backend=backend):
+            pytest.fail("não deve adquirir exclusividade parcial")
+
     assert len(backend.liberados) == 1
+
+
+def test_mutex_de_manutencao_bloqueia_inicio_operacional(tmp_path) -> None:
+    contexto = _contexto_comercial(tmp_path)
+    nome_manutencao = criar_nome_mutex_ambiente(contexto)
+    backend = BackendMutexManutencaoOcupado(nome_manutencao)
+
+    with pytest.raises(InstanciaJaExecutandoError, match="manutenção"):
+        with adquirir_instancia_unica(contexto, backend=backend):
+            pytest.fail("não deve iniciar durante instalação ou desinstalação")
+
+    assert backend.chamadas == [
+        (nome_manutencao, "Sistema-PDV-Operadores")
+    ]
+    assert backend.liberados == []
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="contrato específico do Windows")

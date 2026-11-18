@@ -356,6 +356,29 @@
   bloqueiam a operação. Desenvolvimento preserva a preparação automática e as
   migrações históricas existentes. Essa separação não autoriza nenhuma rota do
   T58 nem antecipa o coordenador do T60.
+- **DEC-061** — A instalação inicial comercial usa Inno Setup 7, por computador
+  e elevada. Produção e Homologação possuem `AppId`, raiz em `%ProgramFiles%`,
+  raiz em `%PROGRAMDATA%`, registro, atalhos e mutex estável de ambiente
+  distintos. O instalador aceita somente destino vazio e ausência integral de
+  identidade ou estado anterior; resíduos preservados após desinstalação
+  bloqueiam reinstalação limpa. O provisionamento publica primeiro o estado
+  `INSTALLING`, instala os arquivos, registra a identidade, valida grupo, ACLs,
+  executável, HKLM e JSON, e somente então substitui atomicamente o estado por
+  `IDLE`. O grupo local `Sistema-PDV-Operadores` é criado ou validado sem incluir
+  contas automaticamente. A desinstalação remove programa, atalhos e registro
+  da instalação, mas preserva integralmente `%PROGRAMDATA%`. Esta etapa não
+  atualiza versões, não migra localização e não recupera instalação parcial.
+  O mutex de manutenção por produto/ambiente é adquirido antes de qualquer
+  mutex operacional por instalação e liberado por último. Instalador e futuro
+  coordenador usam o mutex de manutenção com acesso exclusivo a `SYSTEM` e
+  Administradores; o runtime adquire manutenção e operação, concedendo ao grupo
+  de Operadores apenas os direitos de sincronização necessários. O instalador
+  mantém manutenção por toda a instalação ou desinstalação. As ACLs protegidas
+  abrangem também `administrative/manifests` e rejeitam qualquer escrita de SID
+  não autorizado; Operadores só modificam `data` e `logs`. A estrutura nativa
+  usada para fornecer `SECURITY_ATTRIBUTES` ao Inno corresponde à arquitetura
+  atual do processo `Setup`; qualquer troca dessa arquitetura exige revalidar a
+  ABI e repetir a homologação em VM Windows.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

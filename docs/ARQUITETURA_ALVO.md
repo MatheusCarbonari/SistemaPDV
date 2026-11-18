@@ -573,7 +573,69 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   runtime Qt em diretório temporário vazio: não resolve identidade comercial,
   não abre banco, não configura logs e não oferece operação do PDV.
 
+## Instalador de instalação inicial — T60-B.2
+
+- `installer/windows/Sistema-PDV.iss` é compilado duas vezes a partir da mesma
+  fonte: Produção e Homologação. Ambos são instaladores por computador, x64,
+  elevados e sem atualização. As raízes são
+  `%ProgramFiles%\Sistema-PDV\Producao` e
+  `%ProgramFiles%\Sistema-PDV\Homologacao`; os dados continuam nas raízes T60-B
+  correspondentes sob `%PROGRAMDATA%`.
+- Cada ambiente possui `AppId` e mutex estável próprios. O mutex de manutenção
+  `Global\Sistema-PDV-<produto>-<ambiente>` é o primeiro objeto adquirido por
+  qualquer participante. Instalador e futuro coordenador adquirem somente esse
+  objeto, com acesso para `SYSTEM` e Administradores; o runtime permite também
+  sincronização ao grupo de Operadores e, depois, adquire o mutex operacional
+  `Global\Sistema-PDV-<produto>-<ambiente>-<instalação>`. A liberação ocorre em
+  ordem inversa. Inno Setup usa o mutex de manutenção em `AppMutex` e o mantém
+  adquirido durante todo o provisionamento ou desinstalação. A enumeração pelo
+  caminho exato do processo é uma defesa adicional, não a exclusividade
+  primária. Nenhum processo é encerrado automaticamente nem à força.
+- A pré-validação ocorre antes de qualquer provisionamento. Ela recusa registro
+  HKLM completo ou parcial, entrada de desinstalação, raiz de programa, raiz de
+  dados, banco, manutenção ou evidência anterior do mesmo ambiente. Um registro
+  parcial ou de ambiente desconhecido é tratado como estado de manutenção, não
+  como espaço livre. Uma instalação completa do outro ambiente pode coexistir.
+- O helper cria ou valida `Sistema-PDV-Operadores`, mas nunca adiciona usuários.
+  ACLs protegidas concedem controle total somente a `SYSTEM` e Administradores;
+  operadores recebem modificação em `data` e `logs` e leitura/execução em
+  `config`, `administrative`, `administrative/manifests` e `maintenance`.
+  Qualquer ACE de escrita para outro SID é recusada; Operadores também não podem
+  alterar permissões nem assumir propriedade. A raiz é protegida antes de seus
+  filhos, e cada diretório recebe ACL própria. Falha de aplicação ou
+  comprovação de qualquer ACL impede `IDLE`.
+- O provisionamento protege primeiro a raiz, cria `maintenance` e publica um
+  GUID novo em `maintenance/state.json` como `INSTALLING` antes de criar as
+  demais áreas. Após copiar a distribuição T59, Inno grava a identidade na visão
+  HKLM de 64 bits. A finalização comprova executável, registro, grupo e ACLs,
+  grava `installation.json` sem BOM e publica `IDLE` por substituição atômica.
+  Falha deixa a raiz administrativa ocupada e estado restritivo, impedindo
+  abertura comercial e nova instalação silenciosa.
+- A desinstalação remove somente arquivos sob a raiz do programa, atalhos,
+  entrada de Aplicativos Instalados e subchave HKLM daquela instalação. Como
+  `%PROGRAMDATA%` não pertence ao manifesto de arquivos do Inno, banco, WAL,
+  SHM, backups, logs, diagnósticos, configuração, identidade e evidências de
+  manutenção são preservados. Esses resíduos bloqueiam uma reinstalação limpa e
+  exigirão o procedimento administrativo de recuperação de etapa posterior.
+- Para autorizar uma conta, um Administrador local deve adicioná-la
+  explicitamente ao grupo, por exemplo em PowerShell elevado:
+  `Add-LocalGroupMember -Group "Sistema-PDV-Operadores" -Member "DOMINIO\usuario"`.
+  Remover a conta do grupo revoga o acesso operacional no próximo logon/token
+  Windows aplicável.
+- `scripts/build_installer_windows.ps1` audita novamente a distribuição T59,
+  exige Inno Setup 7, compila ambos os ambientes em diretório isolado, valida os
+  dois executáveis e publica somente ao final em `dist/installers`. A saída
+  anterior permanece intacta se preparação, compilação ou validação falhar.
+- A declaração nativa `TSecurityAttributes` e as assinaturas Win32 do mutex no
+  Pascal Script dependem da arquitetura atual do processo `Setup` gerado. Uma
+  futura mudança da arquitetura nativa desse processo exige revalidar tamanho e
+  alinhamento de ponteiros, recompilar as duas variantes e repetir a homologação
+  em VM antes de publicar um release.
+
 ## Riscos e validações ainda necessários
+- Homologar em VM Windows limpa a instalação e desinstalação reais, ACLs entre
+  contas, mutex entre sessões, encerramento abrupto e coexistência entre
+  Produção e Homologação; os testes automatizados não substituem essa etapa.
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.
 - Validar no T61/T62 lock SQLite, transações incertas, escala do Windows e metas

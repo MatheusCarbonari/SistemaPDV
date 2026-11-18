@@ -20,6 +20,8 @@ htmlcov/
 /build/pyinstaller-work/
 /build/t59-*/
 /dist/windows/
+/build/t60-*/
+/dist/installers/
 
 # Bancos de dados e dados locais (inclusive homologação e backups aninhados)
 data/**

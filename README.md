@@ -135,9 +135,45 @@ somente os recursos temporários confirmados da VM. Nunca apontar esse
 procedimento para o banco do estabelecimento.
 
 O T59 não fornece instalador, atalhos, assinatura de código, atualização ou
-rollback. O T60-B definiu identidade, `%PROGRAMDATA%`, ACLs e instância única,
-mas ainda não provisiona esses recursos; a homologação comercial completa
-continua dependente das próximas etapas do instalador.
+rollback. O T60-B.1 definiu identidade, `%PROGRAMDATA%`, ACLs e instância única;
+o T60-B.2 abaixo provisiona esses recursos somente para instalação inicial.
+Atualização e recuperação de instalações incompletas continuam posteriores.
+
+## Instalador Windows inicial
+
+O T60-B.2 usa Inno Setup 7 para instalações novas de Produção e Homologação.
+Primeiro gere e valide a distribuição T59; depois, com `ISCC.exe` do Inno Setup
+7 instalado, execute:
+
+```powershell
+.\scripts\build_windows.ps1
+.\scripts\build_installer_windows.ps1
+```
+
+Os instaladores e o relatório de hashes são publicados em `dist\installers`.
+O roteiro compila os dois ambientes em diretório isolado e preserva a saída
+anterior se houver falha. O pacote não contém banco, backups, logs, credenciais
+ou dados operacionais.
+
+A instalação exige elevação administrativa e usa caminhos fixos sob
+`%ProgramFiles%\Sistema-PDV` e `%PROGRAMDATA%\Sistema-PDV`. Ela cria ou valida o
+grupo local `Sistema-PDV-Operadores`, mas não autoriza contas automaticamente.
+Um Administrador local deve executar, por exemplo:
+
+```powershell
+Add-LocalGroupMember -Group "Sistema-PDV-Operadores" -Member "DOMINIO\usuario"
+```
+
+A desinstalação preserva todos os dados em `%PROGRAMDATA%`. Por segurança, uma
+nova instalação limpa é recusada enquanto esses dados ou evidências existirem;
+recuperação, migração e atualização comercial não fazem parte desta etapa.
+Instalação, desinstalação e execução são coordenadas pelo mesmo mutex global de
+manutenção do ambiente. O aplicativo adquire esse mutex antes do mutex próprio
+da instalação; nenhum fluxo depende apenas de procurar ou encerrar processos.
+A estrutura Win32 usada pelo mutex acompanha a arquitetura atual do processo do
+instalador e precisa ser revalidada se essa arquitetura mudar. Antes de um
+release, instalação, desinstalação, ACLs e concorrência entre contas/sessões
+devem ser homologadas em uma VM Windows limpa.
 
 ## Exportação de diagnóstico
 

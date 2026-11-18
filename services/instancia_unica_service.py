@@ -64,27 +64,40 @@ class ExclusividadeInstancia(AbstractContextManager[EstadoExclusividade]):
     ) -> None:
         self._contexto = contexto
         self._backend = backend or BackendMutexWindows()
-        self._recurso: object | None = None
+        self._recursos: list[object] = []
         self._estado: EstadoExclusividade | None = None
 
     def __enter__(self) -> EstadoExclusividade:
-        nome = criar_nome_mutex(self._contexto)
-        recurso, abandonado = self._backend.adquirir(
-            nome,
-            grupo_operadores=(
-                GRUPO_OPERADORES if self._contexto.comercial else None
-            ),
+        nome_instalacao = criar_nome_mutex(self._contexto)
+        nomes = (
+            (criar_nome_mutex_ambiente(self._contexto), nome_instalacao)
+            if self._contexto.comercial
+            else (nome_instalacao,)
         )
-        self._recurso = recurso
-        self._estado = EstadoExclusividade(nome, abandonado)
+        abandonado = False
+        try:
+            for nome in nomes:
+                recurso, mutex_abandonado = self._backend.adquirir(
+                    nome,
+                    grupo_operadores=(
+                        GRUPO_OPERADORES if self._contexto.comercial else None
+                    ),
+                )
+                self._recursos.append(recurso)
+                abandonado = abandonado or mutex_abandonado
+        except BaseException:
+            self._liberar_recursos()
+            raise
+        self._estado = EstadoExclusividade(nome_instalacao, abandonado)
         return self._estado
 
     def __exit__(self, tipo, valor, traceback) -> None:
-        recurso = self._recurso
-        self._recurso = None
-        if recurso is not None:
-            self._backend.liberar(recurso)
+        self._liberar_recursos()
         return None
+
+    def _liberar_recursos(self) -> None:
+        while self._recursos:
+            self._backend.liberar(self._recursos.pop())
 
 
 def adquirir_instancia_unica(
@@ -105,6 +118,12 @@ def criar_nome_mutex(contexto: ContextoInstalacao) -> str:
     material = str(contexto.raiz_instalacao).casefold().encode("utf-8")
     identificador = hashlib.sha256(material).hexdigest()[:24]
     return f"Local\\Sistema-PDV-Desenvolvimento-{identificador}"
+
+
+def criar_nome_mutex_ambiente(contexto: ContextoInstalacao) -> str:
+    if not contexto.comercial:
+        raise ValueError("O mutex de ambiente existe somente na instalação comercial.")
+    return f"Global\\Sistema-PDV-{contexto.produto_id}-{contexto.ambiente_id}"
 
 
 class _SECURITY_ATTRIBUTES(ctypes.Structure):

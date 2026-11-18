@@ -1014,6 +1014,24 @@ atualização coordenada e é bloqueado antes de backup, DDL ou alteração de
 `user_version`; bancos futuros ou divergentes também são recusados. O fluxo de
 criação da janela reutiliza a mesma política. Desenvolvimento mantém o contrato
 histórico de preparação automática.
+**Etapa 2 em revisão (T60-B.2):** o instalador Inno Setup aceita apenas
+instalações iniciais. Produção e Homologação usam `AppId`, programa, dados,
+registro e mutex separados. A pré-validação recusa instalações, identidades,
+diretórios ou dados remanescentes; não há sobrescrita nem recuperação implícita.
+O provisionamento cria/valida o grupo local sem adicionar contas, aplica e
+comprova ACLs, registra `INSTALLING` antes dos arquivos e publica `IDLE` apenas
+depois de validar executável, HKLM, `installation.json` e permissões. A
+desinstalação preserva todos os dados e evidências em `%PROGRAMDATA%`, que
+impedem reinstalação limpa. Atualização, migração de localização e recuperação
+de instalação parcial permanecem etapas futuras.
+O mutex de manutenção por produto/ambiente coordena instalador, runtime e futuro
+coordenador entre sessões; o runtime o adquire antes do mutex operacional por
+instalação. ACLs protegidas incluem `administrative/manifests`, recusam escrita
+de qualquer identidade não autorizada e restringem Operadores a modificar
+somente `data` e `logs`. A estrutura Win32 usada pelo mutex depende da
+arquitetura atual do processo de instalação e deverá ser revalidada se essa
+arquitetura mudar. Instalação, desinstalação, ACLs e concorrência entre contas e
+sessões permanecem sujeitas à homologação real em VM Windows isolada.
 
 ### T61 — Teste de performance
 **Origem:** backlog original T50.
