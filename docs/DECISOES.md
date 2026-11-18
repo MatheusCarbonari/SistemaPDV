@@ -379,6 +379,24 @@
   usada para fornecer `SECURITY_ATTRIBUTES` ao Inno corresponde à arquitetura
   atual do processo `Setup`; qualquer troca dessa arquitetura exige revalidar a
   ABI e repetir a homologação em VM Windows.
+- **DEC-062** — A transição de dados T59 em `%LOCALAPPDATA%` para uma instalação
+  T60 em `%PROGRAMDATA%` é exclusivamente administrativa, explícita e não
+  destrutiva. O executável recebe um modo de manutenção separado da abertura do
+  caixa, exige elevação Windows, seleção do banco e confirmação textual do
+  ambiente. O procedimento adquire primeiro o mutex de manutenção, revalida
+  identidade e estado `IDLE`, exige o diretório comercial `data` integralmente
+  vazio e aceita somente origem já compatível com o schema atual. Links,
+  junctions, reparse points, hard links e substituição física da origem são
+  recusados; sua identidade é revalidada sob exclusividade antes e depois da
+  cópia. A cópia reutiliza a API de
+  backup consistente do T55 e nunca executa rotas T58. Eventos imutáveis por
+  operação ficam em `administrative/manifests/data-migrations` somente depois
+  de a identidade comercial ser confiável; identidade divergente não recebe
+  escrita. Após publicar
+  `MIGRATING_LEGACY_DATA`, qualquer falha mantém o runtime bloqueado. Origem,
+  WAL/SHM e backups legados nunca são movidos, apagados ou substituídos. Uma
+  cópia publicada antes de interrupção também é preservada, e a tentativa
+  repetida é recusada em vez de sobrescrevê-la.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

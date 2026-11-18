@@ -18,12 +18,16 @@ from services.instancia_unica_service import (
 
 
 ARGUMENTO_SMOKE_TEST_T59 = "--t59-smoke-test"
+ARGUMENTO_MIGRACAO_DADOS_T60 = "--t60-migrar-dados-legados"
+ARGUMENTO_CONFIRMACAO_AMBIENTE_T60 = "--confirmar-ambiente"
 
 
 def main() -> int:
     """Inicia a aplicação desktop do Sistema-PDV."""
     if ARGUMENTO_SMOKE_TEST_T59 in sys.argv[1:]:
         return _executar_smoke_test_empacotamento()
+    if ARGUMENTO_MIGRACAO_DADOS_T60 in sys.argv[1:]:
+        return _executar_migracao_dados_legados(sys.argv[1:])
     try:
         contexto = obter_contexto_instalacao()
         with adquirir_instancia_unica(contexto):
@@ -42,6 +46,38 @@ def _executar_aplicacao_exclusiva(contexto: ContextoInstalacao) -> int:
     from interface.aplicacao import executar_aplicacao
 
     return executar_aplicacao(contexto=contexto)
+
+
+def _executar_migracao_dados_legados(argumentos: list[str]) -> int:
+    """Executa somente o procedimento administrativo, antes do fluxo normal."""
+    if (
+        len(argumentos) != 4
+        or argumentos[0] != ARGUMENTO_MIGRACAO_DADOS_T60
+        or argumentos[2] != ARGUMENTO_CONFIRMACAO_AMBIENTE_T60
+    ):
+        exibir_erro_inicializacao_segura(
+            "Os argumentos da migração administrativa são inválidos."
+        )
+        return 1
+    from services.migracao_dados_legados_service import (
+        MigracaoDadosLegadosError,
+        migrar_dados_legados,
+    )
+
+    try:
+        contexto = obter_contexto_instalacao()
+        migrar_dados_legados(
+            argumentos[1],
+            contexto,
+            confirmacao=argumentos[3],
+        )
+        return 0
+    except (ContextoInstalacaoError, InstanciaUnicaError) as erro:
+        exibir_erro_inicializacao_segura(str(erro))
+        return 1
+    except MigracaoDadosLegadosError as erro:
+        exibir_erro_inicializacao_segura(str(erro))
+        return 1
 
 
 def _executar_smoke_test_empacotamento() -> int:

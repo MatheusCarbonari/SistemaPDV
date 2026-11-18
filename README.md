@@ -175,6 +175,38 @@ instalador e precisa ser revalidada se essa arquitetura mudar. Antes de um
 release, instalação, desinstalação, ACLs e concorrência entre contas/sessões
 devem ser homologadas em uma VM Windows limpa.
 
+### Migração administrativa de dados T59
+
+O T60-B.3 não procura nem transfere dados automaticamente. Em uma instalação
+comercial nova, com o banco de destino ainda ausente, um Administrador Windows
+elevado pode selecionar explicitamente o banco T59 da própria conta e executar:
+
+```powershell
+& "C:\Program Files\Sistema-PDV\Producao\Sistema-PDV.exe" `
+  --t60-migrar-dados-legados `
+  "$env:LOCALAPPDATA\Sistema-PDV\data\sistema_acougue.db" `
+  --confirmar-ambiente "MIGRAR DADOS LEGADOS PARA PRODUCAO"
+if ($LASTEXITCODE -ne 0) { throw "Migração administrativa recusada" }
+```
+
+Para Homologação, use o executável correspondente e a frase
+`MIGRAR DADOS LEGADOS PARA HOMOLOGACAO`. Feche previamente todas as instâncias
+do Sistema-PDV. O procedimento só aceita o `%LOCALAPPDATA%` resolvido pela API
+do Windows para a conta atual; não use variável de ambiente para redirecionar a
+origem. Links, junctions e outros redirecionamentos são recusados, e a origem é
+revalidada sob exclusividade. O diretório comercial `data` deve estar totalmente
+vazio, inclusive sem arquivos ocultos ou subdiretórios; nenhum conteúdo é
+removido ou sobrescrito. O procedimento preserva origem, WAL/SHM e backups, e
+não executa migrações T58.
+
+O histórico fica em
+`%PROGRAMDATA%\Sistema-PDV\<ambiente>\administrative\manifests\data-migrations`.
+Se a identidade comercial estiver ausente ou divergente, a operação é recusada
+antes de gravar nesse destino não confiável.
+Falha após o início mantém `maintenance/state.json` restritivo e exige inspeção
+administrativa; não repita apagando arquivos. Antes de uso comercial, homologue
+todo o procedimento em VM Windows isolada com dados exclusivamente de teste.
+
 ## Exportação de diagnóstico
 
 Na página **Administração**, um Administrador pode escolher um diretório e usar

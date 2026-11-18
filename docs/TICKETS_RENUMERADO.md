@@ -1033,6 +1033,22 @@ arquitetura atual do processo de instalação e deverá ser revalidada se essa
 arquitetura mudar. Instalação, desinstalação, ACLs e concorrência entre contas e
 sessões permanecem sujeitas à homologação real em VM Windows isolada.
 
+**Etapa 3 em revisão (T60-B.3):** a migração de localização é um modo
+administrativo explícito do executável, executado antes do fluxo operacional e
+proibido durante abertura normal ou instalação inicial. Exige elevação Windows,
+seleção da origem T59 sob a Known Folder `%LOCALAPPDATA%`, confirmação textual
+do ambiente e identidade comercial válida em `%PROGRAMDATA%`. O mutex de
+manutenção bloqueia o runtime; o diretório comercial `data` deve estar
+integralmente vazio, inclusive sem arquivos ocultos, desconhecidos ou
+subdiretórios. Redirecionamentos e substituição física da origem são recusados
+por revalidação sob exclusividade. Somente schema já atual e estruturalmente válido é aceito:
+nenhuma migração T58 é executada. A cópia consistente reutiliza o núcleo T55,
+preserva origem e backups e publica sem sobrescrita. O histórico imutável fica
+em `administrative/manifests/data-migrations`; falha após o início deixa
+`MIGRATING_LEGACY_DATA`, e tentativas repetidas nunca removem ou substituem a
+cópia publicada. Homologação entre contas/sessões e falhas de energia permanece
+pendente em VM Windows isolada, sem dados reais.
+
 ### T61 — Teste de performance
 **Origem:** backlog original T50.
 **Entrega verificável:** Medições repetidas, limites e gargalos no hardware real.

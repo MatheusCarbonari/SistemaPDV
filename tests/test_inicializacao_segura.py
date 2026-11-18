@@ -2,6 +2,7 @@ from contextlib import contextmanager
 import sys
 
 import main as main_module
+import services.migracao_dados_legados_service as migracao_module
 from services.contexto_instalacao_service import (
     EstadoManutencaoInvalidoError,
     resolver_contexto_instalacao,
@@ -123,3 +124,67 @@ def test_estado_de_manutencao_invalido_bloqueia_antes_da_aplicacao(
 
     assert main_module.main() == 1
     assert erros == ["atualização incompleta"]
+
+
+def test_modo_migracao_administrativa_nao_inicia_fluxo_operacional(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    contexto = _contexto(tmp_path)
+    chamadas = []
+    monkeypatch.setattr(main_module, "obter_contexto_instalacao", lambda: contexto)
+    monkeypatch.setattr(
+        migracao_module,
+        "migrar_dados_legados",
+        lambda origem, destino, *, confirmacao: chamadas.append(
+            (origem, destino, confirmacao)
+        ),
+    )
+    monkeypatch.setattr(
+        main_module,
+        "adquirir_instancia_unica",
+        lambda contexto_recebido: (_ for _ in ()).throw(
+            AssertionError("o mutex operacional não deve ser adquirido")
+        ),
+    )
+    monkeypatch.setattr(
+        main_module,
+        "_executar_aplicacao_exclusiva",
+        lambda contexto_recebido: (_ for _ in ()).throw(
+            AssertionError("a aplicação não deve iniciar")
+        ),
+    )
+    origem = tmp_path / "selecionado.db"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "Sistema-PDV",
+            "--t60-migrar-dados-legados",
+            str(origem),
+            "--confirmar-ambiente",
+            "MIGRAR DADOS LEGADOS PARA PRODUCAO",
+        ],
+    )
+
+    assert main_module.main() == 0
+    assert chamadas == [
+        (str(origem), contexto, "MIGRAR DADOS LEGADOS PARA PRODUCAO")
+    ]
+
+
+def test_modo_migracao_recusa_argumentos_incompletos(monkeypatch) -> None:
+    erros = []
+    monkeypatch.setattr(
+        main_module,
+        "exibir_erro_inicializacao_segura",
+        lambda mensagem: erros.append(mensagem),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["Sistema-PDV", "--t60-migrar-dados-legados"],
+    )
+
+    assert main_module.main() == 1
+    assert erros == ["Os argumentos da migração administrativa são inválidos."]

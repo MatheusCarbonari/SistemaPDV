@@ -44,6 +44,7 @@ class BackendMutex(Protocol):
         nome: str,
         *,
         grupo_operadores: str | None,
+        somente_administradores: bool = False,
     ) -> tuple[object, bool]: ...
 
     def liberar(self, recurso: object) -> None: ...
@@ -82,6 +83,7 @@ class ExclusividadeInstancia(AbstractContextManager[EstadoExclusividade]):
                     grupo_operadores=(
                         GRUPO_OPERADORES if self._contexto.comercial else None
                     ),
+                    somente_administradores=False,
                 )
                 self._recursos.append(recurso)
                 abandonado = abandonado or mutex_abandonado
@@ -100,12 +102,53 @@ class ExclusividadeInstancia(AbstractContextManager[EstadoExclusividade]):
             self._backend.liberar(self._recursos.pop())
 
 
+class ExclusividadeManutencao(AbstractContextManager[EstadoExclusividade]):
+    """Exclusividade administrativa por produto e ambiente comercial."""
+
+    def __init__(
+        self,
+        contexto: ContextoInstalacao,
+        *,
+        backend: BackendMutex | None = None,
+    ) -> None:
+        if not contexto.comercial:
+            raise ValueError("A manutenção exclusiva exige instalação comercial.")
+        self._contexto = contexto
+        self._backend = backend or BackendMutexWindows()
+        self._recurso: object | None = None
+
+    def __enter__(self) -> EstadoExclusividade:
+        nome = criar_nome_mutex_ambiente(self._contexto)
+        recurso, abandonado = self._backend.adquirir(
+            nome,
+            grupo_operadores=None,
+            somente_administradores=True,
+        )
+        self._recurso = recurso
+        return EstadoExclusividade(nome, abandonado)
+
+    def __exit__(self, tipo, valor, traceback) -> None:
+        recurso = self._recurso
+        self._recurso = None
+        if recurso is not None:
+            self._backend.liberar(recurso)
+        return None
+
+
 def adquirir_instancia_unica(
     contexto: ContextoInstalacao,
     *,
     backend: BackendMutex | None = None,
 ) -> ExclusividadeInstancia:
     return ExclusividadeInstancia(contexto, backend=backend)
+
+
+def adquirir_manutencao_exclusiva(
+    contexto: ContextoInstalacao,
+    *,
+    backend: BackendMutex | None = None,
+) -> ExclusividadeManutencao:
+    return ExclusividadeManutencao(contexto, backend=backend)
 
 
 def criar_nome_mutex(contexto: ContextoInstalacao) -> str:
@@ -166,12 +209,18 @@ class BackendMutexWindows:
         nome: str,
         *,
         grupo_operadores: str | None,
+        somente_administradores: bool = False,
     ) -> tuple[object, bool]:
+        if grupo_operadores is not None and somente_administradores:
+            raise ValueError("A política de segurança do mutex é ambígua.")
         descritor = None
         atributos = None
         try:
             if grupo_operadores is not None:
                 descritor = self._criar_descritor_seguranca(grupo_operadores)
+            elif somente_administradores:
+                descritor = self._criar_descritor_administrativo()
+            if descritor is not None:
                 atributos = _SECURITY_ATTRIBUTES(
                     ctypes.sizeof(_SECURITY_ATTRIBUTES),
                     descritor,
@@ -206,6 +255,13 @@ class BackendMutexWindows:
             if descritor:
                 self._kernel32.LocalFree(descritor)
 
+    def _criar_descritor_administrativo(self) -> wintypes.LPVOID:
+        return self._converter_sddl(
+            "D:P"
+            "(A;;GA;;;SY)"
+            "(A;;GA;;;BA)"
+        )
+
     def liberar(self, recurso: object) -> None:
         handle = recurso
         try:
@@ -222,6 +278,9 @@ class BackendMutexWindows:
             "(A;;GA;;;BA)"
             f"(A;;0x{mascara_operador:08x};;;{sid_textual})"
         )
+        return self._converter_sddl(sddl)
+
+    def _converter_sddl(self, sddl: str) -> wintypes.LPVOID:
         converter = self._advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW
         converter.argtypes = (
             wintypes.LPCWSTR,

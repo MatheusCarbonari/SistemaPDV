@@ -30,8 +30,16 @@ class BackendMemoria:
         self.chamadas = []
         self.liberados = []
 
-    def adquirir(self, nome, *, grupo_operadores):
-        self.chamadas.append((nome, grupo_operadores))
+    def adquirir(
+        self,
+        nome,
+        *,
+        grupo_operadores,
+        somente_administradores=False,
+    ):
+        self.chamadas.append(
+            (nome, grupo_operadores, somente_administradores)
+        )
         return object(), False
 
     def liberar(self, recurso):
@@ -39,10 +47,20 @@ class BackendMemoria:
 
 
 class BackendFalhaSegundoMutex(BackendMemoria):
-    def adquirir(self, nome, *, grupo_operadores):
+    def adquirir(
+        self,
+        nome,
+        *,
+        grupo_operadores,
+        somente_administradores=False,
+    ):
         if self.chamadas:
             raise InstanciaJaExecutandoError("ocupado")
-        return super().adquirir(nome, grupo_operadores=grupo_operadores)
+        return super().adquirir(
+            nome,
+            grupo_operadores=grupo_operadores,
+            somente_administradores=somente_administradores,
+        )
 
 
 class BackendMutexManutencaoOcupado(BackendMemoria):
@@ -50,8 +68,16 @@ class BackendMutexManutencaoOcupado(BackendMemoria):
         super().__init__()
         self.nome_ocupado = nome_ocupado
 
-    def adquirir(self, nome, *, grupo_operadores):
-        self.chamadas.append((nome, grupo_operadores))
+    def adquirir(
+        self,
+        nome,
+        *,
+        grupo_operadores,
+        somente_administradores=False,
+    ):
+        self.chamadas.append(
+            (nome, grupo_operadores, somente_administradores)
+        )
         if nome == self.nome_ocupado:
             raise InstanciaJaExecutandoError("manutenção em andamento")
         return object(), False
@@ -145,11 +171,11 @@ def test_backend_recebe_grupo_operadores_somente_no_contexto_comercial(
     with adquirir_instancia_unica(contexto, backend=backend):
         pass
 
-    assert [nome for nome, _ in backend.chamadas] == [
+    assert [nome for nome, _, _ in backend.chamadas] == [
         criar_nome_mutex_ambiente(contexto),
         criar_nome_mutex(contexto),
     ]
-    assert [grupo for _, grupo in backend.chamadas] == [
+    assert [grupo for _, grupo, _ in backend.chamadas] == [
         "Sistema-PDV-Operadores",
         "Sistema-PDV-Operadores",
     ]
@@ -177,7 +203,7 @@ def test_mutex_de_manutencao_bloqueia_inicio_operacional(tmp_path) -> None:
             pytest.fail("não deve iniciar durante instalação ou desinstalação")
 
     assert backend.chamadas == [
-        (nome_manutencao, "Sistema-PDV-Operadores")
+        (nome_manutencao, "Sistema-PDV-Operadores", False)
     ]
     assert backend.liberados == []
 

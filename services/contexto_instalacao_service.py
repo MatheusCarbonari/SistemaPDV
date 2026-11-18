@@ -185,6 +185,14 @@ def obter_contexto_instalacao() -> ContextoInstalacao:
     return resolver_contexto_instalacao()
 
 
+def obter_local_app_data_confiavel() -> Path:
+    """Resolve LocalAppData pela Known Folder API, sem aceitar redirecionamento."""
+    return _obter_pasta_conhecida(
+        "f1b32785-6fba-4fcf-9d55-7b8e7f157091",
+        "LocalAppData",
+    )
+
+
 def resolver_contexto_instalacao(
     *,
     empacotado: bool | None = None,

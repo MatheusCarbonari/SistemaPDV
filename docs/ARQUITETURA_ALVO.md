@@ -632,10 +632,59 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   alinhamento de ponteiros, recompilar as duas variantes e repetir a homologação
   em VM antes de publicar um release.
 
+## Migração administrativa de dados legados — T60-B.3
+
+- O modo `--t60-migrar-dados-legados` é desviado em `main.py` antes do mutex
+  operacional, logging, abertura de SQLite e sessões. Ele exige caminho de
+  origem explícito, `--confirmar-ambiente` com a frase fechada de Produção ou
+  Homologação e token Windows elevado. Não existe descoberta ou migração
+  automática na abertura normal ou no instalador T60-B.2.
+- A origem deve ser exatamente o banco T59 da conta que executa o procedimento,
+  sob a Known Folder `%LOCALAPPDATA%\Sistema-PDV\data`. Links simbólicos,
+  junctions, demais reparse points, hard links e caminhos arbitrários são
+  recusados em todos os componentes. A identidade física é capturada na seleção
+  e revalidada depois do mutex de manutenção, antes e depois da cópia. Como
+  `%LOCALAPPDATA%` é por usuário, uma origem de
+  outra conta exige executar o procedimento no contexto dessa conta com
+  elevação; não há varredura de perfis nem confiança em variável de ambiente.
+- O destino é derivado exclusivamente do contexto comercial validado em HKLM e
+  `installation.json`. O serviço adquire o mutex de manutenção por ambiente,
+  comprova `IDLE`, verifica que não existe outra instância `Sistema-PDV.exe` e
+  exige que o diretório comercial `data` esteja integralmente vazio, inclusive
+  sem arquivos desconhecidos, ocultos ou subdiretórios. Nada encontrado é
+  removido, movido ou sobrescrito. Produção e
+  Homologação nunca compartilham contexto ou histórico.
+- `inspecionar_migracao()` abre a origem em modo somente leitura e exige schema
+  atual, integridade e estrutura estrita. Versão anterior, futura ou divergente
+  é encaminhada ao futuro coordenador; o T60-B.3 não chama o executor T58.
+- A publicação usa `criar_copia_sqlite_consistente()` do T55 no diretório
+  comercial vazio. A API SQLite incorpora dados confirmados em WAL ao snapshot,
+  valida a candidata e publica sem sobrescrita. Origem, arquivos auxiliares e
+  backups legados permanecem intactos; não há movimento ou restauração.
+- Cada tentativa que alcança um contexto comercial confiável recebe UUID e
+  diretório imutável em `administrative/manifests/data-migrations`. Eventos JSON
+  registram início, validação, resultado e tipo seguro de falha, sem expor
+  caminhos. Identidade divergente ou inacessível é recusada sem gravar no
+  destino não confiável. Depois das pré-condições, `maintenance/state.json`
+  passa a `MIGRATING_LEGACY_DATA`.
+  Somente uma cópia publicada e validada permite substituir o estado por
+  `IDLE`. Falha ou interrupção conserva estado restritivo; se o arquivo final já
+  existir, nova tentativa é recusada e nunca o remove ou sobrescreve.
+- Uma operação interrompida requer inspeção administrativa do estado, histórico
+  e cópia publicada. Recuperação automática, migração de schema, restauração e
+  atualização de executável permanecem fora desta etapa. O histórico é
+  protegido pelas ACLs administrativas e publicado sem sobrescrita, mas ainda
+  não possui assinatura criptográfica nem individualiza o Administrador além da
+  comprovação do token elevado.
+
 ## Riscos e validações ainda necessários
 - Homologar em VM Windows limpa a instalação e desinstalação reais, ACLs entre
   contas, mutex entre sessões, encerramento abrupto e coexistência entre
   Produção e Homologação; os testes automatizados não substituem essa etapa.
+- Homologar também a migração T60-B.3 com conta operacional elevada, origem T59
+  em WAL, junctions e reparse points reais, concorrência entre contas e sessões,
+  interrupções em cada publicação, ACLs do histórico e reabertura do banco
+  copiado. Nenhum desses ensaios deve usar dados operacionais reais.
 - Verificar no T62 o padrão real das etiquetas de balança, dígito verificador,
   semântica dos campos e comportamento do leitor físico.
 - Validar no T61/T62 lock SQLite, transações incertas, escala do Windows e metas
