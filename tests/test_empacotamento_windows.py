@@ -81,7 +81,11 @@ def test_validacao_do_ambiente_confere_requisitos_fixados(
 ) -> None:
     requisitos = tmp_path / "requirements-build.txt"
     requisitos.write_text(
-        "PySide6_Essentials==6.12.0\nshiboken6==6.12.0\n",
+        "PySide6_Essentials==6.12.0\n"
+        "shiboken6==6.12.0\n"
+        "cryptography==50.0.2\n"
+        "cffi==2.1.1\n"
+        "pycparser==3.12\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(empacotamento.sys, "platform", "win32")
@@ -90,7 +94,13 @@ def test_validacao_do_ambiente_confere_requisitos_fixados(
     monkeypatch.setattr(
         empacotamento.metadata,
         "version",
-        lambda nome: "6.12.0",
+        lambda nome: {
+            "PySide6_Essentials": "6.12.0",
+            "shiboken6": "6.12.0",
+            "cryptography": "50.0.2",
+            "cffi": "2.1.1",
+            "pycparser": "3.12",
+        }[nome],
     )
     monkeypatch.setattr(empacotamento, "import_module", lambda nome: object())
 
@@ -159,6 +169,16 @@ def test_lock_qt_exclui_componentes_nao_utilizados() -> None:
     assert not any(linha.startswith("PySide6_WebEngine==") for linha in linhas)
 
 
+def test_lock_inclui_dependencias_criptograficas_exatas() -> None:
+    requisitos = (
+        RAIZ_PROJETO / "requirements-build.txt"
+    ).read_text(encoding="utf-8")
+
+    assert "cryptography==50.0.2" in requisitos.splitlines()
+    assert "cffi==2.1.1" in requisitos.splitlines()
+    assert "pycparser==3.12" in requisitos.splitlines()
+
+
 @pytest.mark.parametrize(
     "relativo",
     [
@@ -190,6 +210,7 @@ def test_configuracao_define_onedir_grafico_sem_dados_adicionados() -> None:
     assert 'name="Sistema-PDV"' in spec
     assert "console=False" in spec
     assert "datas=[]" in spec
+    assert 'hiddenimports=["services.manifesto_pacote_service"]' in spec
     assert "exclude_binaries=True" in spec
 
     roteiro = (RAIZ_PROJETO / "scripts" / "build_windows.ps1").read_text(
@@ -206,6 +227,22 @@ def test_configuracao_define_onedir_grafico_sem_dados_adicionados() -> None:
     assert roteiro.index("Start-Process") < roteiro.index(
         "tools.empacotamento_windows publicar"
     )
+    assert "tools.manifesto_pacote gerar" in roteiro
+    assert "tools.manifesto_pacote assinar" in roteiro
+    assert roteiro.index("[IO.File]::WriteAllText") < roteiro.index(
+        "tools.manifesto_pacote gerar"
+    )
+    assert roteiro.index("tools.manifesto_pacote gerar") < roteiro.index(
+        "tools.empacotamento_windows publicar"
+    )
+    assert "New-Object System.Text.UTF8Encoding($false)" in roteiro
+    assert "[IO.File]::WriteAllText" in roteiro
+    trecho_relatorio = roteiro[
+        roteiro.index("$CaminhoRelatorio") : roteiro.index(
+            "if ($ConfiguracaoManifesto)"
+        )
+    ]
+    assert "Set-Content" not in trecho_relatorio
 
 
 def test_publicacao_substitui_distribuicao_somente_ao_final(tmp_path) -> None:

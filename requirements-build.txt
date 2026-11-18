@@ -3,8 +3,11 @@
 # O metapacote PySide6 não é usado: ele instalaria Addons, PDF e WebEngine,
 # componentes que o runtime atual do PDV não importa.
 altgraph==0.17.5
+cffi==2.1.1
+cryptography==50.0.2
 packaging==26.1
 pefile==2024.8.26
+pycparser==3.12
 PyInstaller==6.22.3
 pyinstaller-hooks-contrib==2026.10
 PySide6_Essentials==6.12.0

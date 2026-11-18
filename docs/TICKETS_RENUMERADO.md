@@ -1049,6 +1049,20 @@ em `administrative/manifests/data-migrations`; falha após o início deixa
 cópia publicada. Homologação entre contas/sessões e falhas de energia permanece
 pendente em VM Windows isolada, sem dados reais.
 
+**Etapa 4 em revisão (T60-B.4):** pacotes comerciais recebem manifesto JSON
+canônico versionado com identidade, metadados T50, Windows x64, matriz explícita
+de versão/schema, política, declaração de migrações e inventário completo por
+tamanho e SHA-256. A assinatura destacada usa Ed25519 e somente uma chave
+pública presente na âncora confiável do runtime pode validá-la; chave fornecida
+pelo próprio pacote é recusada. Como não existe material comercial autorizado,
+a âncora inicial permanece vazia e chaves efêmeras são usadas apenas nos testes.
+O verificador rejeita arquivos ausentes, extras, adulterados, duplicados, links,
+redirecionamentos e caminhos que escapem da raiz, sem executar conteúdo nem
+abrir banco comercial. A geração opcional integra o build T59 antes da publicação
+protegida e mantém assinatura separada. Integridade, declaração e homologação
+não autorizam atualização coordenada: substituição de executáveis, execução T58,
+rollback, staging exclusivo, revogação e recuperação continuam posteriores.
+
 ### T61 — Teste de performance
 **Origem:** backlog original T50.
 **Entrega verificável:** Medições repetidas, limites e gargalos no hardware real.

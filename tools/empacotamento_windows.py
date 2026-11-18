@@ -59,6 +59,9 @@ SUFIXOS_PROIBIDOS = frozenset(
 DISTRIBUICOES_QT_RUNTIME = frozenset(
     {"pyside6-essentials", "shiboken6"}
 )
+DISTRIBUICOES_CRIPTO_RUNTIME = frozenset(
+    {"cffi", "cryptography", "pycparser"}
+)
 MODULOS_QT_RUNTIME = (
     "PySide6.QtCore",
     "PySide6.QtGui",
@@ -128,6 +131,13 @@ def validar_ambiente_build(caminho_requisitos: Path) -> None:
     ):
         raise EmpacotamentoInvalidoError(
             "PySide6_Essentials e shiboken6 devem usar a mesma versão."
+        )
+
+    cripto_ausentes = DISTRIBUICOES_CRIPTO_RUNTIME - versoes_fixadas.keys()
+    if cripto_ausentes:
+        raise EmpacotamentoInvalidoError(
+            "Contrato criptográfico incompleto em requirements-build.txt: "
+            + ", ".join(sorted(cripto_ausentes))
         )
 
     modulos_ausentes = []

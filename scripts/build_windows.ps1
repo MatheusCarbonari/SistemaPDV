@@ -2,6 +2,9 @@
 param(
     [string]$BuildId = $env:SISTEMA_PDV_BUILD_ID,
     [string]$CommitGit = $env:SISTEMA_PDV_COMMIT_GIT,
+    [string]$ConfiguracaoManifesto,
+    [string]$ChavePrivadaManifesto,
+    [string]$ChaveIdManifesto,
     [switch]$PularSmokeTest
 )
 
@@ -170,9 +173,38 @@ $Relatorio = [ordered]@{
     executavel_sha256 = $Hash
     distribuicao = "Sistema-PDV"
 }
-$Relatorio | ConvertTo-Json | Set-Content `
-    -LiteralPath (Join-Path $DiretorioDistTemporario "build-report.json") `
-    -Encoding UTF8
+$CaminhoRelatorio = Join-Path $DiretorioDistTemporario "build-report.json"
+$ConteudoRelatorio = ($Relatorio | ConvertTo-Json) + [Environment]::NewLine
+$Utf8SemBom = New-Object System.Text.UTF8Encoding($false)
+[IO.File]::WriteAllText($CaminhoRelatorio, $ConteudoRelatorio, $Utf8SemBom)
+
+if ($ConfiguracaoManifesto) {
+    $ConfiguracaoManifesto = (Resolve-Path `
+        -LiteralPath $ConfiguracaoManifesto).Path
+    & $PythonExecutavel -m tools.manifesto_pacote gerar `
+        --raiz $DiretorioDistTemporario `
+        --configuracao $ConfiguracaoManifesto
+    if ($LASTEXITCODE -ne 0) {
+        throw "O manifesto do pacote não pôde ser gerado ou auditado."
+    }
+    if ([bool]$ChavePrivadaManifesto -ne [bool]$ChaveIdManifesto) {
+        throw "Chave privada e identificador da chave devem ser informados juntos."
+    }
+    if ($ChavePrivadaManifesto) {
+        $ChavePrivadaManifesto = (Resolve-Path `
+            -LiteralPath $ChavePrivadaManifesto).Path
+        & $PythonExecutavel -m tools.manifesto_pacote assinar `
+            --raiz $DiretorioDistTemporario `
+            --chave-privada $ChavePrivadaManifesto `
+            --chave-id $ChaveIdManifesto
+        if ($LASTEXITCODE -ne 0) {
+            throw "O manifesto do pacote não pôde ser assinado."
+        }
+    }
+}
+elseif ($ChavePrivadaManifesto -or $ChaveIdManifesto) {
+    throw "A assinatura exige uma configuração explícita de manifesto."
+}
 
 & $PythonExecutavel -m tools.empacotamento_windows publicar `
     --origem $DiretorioDistTemporario `

@@ -397,6 +397,17 @@
   WAL/SHM e backups legados nunca são movidos, apagados ou substituídos. Uma
   cópia publicada antes de interrupção também é preservada, e a tentativa
   repetida é recusada em vez de sobrescrevê-la.
+- **DEC-063** — Pacotes comerciais T60 usam manifesto JSON canônico versionado,
+  inventário completo com tamanho e SHA-256 e assinatura Ed25519 separada. A
+  chave privada é sempre externa ao repositório, build, instalador e pacote; o
+  runtime aceita somente `key_id` presente na âncora pública incorporada à
+  distribuição e protegida pelos arquivos de `%ProgramFiles%`. Nenhuma chave
+  comercial foi autorizada no T60-B.4, portanto a âncora inicial é vazia e todo
+  pacote permanece não confiável por padrão. Chaves efêmeras existem somente
+  nos testes. O manifesto separa matriz declarada de versão/schema, referência
+  de homologação e presença de migrações; assinatura e integridade válidas não
+  autorizam atualização, migração ou substituição de executável. O futuro
+  coordenador deverá acrescentar estado, exclusividade e decisão operacional.
 
 ## Decisões que exigem cuidado
 - O código do produto pode ser alterado somente sem itens na venda em andamento;

@@ -207,6 +207,53 @@ Falha após o início mantém `maintenance/state.json` restritivo e exige inspe�
 administrativa; não repita apagando arquivos. Antes de uso comercial, homologue
 todo o procedimento em VM Windows isolada com dados exclusivamente de teste.
 
+### Manifesto de pacote comercial
+
+O T60-B.4 acrescenta geração opcional de `package-manifest.json` ao build T59.
+A configuração deve ficar fora da distribuição e declarar ambiente, pacote,
+versões de origem, schema, política e referência de homologação. Exemplo mínimo:
+
+```json
+{
+  "environment": "HOMOLOGACAO",
+  "package_id": "sistema-pdv-homologacao-0.1.0-build1",
+  "package_version": "0.1.0",
+  "application_version": "0.1.0",
+  "build_id": "win-build1",
+  "commit_git": "0123456789abcdef0123456789abcdef01234567",
+  "allowed_sources": [{"application_version": "0.1.0", "schema_version": 10}],
+  "required_schema_version": 10,
+  "update_policy_id": "T60-SEM-MIGRACAO-V1",
+  "previous_application_compatibility_declared": true,
+  "homologation_reference": "HOMOLOG-EXEMPLO-1",
+  "schema_migrations": []
+}
+```
+
+O `build_id`, versão e commit precisam coincidir com `build-report.json`. Para
+gerar uma candidata não assinada:
+
+```powershell
+.\scripts\build_windows.ps1 `
+  -BuildId win-build1 `
+  -CommitGit 0123456789abcdef0123456789abcdef01234567 `
+  -ConfiguracaoManifesto C:\release-seguro\manifesto-homologacao.json
+```
+
+Uma assinatura autorizada, quando existirem chave e política aprovadas, usa
+`-ChavePrivadaManifesto C:\cofre\release-ed25519.pem` e
+`-ChaveIdManifesto <id-aprovado>` no mesmo comando. A chave deve permanecer fora
+do repositório, pacote e máquina operacional. Geração e auditoria sem assinatura
+não tornam o pacote confiável. Nesta etapa nenhuma chave comercial está
+autorizada e a âncora pública do runtime é vazia; somente testes usam chaves
+efêmeras.
+
+O verificador não instala, migra, restaura ou substitui arquivos. Mesmo uma
+assinatura válida e uma matriz compatível retornam autorização de atualização
+como falsa até o futuro coordenador T60 aplicar exclusividade, estado e decisões
+de compatibilidade. Custódia/rotação/revogação de chaves, Authenticode e ensaio
+offline em VM Windows limpa permanecem pendentes.
+
 ## Exportação de diagnóstico
 
 Na página **Administração**, um Administrador pode escolher um diretório e usar

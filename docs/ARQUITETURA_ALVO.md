@@ -677,6 +677,51 @@ Binário Windows empacotado, arquivos de dados fora da instalação; instalador 
   não possui assinatura criptográfica nem individualiza o Administrador além da
   comprovação do token elevado.
 
+## Manifestos e integridade de pacotes — T60-B.4
+
+- `package-manifest.json` usa contrato 1 e JSON UTF-8 canônico: chaves ordenadas,
+  sem espaços supérfluos, duplicatas ou valores não JSON. Ele identifica produto,
+  ambiente, pacote, versão T50, build, commit opcional, Windows x64, política de
+  atualização, schema exigido, migrações declaradas e matriz explícita de
+  origens por versão do aplicativo e schema. A geração é determinística quando
+  conteúdo e metadados são iguais; não contém instante, caminho local ou segredo.
+- O inventário cobre todos os arquivos do pacote, exceto o próprio manifesto e
+  sua assinatura destacada, usando caminho POSIX relativo, tamanho e SHA-256.
+  A inspeção rejeita ausências, extras, colisões sem distinção de caixa,
+  caminhos absolutos ou com `..`, nomes reservados ou ambíguos no Windows,
+  links, junctions, reparse points, hard links e entradas especiais. As mesmas
+  verificações físicas protegem o manifesto, a assinatura e o relatório T59.
+  Nenhum arquivo distribuído é executado durante a análise.
+- A assinatura destacada usa Ed25519 sobre os bytes canônicos do manifesto. O
+  `key_id` seleciona uma chave somente numa âncora pública confiável; uma chave
+  entregue pelo próprio pacote não cria confiança. A chave privada é lida apenas
+  pela ferramenta de assinatura e é recusada se estiver dentro do pacote.
+- Não há chave pública comercial autorizada nesta etapa. A âncora embutida está
+  vazia e, portanto, o verificador fail-closed rejeita qualquer assinatura no
+  runtime normal. Testes criam chaves efêmeras somente em `tmp_path`. Incorporar
+  ou rotacionar uma chave pública exigirá decisão de release, revisão do
+  fingerprint e nova distribuição protegida em `%ProgramFiles%`; a chave privada
+  nunca será incorporada.
+- `scripts/build_windows.ps1` preserva o T59 sem manifesto quando nenhuma
+  configuração é informada. Com `-ConfiguracaoManifesto`, gera e audita o
+  manifesto somente depois do build, smoke test e `build-report.json`, mas antes
+  da publicação protegida. `-ChavePrivadaManifesto` e `-ChaveIdManifesto` são
+  opcionais e inseparáveis. Geração, auditoria, assinatura e futura verificação
+  pelo coordenador continuam etapas distintas. O relatório T59 é gravado em
+  UTF-8 sem BOM por API .NET explícita, compatível com Windows PowerShell 5.1 e
+  PowerShell 7.
+- `verificar_pacote_assinado()` comprova primeiro a assinatura, depois contrato,
+  inventário, relatório T59, identidade comercial, plataforma e matriz de
+  compatibilidade. O resultado mantém
+  `atualizacao_coordenada_autorizada=False`: declaração e homologação registradas
+  no manifesto não substituem a autorização do T58/T60 nem executam migração.
+- O T60-B.4 não bloqueia concorrência externa que altere um diretório enquanto
+  ele é inspecionado. O coordenador futuro deverá copiar ou abrir o pacote em
+  staging administrativo exclusivo e revalidá-lo imediatamente antes de cada
+  transição. Também permanecem pendentes assinatura comercial real, custódia e
+  rotação de chaves, revogação, assinatura de código Authenticode e homologação
+  do pacote numa VM Windows limpa e offline.
+
 ## Riscos e validações ainda necessários
 - Homologar em VM Windows limpa a instalação e desinstalação reais, ACLs entre
   contas, mutex entre sessões, encerramento abrupto e coexistência entre
